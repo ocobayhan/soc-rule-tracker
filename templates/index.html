@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Rule Tracker</title>
-  <link rel="stylesheet" href="/static/styles.css?v=5"/>
+  <link rel="stylesheet" href="/static/styles.css?v=6"/>
 </head>
 <body>
 
@@ -83,16 +83,21 @@
     <div class="table-wrapper">
       <table class="table table-fixed">
         <colgroup>
-          <col class="col-dot"/><col class="col-name"/><col class="col-env"/>
+          <col class="col-dot"/><col class="col-id"/>
+          <col class="col-name"/><col class="col-env"/>
           <col class="col-person"/><col class="col-reason"/><col class="col-freq"/>
           <col class="col-analyst"/><col class="col-status"/>
           <col class="col-date"/><col class="col-date"/><col class="col-act"/>
         </colgroup>
         <thead><tr>
           <th></th>
-          <th>Kural İsmi</th><th>Ortam</th><th>Raporlayan</th>
+          <th class="th-sortable" id="th-tune-id" onclick="sortTune('id')"># <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-tune-rule_name" onclick="sortTune('rule_name')">Kural İsmi <span class="sort-arrow"></span></th>
+          <th>Ortam</th><th>Raporlayan</th>
           <th>Tune Nedeni</th><th>Sıklık</th><th>Tune Eden</th>
-          <th>Durum</th><th>Raporlandı</th><th>Tamamlandı</th>
+          <th class="th-sortable" id="th-tune-status" onclick="sortTune('status')">Durum <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-tune-created_at" onclick="sortTune('created_at')">Raporlandı <span class="sort-arrow"></span></th>
+          <th>Tamamlandı</th>
           <th>İşlem</th>
         </tr></thead>
         <tbody id="tune-tbody"></tbody>
@@ -118,12 +123,23 @@
       <button class="btn-ghost-sm" onclick="clearUCFilters()">Temizle</button>
     </div>
     <div class="table-wrapper">
-      <table class="table">
+      <table class="table table-fixed">
+        <colgroup>
+          <col class="col-dot"/><col class="col-id"/>
+          <col class="col-desc"/><col class="col-env"/>
+          <col class="col-person"/><col class="col-rule"/>
+          <col class="col-analyst"/><col class="col-status"/>
+          <col class="col-date"/><col class="col-date"/><col class="col-act"/>
+        </colgroup>
         <thead><tr>
-          <th style="width:30px"></th>
-          <th>Use-Case</th><th>Ortam</th><th>Talep Eden</th>
+          <th></th>
+          <th class="th-sortable" id="th-uc-id" onclick="sortUC('id')"># <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-uc-usecase_description" onclick="sortUC('usecase_description')">Use-Case <span class="sort-arrow"></span></th>
+          <th>Ortam</th><th>Talep Eden</th>
           <th>Yazılan Kural</th><th>Analist</th>
-          <th>Durum</th><th>Talep Tarihi</th><th>Yazılma Tarihi</th>
+          <th class="th-sortable" id="th-uc-status" onclick="sortUC('status')">Durum <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-uc-created_at" onclick="sortUC('created_at')">Talep Tarihi <span class="sort-arrow"></span></th>
+          <th>Yazılma Tarihi</th>
           <th>İşlem</th>
         </tr></thead>
         <tbody id="uc-tbody"></tbody>
@@ -517,6 +533,6 @@
 
 {% endif %}
 
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=6"></script>
 </body>
 </html>

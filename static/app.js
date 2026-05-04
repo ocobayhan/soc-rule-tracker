@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Rule Tracker — Frontend  v5
+   SOC Rule Tracker — Frontend  v6
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -304,6 +304,46 @@ let tuneRows = [];
 let ucRows   = [];
 
 // ---------------------------------------------------------------------------
+// Client-side sort state
+// ---------------------------------------------------------------------------
+let tuneSortCol = "id", tuneSortDir = 1;   // 1 = asc, -1 = desc
+let ucSortCol   = "id", ucSortDir   = 1;
+
+function clientSort(rows, col, dir) {
+  return [...rows].sort((a, b) => {
+    const av = a[col] ?? "", bv = b[col] ?? "";
+    if (col === "id") return dir * (Number(av) - Number(bv));
+    return dir * String(av).localeCompare(String(bv), "tr", { sensitivity: "base" });
+  });
+}
+
+function updateSortUI(prefix, activeCol, dir) {
+  const cols = prefix === "tune"
+    ? ["id", "rule_name", "status", "created_at"]
+    : ["id", "usecase_description", "status", "created_at"];
+  cols.forEach(col => {
+    const th    = document.getElementById(`th-${prefix}-${col}`);
+    if (!th) return;
+    const arrow = th.querySelector(".sort-arrow");
+    const isActive = col === activeCol;
+    if (arrow) arrow.textContent = isActive ? (dir === 1 ? "↑" : "↓") : "";
+    th.classList.toggle("th-sorted", isActive);
+  });
+}
+
+function sortTune(col) {
+  tuneSortDir = tuneSortCol === col ? tuneSortDir * -1 : 1;
+  tuneSortCol = col;
+  renderTuneRows();
+}
+
+function sortUC(col) {
+  ucSortDir = ucSortCol === col ? ucSortDir * -1 : 1;
+  ucSortCol = col;
+  renderUCRows();
+}
+
+// ---------------------------------------------------------------------------
 // Tune list
 // ---------------------------------------------------------------------------
 function tuneActionBtns(r) {
@@ -316,6 +356,31 @@ function tuneActionBtns(r) {
   return `${edit}${del}`;
 }
 
+function renderTuneRows() {
+  const sorted = clientSort(tuneRows, tuneSortCol, tuneSortDir);
+  updateSortUI("tune", tuneSortCol, tuneSortDir);
+  const tbody = document.getElementById("tune-tbody");
+  const empty = document.getElementById("tune-empty");
+  if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  tbody.innerHTML = sorted.map(r => `<tr>
+    <td>${dot(r.status, TUNE_CLS)}</td>
+    <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
+    <td class="td-truncate" title="${esc(r.rule_name)}">
+      <span class="cell-link" onclick="openTuneDetail(${r.id})" style="cursor:pointer">${esc(r.rule_name)}</span>
+    </td>
+    <td class="td-truncate">${esc(r.environment)}</td>
+    <td class="td-truncate">${esc(r.reporter)}</td>
+    <td class="td-truncate" title="${esc(r.tune_reason)}">${esc(r.tune_reason)}</td>
+    <td>${freqBadge(r.trigger_frequency)}</td>
+    <td class="td-truncate">${esc(r.tuning_analyst)||'<span class="text-muted">—</span>'}</td>
+    <td>${badge(r.status, TUNE_CLS)}</td>
+    <td class="text-muted">${fmtDate(r.created_at)}</td>
+    <td class="text-muted">${fmtDate(r.completed_at)}</td>
+    <td style="white-space:nowrap">${tuneActionBtns(r)}</td>
+  </tr>`).join("");
+}
+
 async function loadTune() {
   const p = new URLSearchParams();
   const month  = document.getElementById("tune-filter-month").value;
@@ -324,28 +389,9 @@ async function loadTune() {
   if (month)  p.set("month", month);
   if (env)    p.set("environment", env);
   if (status) p.set("status", status);
-
   try {
     tuneRows = await apiFetch(`/api/tune?${p}`);
-    const tbody = document.getElementById("tune-tbody");
-    const empty = document.getElementById("tune-empty");
-    if (!tuneRows.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
-    empty.style.display = "none";
-    tbody.innerHTML = tuneRows.map(r => `<tr>
-      <td>${dot(r.status, TUNE_CLS)}</td>
-      <td class="td-truncate" title="${esc(r.rule_name)}">
-        <span class="cell-link" onclick="openTuneDetail(${r.id})" style="cursor:pointer">${esc(r.rule_name)}</span>
-      </td>
-      <td class="td-truncate">${esc(r.environment)}</td>
-      <td class="td-truncate">${esc(r.reporter)}</td>
-      <td class="td-truncate" title="${esc(r.tune_reason)}">${esc(r.tune_reason)}</td>
-      <td>${freqBadge(r.trigger_frequency)}</td>
-      <td class="td-truncate">${esc(r.tuning_analyst)||'<span class="text-muted">—</span>'}</td>
-      <td>${badge(r.status, TUNE_CLS)}</td>
-      <td class="text-muted">${fmtDate(r.created_at)}</td>
-      <td class="text-muted">${fmtDate(r.completed_at)}</td>
-      <td style="white-space:nowrap">${tuneActionBtns(r)}</td>
-    </tr>`).join("");
+    renderTuneRows();
   } catch (e) { console.error(e); }
 }
 
@@ -510,6 +556,30 @@ function ucActionBtns(r) {
   return `${edit}${del}`;
 }
 
+function renderUCRows() {
+  const sorted = clientSort(ucRows, ucSortCol, ucSortDir);
+  updateSortUI("uc", ucSortCol, ucSortDir);
+  const tbody = document.getElementById("uc-tbody");
+  const empty = document.getElementById("uc-empty");
+  if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  tbody.innerHTML = sorted.map(r => `<tr>
+    <td>${dot(r.status, UC_CLS)}</td>
+    <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
+    <td class="td-truncate" title="${esc(r.usecase_description)}">
+      <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
+    </td>
+    <td class="td-truncate">${esc(r.environment)}</td>
+    <td class="td-truncate">${esc(r.requester)}</td>
+    <td class="td-truncate">${esc(r.rule_name)||'<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate">${esc(r.rule_author)||'<span class="text-muted">—</span>'}</td>
+    <td>${badge(r.status, UC_CLS)}</td>
+    <td class="text-muted">${fmtDate(r.created_at)}</td>
+    <td class="text-muted">${fmtDate(r.completed_at)}</td>
+    <td style="white-space:nowrap">${ucActionBtns(r)}</td>
+  </tr>`).join("");
+}
+
 async function loadUC() {
   const p = new URLSearchParams();
   const month  = document.getElementById("uc-filter-month").value;
@@ -518,27 +588,9 @@ async function loadUC() {
   if (month)  p.set("month", month);
   if (env)    p.set("environment", env);
   if (status) p.set("status", status);
-
   try {
     ucRows = await apiFetch(`/api/usecase?${p}`);
-    const tbody = document.getElementById("uc-tbody");
-    const empty = document.getElementById("uc-empty");
-    if (!ucRows.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
-    empty.style.display = "none";
-    tbody.innerHTML = ucRows.map(r => `<tr>
-      <td>${dot(r.status, UC_CLS)}</td>
-      <td class="td-truncate" title="${esc(r.usecase_description)}">
-        <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
-      </td>
-      <td class="td-truncate">${esc(r.environment)}</td>
-      <td class="td-truncate">${esc(r.requester)}</td>
-      <td class="td-truncate">${esc(r.rule_name)||'<span class="text-muted">—</span>'}</td>
-      <td class="td-truncate">${esc(r.rule_author)||'<span class="text-muted">—</span>'}</td>
-      <td>${badge(r.status, UC_CLS)}</td>
-      <td class="text-muted">${fmtDate(r.created_at)}</td>
-      <td class="text-muted">${fmtDate(r.completed_at)}</td>
-      <td style="white-space:nowrap">${ucActionBtns(r)}</td>
-    </tr>`).join("");
+    renderUCRows();
   } catch (e) { console.error(e); }
 }
 

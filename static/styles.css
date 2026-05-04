@@ -689,19 +689,33 @@ select.form-input option { background: var(--color-panel-background); color: var
 .cell-link { color: var(--text-primary); transition: color .15s; }
 
 /* ============================================================
-   TABLE — fixed layout to prevent Tune Nedeni column bloat
+   TABLE — fixed layout to prevent column bloat
    ============================================================ */
 .table-fixed { table-layout: fixed; width: 100%; }
 .table-fixed .col-dot    { width: 30px; }
-.table-fixed .col-name   { width: 14%; }
+.table-fixed .col-id     { width: 44px; }
+.table-fixed .col-name   { width: 13%; }
 .table-fixed .col-env    { width: 9%; }
 .table-fixed .col-person { width: 9%; }
-.table-fixed .col-reason { width: 18%; }
+.table-fixed .col-reason { width: 17%; }
 .table-fixed .col-freq   { width: 7%; }
 .table-fixed .col-analyst{ width: 9%; }
-.table-fixed .col-status { width: 11%; }
+.table-fixed .col-status { width: 10%; }
 .table-fixed .col-date   { width: 8%; }
 .table-fixed .col-act    { width: 10%; }
+/* UC-specific */
+.table-fixed .col-desc   { width: 18%; }
+.table-fixed .col-rule   { width: 13%; }
+
+/* Sortable column headers */
+.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color .12s;
+}
+.th-sortable:hover { color: var(--text-secondary); }
+.th-sorted         { color: var(--text-primary) !important; }
+.sort-arrow        { font-size: 10px; opacity: .75; margin-left: 2px; }
 
 /* ============================================================
    WORKFLOW ACTION BUTTONS
