@@ -192,8 +192,7 @@ def login():
         if user and check_password_hash(user["password_hash"], password):
             session["user_id"]  = user["id"]
             session["username"] = user["username"]
-            session["role"]     = user["role"]
-            write_audit("LOGIN", detail=f"IP: {request.remote_addr}")
+            session["role"]     = user["role"]   # always fresh from DB
             return redirect(url_for("index"))
         error = "Kullanıcı adı veya şifre hatalı."
     return render_template("login.html", error=error)

@@ -354,7 +354,7 @@ function sortUC(col) {
 // Tune list
 // ---------------------------------------------------------------------------
 function tuneActionBtns(r) {
-  const isAdmin    = USER_ROLE === "admin";
+  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user";
   const isMyTask   = r.tuning_analyst === CURRENT_USER;
   const isUnowned  = !r.tuning_analyst;
 
