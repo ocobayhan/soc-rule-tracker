@@ -707,6 +707,25 @@ select.form-input option { background: var(--color-panel-background); color: var
 .table-fixed .col-desc   { width: 18%; }
 .table-fixed .col-rule   { width: 13%; }
 
+/* Search box */
+.search-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  line-height: 1;
+}
+.search-input {
+  padding-left: 30px !important;
+  min-width: 220px !important;
+}
+
 /* Sortable column headers */
 .th-sortable {
   cursor: pointer;

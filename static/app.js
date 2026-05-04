@@ -304,10 +304,16 @@ let tuneRows = [];
 let ucRows   = [];
 
 // ---------------------------------------------------------------------------
-// Client-side sort state
+// Client-side sort & search state
 // ---------------------------------------------------------------------------
 let tuneSortCol = "id", tuneSortDir = 1;   // 1 = asc, -1 = desc
 let ucSortCol   = "id", ucSortDir   = 1;
+
+let tuneSearch = "";
+let ucSearch   = "";
+
+function onTuneSearch(val) { tuneSearch = val.toLowerCase(); renderTuneRows(); }
+function onUCSearch(val)   { ucSearch   = val.toLowerCase(); renderUCRows();  }
 
 function clientSort(rows, col, dir) {
   return [...rows].sort((a, b) => {
@@ -357,7 +363,11 @@ function tuneActionBtns(r) {
 }
 
 function renderTuneRows() {
-  const sorted = clientSort(tuneRows, tuneSortCol, tuneSortDir);
+  const TUNE_FIELDS = ["rule_name","tune_reason","reporter","environment","tuning_analyst","how_tuned"];
+  const visible = tuneSearch
+    ? tuneRows.filter(r => TUNE_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(tuneSearch)))
+    : tuneRows;
+  const sorted = clientSort(visible, tuneSortCol, tuneSortDir);
   updateSortUI("tune", tuneSortCol, tuneSortDir);
   const tbody = document.getElementById("tune-tbody");
   const empty = document.getElementById("tune-empty");
@@ -397,6 +407,8 @@ async function loadTune() {
 
 function clearTuneFilters() {
   ["tune-filter-month","tune-filter-env","tune-filter-status"].forEach(id => { document.getElementById(id).value = ""; });
+  const s = document.getElementById("tune-search"); if (s) s.value = "";
+  tuneSearch = "";
   loadTune();
 }
 
@@ -557,7 +569,11 @@ function ucActionBtns(r) {
 }
 
 function renderUCRows() {
-  const sorted = clientSort(ucRows, ucSortCol, ucSortDir);
+  const UC_FIELDS = ["usecase_description","requester","environment","rule_name","rule_author","notes"];
+  const visible = ucSearch
+    ? ucRows.filter(r => UC_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(ucSearch)))
+    : ucRows;
+  const sorted = clientSort(visible, ucSortCol, ucSortDir);
   updateSortUI("uc", ucSortCol, ucSortDir);
   const tbody = document.getElementById("uc-tbody");
   const empty = document.getElementById("uc-empty");
@@ -596,6 +612,8 @@ async function loadUC() {
 
 function clearUCFilters() {
   ["uc-filter-month","uc-filter-env","uc-filter-status"].forEach(id => { document.getElementById(id).value = ""; });
+  const s = document.getElementById("uc-search"); if (s) s.value = "";
+  ucSearch = "";
   loadUC();
 }
 
