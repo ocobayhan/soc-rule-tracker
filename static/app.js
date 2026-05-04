@@ -843,13 +843,6 @@ async function loadSettings() {
           <button class="btn-icon danger" onclick="deleteEnvironment(${e.id})">&#x1F5D1;</button></li>`).join("")
       : `<li class="text-muted" style="justify-content:center">Henüz ortam eklenmedi.</li>`;
   }
-  const analyList = document.getElementById("analyst-settings-list");
-  if (analyList) {
-    analyList.innerHTML = _analysts.length
-      ? _analysts.map(a => `<li><span>${esc(a.name)}</span>
-          <button class="btn-icon danger" onclick="deleteAnalyst(${a.id})">&#x1F5D1;</button></li>`).join("")
-      : `<li class="text-muted" style="justify-content:center">Henüz analist eklenmedi.</li>`;
-  }
   await loadUsersList();
 }
 
@@ -905,20 +898,8 @@ async function deleteEnvironment(id) {
   try { await apiFetch(`/api/environments/${id}`, { method: "DELETE" }); loadSettings(); }
   catch (e) { alert(e.message); }
 }
-async function addAnalyst() {
-  const inp = document.getElementById("new-analyst-input");
-  const name = inp.value.trim(); if (!name) return;
-  try { await apiFetch("/api/analysts", { method: "POST", body: JSON.stringify({ name }) }); inp.value = ""; loadSettings(); }
-  catch (e) { alert(e.message); }
-}
-async function deleteAnalyst(id) {
-  if (!confirm("Bu analisti silmek istediğinize emin misiniz?")) return;
-  try { await apiFetch(`/api/analysts/${id}`, { method: "DELETE" }); loadSettings(); }
-  catch (e) { alert(e.message); }
-}
 
 document.getElementById("new-env-input")?.addEventListener("keydown", e => { if (e.key==="Enter") addEnvironment(); });
-document.getElementById("new-analyst-input")?.addEventListener("keydown", e => { if (e.key==="Enter") addAnalyst(); });
 
 // ---------------------------------------------------------------------------
 // Modal overlay close

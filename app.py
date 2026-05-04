@@ -266,39 +266,17 @@ def delete_environment(env_id):
     return jsonify({"ok": True})
 
 # ---------------------------------------------------------------------------
-# Analysts
+# Analysts — now served from the users table (role != settings)
 # ---------------------------------------------------------------------------
 @app.route("/api/analysts", methods=["GET"])
 @login_required
 def list_analysts():
-    db = get_db()
-    rows = db.execute("SELECT * FROM analysts ORDER BY name").fetchall()
+    db   = get_db()
+    rows = db.execute(
+        "SELECT id, username AS name, role FROM users "
+        "WHERE role != 'settings' ORDER BY username"
+    ).fetchall()
     return jsonify([dict(r) for r in rows])
-
-@app.route("/api/analysts", methods=["POST"])
-@login_required
-@settings_required
-def add_analyst():
-    name = (request.json or {}).get("name", "").strip()
-    if not name:
-        return jsonify({"error": "İsim zorunludur"}), 400
-    db = get_db()
-    try:
-        db.execute("INSERT INTO analysts (name) VALUES (?)", (name,))
-        db.commit()
-    except Exception:
-        return jsonify({"error": "Bu analist zaten mevcut"}), 409
-    row = db.execute("SELECT * FROM analysts WHERE name=?", (name,)).fetchone()
-    return jsonify(dict(row)), 201
-
-@app.route("/api/analysts/<int:analyst_id>", methods=["DELETE"])
-@login_required
-@settings_required
-def delete_analyst(analyst_id):
-    db = get_db()
-    db.execute("DELETE FROM analysts WHERE id=?", (analyst_id,))
-    db.commit()
-    return jsonify({"ok": True})
 
 # ---------------------------------------------------------------------------
 # KPI
