@@ -830,6 +830,56 @@ function setupPaste(textareaId, previewAreaId, hiddenId) {
 }
 
 // ---------------------------------------------------------------------------
+// Resizable columns
+// ---------------------------------------------------------------------------
+function makeColumnsResizable(table) {
+  if (!table) return;
+  const ths  = Array.from(table.querySelectorAll("thead tr th"));
+  const cols = Array.from(table.querySelectorAll("col"));
+
+  ths.forEach((th, i) => {
+    // Skip first (status dot) and last (actions)
+    if (i === 0 || i === ths.length - 1) return;
+
+    const handle = document.createElement("div");
+    handle.className = "col-resize-handle";
+
+    // Prevent click on handle from firing the sort onclick
+    handle.addEventListener("click", e => e.stopPropagation());
+
+    handle.addEventListener("mousedown", e => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const startX = e.pageX;
+      const startW = th.offsetWidth;
+      handle.classList.add("dragging");
+      document.body.style.cursor     = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const onMove = e => {
+        const w = Math.min(Math.max(startW + (e.pageX - startX), 60), 450);
+        th.style.width = w + "px";
+        if (cols[i]) cols[i].style.width = w + "px";
+      };
+
+      const onUp = () => {
+        handle.classList.remove("dragging");
+        document.body.style.cursor     = "";
+        document.body.style.userSelect = "";
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup",   onUp);
+      };
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup",   onUp);
+    });
+
+    th.appendChild(handle);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 if (IS_SETTINGS) {
@@ -838,5 +888,7 @@ if (IS_SETTINGS) {
   loadDropdownData().then(() => {
     loadDashboard();
     setupAllPaste();
+    // Attach column resizers (tables are in static HTML, always present)
+    document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
   });
 }

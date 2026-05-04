@@ -351,6 +351,7 @@ body {
   letter-spacing: var(--ls-md);
   white-space: nowrap;
   background: var(--color-pitch-black);
+  position: relative; /* needed for resize handle */
 }
 .table td {
   padding: 11px 14px;
@@ -718,6 +719,33 @@ select.form-input option { background: var(--color-panel-background); color: var
 /* UC-specific */
 .table-fixed .col-desc   { width: 18%; }
 .table-fixed .col-rule   { width: 13%; }
+
+/* Column resize handle */
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;        /* wider hit-area */
+  height: 100%;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 1;
+}
+.col-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  right: 1px;
+  width: 2px;
+  height: 60%;
+  border-radius: 2px;
+  background: transparent;
+  transition: background .15s;
+}
+.col-resize-handle:hover::after,
+.col-resize-handle.dragging::after {
+  background: rgba(247,247,247,.2);
+}
 
 /* Search box */
 .search-wrap {
