@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Rule Tracker</title>
-  <link rel="stylesheet" href="/static/styles.css?v=8"/>
+  <link rel="stylesheet" href="/static/styles.css?v=9"/>
 </head>
 <body>
 
@@ -19,6 +19,7 @@
     <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
     <button class="nav-btn" data-tab="tuning">Kural Tuning</button>
     <button class="nav-btn" data-tab="usecase">Use-Case / Kural Yazma</button>
+    <button class="nav-btn" data-tab="auditlog">Audit Log</button>
     {% else %}
     <button class="nav-btn active" data-tab="settings">Ayarlar</button>
     {% endif %}
@@ -161,6 +162,28 @@
     </div>
   </section>
 
+  <!-- ===== AUDIT LOG ===== -->
+  <section id="tab-auditlog" class="tab-panel">
+    <div class="page-header">
+      <h1 class="page-title">Audit Log</h1>
+      <button class="btn btn-secondary" onclick="loadAuditLog()">Yenile</button>
+    </div>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead><tr>
+          <th style="width:140px">Zaman</th>
+          <th style="width:120px">Kullanıcı</th>
+          <th style="width:160px">İşlem</th>
+          <th style="width:80px">Tip</th>
+          <th style="width:60px">ID</th>
+          <th>Detay</th>
+        </tr></thead>
+        <tbody id="audit-tbody"></tbody>
+      </table>
+      <div id="audit-empty" class="empty-state" style="display:none">Henüz kayıt yok.</div>
+    </div>
+  </section>
+
 {% else %}
 
   <!-- ===== SETTINGS ===== -->
@@ -187,6 +210,24 @@
         </div>
         <ul class="settings-list" id="analyst-settings-list"></ul>
       </div>
+    </div>
+
+    <!-- Users panel -->
+    <div class="settings-panel" style="margin-top:20px;max-width:800px">
+      <div class="settings-panel-header">
+        <span class="settings-panel-title">Kullanıcılar</span>
+        <div class="settings-add-row">
+          <input type="text"     id="new-user-username" class="form-input input-sm" placeholder="Kullanıcı adı"/>
+          <input type="password" id="new-user-password" class="form-input input-sm" placeholder="Şifre (min 6)"/>
+          <select id="new-user-role" class="form-input input-sm">
+            <option value="analyst">Analist</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button class="btn btn-primary" onclick="addUser()">Ekle</button>
+        </div>
+      </div>
+      <div id="user-form-error" class="form-error" style="display:none;margin:0 20px 12px"></div>
+      <ul class="settings-list" id="user-settings-list"></ul>
     </div>
   </section>
 
@@ -546,6 +587,10 @@
 
 {% endif %}
 
-<script src="/static/app.js?v=8"></script>
+<script>
+  const USER_ROLE    = "{{ user_role }}";
+  const CURRENT_USER = "{{ username }}";
+</script>
+<script src="/static/app.js?v=9"></script>
 </body>
 </html>

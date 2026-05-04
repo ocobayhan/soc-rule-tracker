@@ -1011,6 +1011,42 @@ select.form-input option { background: var(--color-panel-background); color: var
   box-shadow: 0 24px 60px rgba(0,0,0,.6);
 }
 
+/* ============================================================
+   AUDIT LOG BADGES
+   ============================================================ */
+.audit-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--ls-sm);
+  white-space: nowrap;
+  background: rgba(247,247,247,.06);
+  color: var(--text-secondary);
+}
+.audit-login   { color: #60a5fa; background: rgba(96,165,250,.1); }
+.audit-create  { color: #4ade80; background: rgba(74,222,128,.1); }
+.audit-claim   { color: #60a5fa; background: rgba(96,165,250,.1); }
+.audit-close   { color: #c084fc; background: rgba(192,132,252,.1); }
+.audit-edit    { color: #fbbf24; background: rgba(251,191,36,.08); }
+.audit-delete  { color: #f87171; background: rgba(248,113,113,.1); }
+
+/* ============================================================
+   USER ROLE BADGES (settings panel)
+   ============================================================ */
+.user-role-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 8px;
+  letter-spacing: var(--ls-md);
+}
+.role-admin   { color: #f59e0b; background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.2); }
+.role-analyst { color: #60a5fa; background: rgba(96,165,250,.1);  border: 1px solid rgba(96,165,250,.18); }
+
 a { color: var(--text-secondary); text-decoration: none; }
 a:hover { color: var(--text-primary); }
 

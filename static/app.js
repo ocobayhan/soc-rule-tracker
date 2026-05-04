@@ -17,6 +17,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "tuning")    loadTune();
     if (btn.dataset.tab === "usecase")   loadUC();
     if (btn.dataset.tab === "settings")  loadSettings();
+    if (btn.dataset.tab === "auditlog")  loadAuditLog();
   });
 });
 
@@ -353,11 +354,21 @@ function sortUC(col) {
 // Tune list
 // ---------------------------------------------------------------------------
 function tuneActionBtns(r) {
-  const edit = `<button class="btn-icon" title="Düzenle" onclick="openTuneEditModal(${r.id})">&#9998;</button>`;
-  const del  = `<button class="btn-icon danger" title="Sil" onclick="deleteTune(${r.id})">&#x1F5D1;</button>`;
+  const isAdmin    = USER_ROLE === "admin";
+  const isMyTask   = r.tuning_analyst === CURRENT_USER;
+  const isUnowned  = !r.tuning_analyst;
+
+  const canEdit = isAdmin || isMyTask || (isUnowned && r.status === "Açık");
+  const edit = canEdit
+    ? `<button class="btn-icon" title="Düzenle" onclick="openTuneEditModal(${r.id})">&#9998;</button>`
+    : "";
+  const del  = isAdmin
+    ? `<button class="btn-icon danger" title="Sil" onclick="deleteTune(${r.id})">&#x1F5D1;</button>`
+    : "";
+
   if (r.status === "Açık")
     return `<button class="btn-action-claim" onclick="openTuneClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
-  if (r.status === "İnceleniyor")
+  if (r.status === "İnceleniyor" && (isAdmin || isMyTask))
     return `<button class="btn-action-close" onclick="openTuneCloseModal(${r.id})">Kapat</button> ${edit}${del}`;
   return `${edit}${del}`;
 }
@@ -499,8 +510,15 @@ async function saveTuneEdit() {
 // ---------------------------------------------------------------------------
 function openTuneClaimModal(id) {
   populateAnalystDropdowns();
-  document.getElementById("claim-tune-id").value      = id;
-  document.getElementById("claim-tune-analyst").value = "";
+  document.getElementById("claim-tune-id").value = id;
+  const sel = document.getElementById("claim-tune-analyst");
+  if (USER_ROLE === "analyst") {
+    sel.innerHTML  = `<option value="${esc(CURRENT_USER)}" selected>${esc(CURRENT_USER)}</option>`;
+    sel.disabled   = true;
+  } else {
+    sel.disabled = false;
+    sel.value    = "";
+  }
   document.getElementById("claim-tune-error").style.display = "none";
   document.getElementById("tune-claim-modal").style.display = "flex";
 }
@@ -559,11 +577,21 @@ async function deleteTune(id) {
 // UC list
 // ---------------------------------------------------------------------------
 function ucActionBtns(r) {
-  const edit = `<button class="btn-icon" title="Düzenle" onclick="openUCEditModal(${r.id})">&#9998;</button>`;
-  const del  = `<button class="btn-icon danger" title="Sil" onclick="deleteUC(${r.id})">&#x1F5D1;</button>`;
+  const isAdmin   = USER_ROLE === "admin";
+  const isMyTask  = r.rule_author === CURRENT_USER;
+  const isUnowned = !r.rule_author;
+
+  const canEdit = isAdmin || isMyTask || (isUnowned && r.status === "Açık");
+  const edit = canEdit
+    ? `<button class="btn-icon" title="Düzenle" onclick="openUCEditModal(${r.id})">&#9998;</button>`
+    : "";
+  const del  = isAdmin
+    ? `<button class="btn-icon danger" title="Sil" onclick="deleteUC(${r.id})">&#x1F5D1;</button>`
+    : "";
+
   if (r.status === "Açık")
     return `<button class="btn-action-claim" onclick="openUCClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
-  if (r.status === "İnceleniyor")
+  if (r.status === "İnceleniyor" && (isAdmin || isMyTask))
     return `<button class="btn-action-close" onclick="openUCCloseModal(${r.id})">Kapat</button> ${edit}${del}`;
   return `${edit}${del}`;
 }
@@ -689,8 +717,15 @@ async function saveUCEdit() {
 // ---------------------------------------------------------------------------
 function openUCClaimModal(id) {
   populateAnalystDropdowns();
-  document.getElementById("claim-uc-id").value      = id;
-  document.getElementById("claim-uc-analyst").value = "";
+  document.getElementById("claim-uc-id").value = id;
+  const sel = document.getElementById("claim-uc-analyst");
+  if (USER_ROLE === "analyst") {
+    sel.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(CURRENT_USER)}</option>`;
+    sel.disabled  = true;
+  } else {
+    sel.disabled = false;
+    sel.value    = "";
+  }
   document.getElementById("claim-uc-error").style.display = "none";
   document.getElementById("uc-claim-modal").style.display = "flex";
 }
@@ -746,6 +781,59 @@ async function deleteUC(id) {
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Audit Log
+// ---------------------------------------------------------------------------
+const ACTION_TR = {
+  "LOGIN":       "Giriş yapıldı",
+  "CREATE_TUNE": "Tuning oluşturuldu",
+  "CLAIM_TUNE":  "Tuning üstlenildi",
+  "CLOSE_TUNE":  "Tuning kapatıldı",
+  "EDIT_TUNE":   "Tuning düzenlendi",
+  "DELETE_TUNE": "Tuning silindi",
+  "CREATE_UC":   "Use-Case oluşturuldu",
+  "CLAIM_UC":    "Use-Case üstlenildi",
+  "CLOSE_UC":    "Use-Case kapatıldı",
+  "EDIT_UC":     "Use-Case düzenlendi",
+  "DELETE_UC":   "Use-Case silindi",
+  "CREATE_USER": "Kullanıcı oluşturuldu",
+  "DELETE_USER": "Kullanıcı silindi",
+};
+const ACTION_CLS = {
+  "LOGIN": "audit-login",
+  "CREATE_TUNE": "audit-create", "CREATE_UC": "audit-create", "CREATE_USER": "audit-create",
+  "CLAIM_TUNE":  "audit-claim",  "CLAIM_UC":  "audit-claim",
+  "CLOSE_TUNE":  "audit-close",  "CLOSE_UC":  "audit-close",
+  "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",
+  "DELETE_TUNE": "audit-delete", "DELETE_UC": "audit-delete", "DELETE_USER": "audit-delete",
+};
+
+async function loadAuditLog() {
+  try {
+    const rows  = await apiFetch("/api/audit");
+    const tbody = document.getElementById("audit-tbody");
+    const empty = document.getElementById("audit-empty");
+    if (!rows.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+    empty.style.display = "none";
+    tbody.innerHTML = rows.map(r => {
+      const cls  = ACTION_CLS[r.action] || "";
+      const label = ACTION_TR[r.action]  || r.action;
+      const time  = r.created_at ? r.created_at.slice(0, 16).replace("T", " ") : "—";
+      return `<tr>
+        <td class="text-muted" style="font-size:12px;white-space:nowrap">${time}</td>
+        <td style="font-weight:500">${esc(r.username)}</td>
+        <td><span class="audit-badge ${cls}">${label}</span></td>
+        <td class="text-muted" style="font-size:12px">${esc(r.record_type || "")}</td>
+        <td class="text-muted" style="font-size:12px">${r.record_id ? "#"+r.record_id : ""}</td>
+        <td class="text-muted" style="font-size:12px">${esc(r.detail || "")}</td>
+      </tr>`;
+    }).join("");
+  } catch (e) { console.error(e); }
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
 async function loadSettings() {
   await loadDropdownData();
   const envList = document.getElementById("env-settings-list");
@@ -762,6 +850,48 @@ async function loadSettings() {
           <button class="btn-icon danger" onclick="deleteAnalyst(${a.id})">&#x1F5D1;</button></li>`).join("")
       : `<li class="text-muted" style="justify-content:center">Henüz analist eklenmedi.</li>`;
   }
+  await loadUsersList();
+}
+
+async function loadUsersList() {
+  const list = document.getElementById("user-settings-list");
+  if (!list) return;
+  try {
+    const users = await apiFetch("/api/users");
+    const ROLE_LABEL = { admin: "Admin", analyst: "Analist" };
+    list.innerHTML = users.length
+      ? users.map(u => `<li>
+          <span>${esc(u.username)}
+            <span class="user-role-badge role-${u.role}">${ROLE_LABEL[u.role] || u.role}</span>
+          </span>
+          <button class="btn-icon danger" onclick="deleteUser(${u.id}, '${esc(u.username)}')">&#x1F5D1;</button>
+        </li>`).join("")
+      : `<li class="text-muted" style="justify-content:center">Henüz kullanıcı eklenmedi.</li>`;
+  } catch (e) { console.error(e); }
+}
+
+async function addUser() {
+  const username = document.getElementById("new-user-username").value.trim();
+  const password = document.getElementById("new-user-password").value.trim();
+  const role     = document.getElementById("new-user-role").value;
+  const errEl    = document.getElementById("user-form-error");
+  errEl.style.display = "none";
+  if (!username || !password) {
+    errEl.textContent = "Kullanıcı adı ve şifre zorunludur.";
+    errEl.style.display = "block"; return;
+  }
+  try {
+    await apiFetch("/api/users", { method: "POST", body: JSON.stringify({ username, password, role }) });
+    document.getElementById("new-user-username").value = "";
+    document.getElementById("new-user-password").value = "";
+    loadUsersList();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(`"${name}" kullanıcısını silmek istediğinize emin misiniz?`)) return;
+  try { await apiFetch(`/api/users/${id}`, { method: "DELETE" }); loadUsersList(); }
+  catch (e) { alert(e.message); }
 }
 
 async function addEnvironment() {

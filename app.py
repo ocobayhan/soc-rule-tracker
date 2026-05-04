@@ -46,7 +46,20 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'user',
+            role TEXT NOT NULL DEFAULT 'analyst',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id   INTEGER,
+            username  TEXT NOT NULL,
+            action    TEXT NOT NULL,
+            record_type TEXT,
+            record_id   INTEGER,
+            detail    TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
@@ -109,19 +122,43 @@ def init_db():
     if not _col_exists(db, "usecase_requests", "completed_at"):
         db.execute("ALTER TABLE usecase_requests ADD COLUMN completed_at TEXT")
     if not _col_exists(db, "users", "role"):
-        db.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'")
+        db.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'analyst'")
+
+    # Migrate legacy 'user' role → 'admin'
+    db.execute("UPDATE users SET role='admin' WHERE role='user'")
     db.commit()
 
     # Seed users
     if not db.execute("SELECT id FROM users WHERE username='admin'").fetchone():
         db.execute("INSERT INTO users (username,password_hash,role) VALUES (?,?,?)",
-                   ("admin", generate_password_hash("Admin123!"), "user"))
+                   ("admin", generate_password_hash("Admin123!"), "admin"))
     if not db.execute("SELECT id FROM users WHERE username='settings'").fetchone():
         db.execute("INSERT INTO users (username,password_hash,role) VALUES (?,?,?)",
                    ("settings", generate_password_hash("Settings123!"), "settings"))
     db.commit()
 
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Audit log helper
+# ---------------------------------------------------------------------------
+def write_audit(action, record_type=None, record_id=None, detail=""):
+    """Write an audit entry for the currently authenticated session user."""
+    try:
+        db = get_db()
+        db.execute(
+            "INSERT INTO audit_log (user_id,username,action,record_type,record_id,detail,created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (session.get("user_id"), session.get("username", "?"),
+             action, record_type, record_id, detail,
+             datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        db.commit()
+    except Exception as e:
+        app.logger.warning("Audit write failed: %s", e)
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -156,6 +193,7 @@ def login():
             session["user_id"]  = user["id"]
             session["username"] = user["username"]
             session["role"]     = user["role"]
+            write_audit("LOGIN", detail=f"IP: {request.remote_addr}")
             return redirect(url_for("index"))
         error = "Kullanıcı adı veya şifre hatalı."
     return render_template("login.html", error=error)
@@ -168,9 +206,11 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    is_settings = session.get("role") == "settings"
+    role = session.get("role", "analyst")
+    is_settings = role == "settings"
     return render_template("index.html",
                            username=session.get("username"),
+                           user_role=role,
                            is_settings=is_settings)
 
 # ---------------------------------------------------------------------------
@@ -333,7 +373,10 @@ def create_tune():
         now, None, now
     ))
     db.commit()
-    return jsonify(dict(db.execute("SELECT * FROM tune_requests WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+    new_row = db.execute("SELECT * FROM tune_requests WHERE id=?", (cur.lastrowid,)).fetchone()
+    write_audit("CREATE_TUNE", "tune", new_row["id"],
+                f"Kural: {new_row['rule_name']} | Ortam: {new_row['environment']}")
+    return jsonify(dict(new_row)), 201
 
 @app.route("/api/tune/<int:item_id>", methods=["PUT"])
 @login_required
@@ -343,6 +386,23 @@ def update_tune(item_id):
     row  = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
+
+    # ── Permission checks for analyst role ──────────────────────────────────
+    role    = session.get("role", "analyst")
+    uname   = session.get("username", "")
+    if role == "analyst":
+        cur_analyst = row["tuning_analyst"] or ""
+        new_analyst = data.get("tuning_analyst", cur_analyst).strip()
+        new_st      = data.get("status", row["status"])
+        # Cannot edit a task assigned to someone else
+        if cur_analyst and cur_analyst != uname:
+            return jsonify({"error": "Bu talep size atanmamış. Düzenlemek için admin yetkisi gereklidir."}), 403
+        # Cannot claim for someone else
+        if new_analyst and new_analyst != uname:
+            return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
+        # Cannot close a task not assigned to self
+        if new_st in ("Tamamlandı", "Tune Edilmedi") and cur_analyst != uname:
+            return jsonify({"error": "Sadece size atanan talepleri kapatabilirsiniz."}), 403
 
     now       = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])
@@ -376,16 +436,32 @@ def update_tune(item_id):
         completed_at, now, item_id
     ))
     db.commit()
-    return jsonify(dict(db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()))
+    updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    # Determine audit action
+    if new_status == "İnceleniyor" and data.get("tuning_analyst"):
+        a_action = "CLAIM_TUNE"
+        a_detail = f"Kural: {updated['rule_name']} | Analist: {updated['tuning_analyst']}"
+    elif new_status in ("Tamamlandı", "Tune Edilmedi"):
+        a_action = "CLOSE_TUNE"
+        a_detail = f"Kural: {updated['rule_name']} | Durum: {new_status}"
+    else:
+        a_action = "EDIT_TUNE"
+        a_detail = f"Kural: {updated['rule_name']}"
+    write_audit(a_action, "tune", item_id, a_detail)
+    return jsonify(dict(updated))
 
 @app.route("/api/tune/<int:item_id>", methods=["DELETE"])
 @login_required
 def delete_tune(item_id):
+    if session.get("role") == "analyst":
+        return jsonify({"error": "Kayıt silmek için admin yetkisi gereklidir."}), 403
     db = get_db()
-    if not db.execute("SELECT id FROM tune_requests WHERE id=?", (item_id,)).fetchone():
+    row = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
     db.execute("DELETE FROM tune_requests WHERE id=?", (item_id,))
     db.commit()
+    write_audit("DELETE_TUNE", "tune", item_id, f"Kural: {row['rule_name']}")
     return jsonify({"ok": True})
 
 # ---------------------------------------------------------------------------
@@ -428,7 +504,10 @@ def create_usecase():
         now, None, now
     ))
     db.commit()
-    return jsonify(dict(db.execute("SELECT * FROM usecase_requests WHERE id=?", (cur.lastrowid,)).fetchone())), 201
+    new_row = db.execute("SELECT * FROM usecase_requests WHERE id=?", (cur.lastrowid,)).fetchone()
+    write_audit("CREATE_UC", "usecase", new_row["id"],
+                f"Tanım: {new_row['usecase_description'][:80]} | Ortam: {new_row['environment']}")
+    return jsonify(dict(new_row)), 201
 
 @app.route("/api/usecase/<int:item_id>", methods=["PUT"])
 @login_required
@@ -438,6 +517,20 @@ def update_usecase(item_id):
     row  = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
+
+    # ── Permission checks for analyst role ──────────────────────────────────
+    role    = session.get("role", "analyst")
+    uname   = session.get("username", "")
+    if role == "analyst":
+        cur_author  = row["rule_author"] or ""
+        new_author  = data.get("rule_author", cur_author).strip()
+        new_st      = data.get("status", row["status"])
+        if cur_author and cur_author != uname:
+            return jsonify({"error": "Bu talep size atanmamış. Düzenlemek için admin yetkisi gereklidir."}), 403
+        if new_author and new_author != uname:
+            return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
+        if new_st in ("Yazıldı", "Yazılamaz") and cur_author != uname:
+            return jsonify({"error": "Sadece size atanan talepleri kapatabilirsiniz."}), 403
 
     now        = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])
@@ -464,17 +557,105 @@ def update_usecase(item_id):
         new_status, completed_at, now, item_id
     ))
     db.commit()
-    return jsonify(dict(db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()))
+    updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    if new_status == "İnceleniyor" and data.get("rule_author"):
+        a_action = "CLAIM_UC"
+        a_detail = f"Tanım: {updated['usecase_description'][:60]} | Analist: {updated['rule_author']}"
+    elif new_status in ("Yazıldı", "Yazılamaz"):
+        a_action = "CLOSE_UC"
+        a_detail = f"Tanım: {updated['usecase_description'][:60]} | Durum: {new_status}"
+    else:
+        a_action = "EDIT_UC"
+        a_detail = f"Tanım: {updated['usecase_description'][:60]}"
+    write_audit(a_action, "usecase", item_id, a_detail)
+    return jsonify(dict(updated))
 
 @app.route("/api/usecase/<int:item_id>", methods=["DELETE"])
 @login_required
 def delete_usecase(item_id):
+    if session.get("role") == "analyst":
+        return jsonify({"error": "Kayıt silmek için admin yetkisi gereklidir."}), 403
     db = get_db()
-    if not db.execute("SELECT id FROM usecase_requests WHERE id=?", (item_id,)).fetchone():
+    row = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
     db.execute("DELETE FROM usecase_requests WHERE id=?", (item_id,))
     db.commit()
+    write_audit("DELETE_UC", "usecase", item_id, f"Tanım: {row['usecase_description'][:60]}")
     return jsonify({"ok": True})
+
+# ---------------------------------------------------------------------------
+# User management  (settings role only)
+# ---------------------------------------------------------------------------
+@app.route("/api/users", methods=["GET"])
+@login_required
+@settings_required
+def list_users():
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, username, role, created_at FROM users "
+        "WHERE role != 'settings' ORDER BY username"
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/users", methods=["POST"])
+@login_required
+@settings_required
+def create_user():
+    data     = request.json or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+    role     = data.get("role", "analyst")
+    if not username or not password:
+        return jsonify({"error": "Kullanıcı adı ve şifre zorunludur"}), 400
+    if role not in ("admin", "analyst"):
+        return jsonify({"error": "Geçersiz rol (admin veya analyst olmalı)"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Şifre en az 6 karakter olmalıdır"}), 400
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO users (username,password_hash,role) VALUES (?,?,?)",
+            (username, generate_password_hash(password), role)
+        )
+        db.commit()
+    except Exception:
+        return jsonify({"error": "Bu kullanıcı adı zaten mevcut"}), 409
+    user = db.execute(
+        "SELECT id,username,role,created_at FROM users WHERE username=?", (username,)
+    ).fetchone()
+    write_audit("CREATE_USER", "user", user["id"], f"Kullanıcı: {username} | Rol: {role}")
+    return jsonify(dict(user)), 201
+
+@app.route("/api/users/<int:user_id>", methods=["DELETE"])
+@login_required
+@settings_required
+def delete_user(user_id):
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 404
+    if user["role"] == "settings":
+        return jsonify({"error": "Settings kullanıcısı silinemez"}), 403
+    db.execute("DELETE FROM users WHERE id=?", (user_id,))
+    db.commit()
+    write_audit("DELETE_USER", "user", user_id, f"Kullanıcı: {user['username']}")
+    return jsonify({"ok": True})
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+@app.route("/api/audit")
+@login_required
+def get_audit():
+    if session.get("role") == "settings":
+        return jsonify({"error": "Forbidden"}), 403
+    db    = get_db()
+    limit = min(int(request.args.get("limit", 300)), 1000)
+    rows  = db.execute(
+        "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 # ---------------------------------------------------------------------------
 # Export (Excel)
