@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Rule Tracker</title>
-  <link rel="stylesheet" href="/static/styles.css?v=7"/>
+  <link rel="stylesheet" href="/static/styles.css?v=8"/>
 </head>
 <body>
 
@@ -43,6 +43,9 @@
         <button class="btn btn-secondary" onclick="loadKPI()">Uygula</button>
         <button class="btn-ghost-sm" onclick="document.getElementById('kpi-month').value='';loadKPI()">Tümü</button>
       </div>
+      <a href="/api/export" class="btn btn-export" title="Tüm veriyi Excel olarak indir">
+        &#8675; Excel
+      </a>
     </div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-label">Açık Tuning Talebi</div><div class="kpi-value" id="kpi-tune-open">—</div></div>

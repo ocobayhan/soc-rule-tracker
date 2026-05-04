@@ -1,10 +1,11 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 from functools import wraps
+from io import BytesIO
 
 from flask import (Flask, g, jsonify, redirect, render_template, request,
-                   session, url_for)
+                   send_file, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -474,6 +475,128 @@ def delete_usecase(item_id):
     db.execute("DELETE FROM usecase_requests WHERE id=?", (item_id,))
     db.commit()
     return jsonify({"ok": True})
+
+# ---------------------------------------------------------------------------
+# Export (Excel)
+# ---------------------------------------------------------------------------
+@app.route("/api/export")
+@login_required
+def export_data():
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        return jsonify({"error": "openpyxl kütüphanesi eksik. pip install openpyxl"}), 500
+
+    db = get_db()
+    wb = Workbook()
+
+    HDR_FONT  = Font(bold=True, color="F7F7F7", size=10)
+    HDR_FILL  = PatternFill("solid", fgColor="1C1C1C")
+    HDR_ALIGN = Alignment(horizontal="left", vertical="center", wrap_text=False)
+    CELL_ALIGN = Alignment(vertical="top", wrap_text=True)
+
+    def write_headers(ws, headers):
+        for ci, h in enumerate(headers, 1):
+            c = ws.cell(row=1, column=ci, value=h)
+            c.font, c.fill, c.alignment = HDR_FONT, HDR_FILL, HDR_ALIGN
+        ws.row_dimensions[1].height = 22
+        ws.freeze_panes = "A2"
+
+    def auto_width(ws, min_w=8, max_w=60):
+        for col in ws.columns:
+            width = max(
+                (len(str(cell.value)) for cell in col if cell.value),
+                default=min_w
+            )
+            ws.column_dimensions[get_column_letter(col[0].column)].width = min(max(width + 2, min_w), max_w)
+
+    def fmt_date(val):
+        return val[:10] if val else ""
+
+    # ── Sheet 1 : Tuning Talepleri ─────────────────────────────────────────
+    ws1 = wb.active
+    ws1.title = "Tuning Talepleri"
+    tune_cols = ["ID", "Kural İsmi", "Ortam", "Raporlayan", "Tune Nedeni",
+                 "Tetiklenme Sıklığı", "Tune Eden Analist", "Nasıl Tune Edildi",
+                 "Durum", "Raporlandı", "Tamamlandı"]
+    write_headers(ws1, tune_cols)
+
+    for r in db.execute("SELECT * FROM tune_requests ORDER BY id").fetchall():
+        row = [r["id"], r["rule_name"], r["environment"], r["reporter"],
+               r["tune_reason"], r["trigger_frequency"] or "",
+               r["tuning_analyst"] or "", r["how_tuned"] or "",
+               r["status"], fmt_date(r["created_at"]), fmt_date(r["completed_at"])]
+        ws1.append(row)
+        for ci in range(1, len(tune_cols) + 1):
+            ws1.cell(row=ws1.max_row, column=ci).alignment = CELL_ALIGN
+
+    auto_width(ws1)
+
+    # ── Sheet 2 : Use-Case Talepleri ───────────────────────────────────────
+    ws2 = wb.create_sheet("Use-Case Talepleri")
+    uc_cols = ["ID", "Use-Case Tanımı", "Ortam", "Talep Eden",
+               "Analist", "Yazılan Kural Adı", "Notlar",
+               "Durum", "Talep Tarihi", "Yazılma Tarihi"]
+    write_headers(ws2, uc_cols)
+
+    for r in db.execute("SELECT * FROM usecase_requests ORDER BY id").fetchall():
+        row = [r["id"], r["usecase_description"], r["environment"], r["requester"],
+               r["rule_author"] or "", r["rule_name"] or "", r["notes"] or "",
+               r["status"], fmt_date(r["created_at"]), fmt_date(r["completed_at"])]
+        ws2.append(row)
+        for ci in range(1, len(uc_cols) + 1):
+            ws2.cell(row=ws2.max_row, column=ci).alignment = CELL_ALIGN
+
+    auto_width(ws2)
+
+    # ── Sheet 3 : KPI Özeti ────────────────────────────────────────────────
+    ws3 = wb.create_sheet("KPI Özeti")
+    write_headers(ws3, ["Metrik", "Değer"])
+
+    def q(sql): return db.execute(sql).fetchone()["c"]
+
+    total_tune = q("SELECT COUNT(*) c FROM tune_requests")
+    kpi_rows = [
+        ("── TUNING ──────────────────────", ""),
+        ("Toplam Tuning Talebi",      total_tune),
+        ("Açık",                      q("SELECT COUNT(*) c FROM tune_requests WHERE status='Açık'")),
+        ("İnceleniyor",               q("SELECT COUNT(*) c FROM tune_requests WHERE status='İnceleniyor'")),
+        ("Tamamlandı",                q("SELECT COUNT(*) c FROM tune_requests WHERE status='Tamamlandı'")),
+        ("Tune Edilmedi",             q("SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Edilmedi'")),
+        ("", ""),
+        ("── USE-CASE ────────────────────", ""),
+    ]
+    total_uc   = q("SELECT COUNT(*) c FROM usecase_requests")
+    written_uc = q("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazıldı'")
+    kpi_rows  += [
+        ("Toplam Use-Case Talebi",    total_uc),
+        ("Açık",                      q("SELECT COUNT(*) c FROM usecase_requests WHERE status='Açık'")),
+        ("İnceleniyor",               q("SELECT COUNT(*) c FROM usecase_requests WHERE status='İnceleniyor'")),
+        ("Yazıldı",                   written_uc),
+        ("Yazılamaz",                 q("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazılamaz'")),
+        ("Dönüşüm Oranı (%)",         round(written_uc / total_uc * 100, 1) if total_uc else 0),
+        ("", ""),
+        ("Dışa Aktarım Tarihi",       date.today().isoformat()),
+    ]
+    for label, val in kpi_rows:
+        ws3.append([label, val])
+
+    auto_width(ws3)
+
+    # ── Serve ──────────────────────────────────────────────────────────────
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"SOC_RuleTracker_{date.today().isoformat()}.xlsx"
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
 
 # ---------------------------------------------------------------------------
 # Entry point

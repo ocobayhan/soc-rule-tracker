@@ -452,6 +452,18 @@ body {
   border: 1px solid rgba(203,15,0,.2);
 }
 
+/* Export */
+.btn-export {
+  background: rgba(74,222,128,.1);
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,.22);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: var(--ls-sm);
+  white-space: nowrap;
+}
+.btn-export:hover { opacity: .8; color: #4ade80; }
+
 /* Ghost small */
 .btn-ghost-sm {
   background: none;
