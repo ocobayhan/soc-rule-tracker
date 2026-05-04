@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SOC Rule Tracker</title>
+  <link rel="stylesheet" href="/static/styles.css?v=5"/>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo-icon">&#9656;</div>
+    <span class="header-logo-text">SOC Rule Tracker</span>
+  </div>
+  <nav class="header-nav">
+    {% if not is_settings %}
+    <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+    <button class="nav-btn" data-tab="tuning">Kural Tuning</button>
+    <button class="nav-btn" data-tab="usecase">Use-Case / Kural Yazma</button>
+    {% else %}
+    <button class="nav-btn active" data-tab="settings">Ayarlar</button>
+    {% endif %}
+  </nav>
+  <div class="header-right">
+    <span class="header-user">{{ username }}</span>
+    <a href="/logout" class="btn-ghost-sm">Çıkış</a>
+  </div>
+</header>
+
+<main class="main">
+
+{% if not is_settings %}
+
+  <!-- ===== DASHBOARD ===== -->
+  <section id="tab-dashboard" class="tab-panel active">
+    <div class="page-header">
+      <h1 class="page-title">Dashboard</h1>
+      <div class="filter-row">
+        <span class="filter-label">Ay:</span>
+        <input type="month" id="kpi-month" class="form-input input-sm"/>
+        <button class="btn btn-secondary" onclick="loadKPI()">Uygula</button>
+        <button class="btn-ghost-sm" onclick="document.getElementById('kpi-month').value='';loadKPI()">Tümü</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">Açık Tuning Talebi</div><div class="kpi-value" id="kpi-tune-open">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Tamamlanan Tuning</div><div class="kpi-value kpi-green" id="kpi-tune-done">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Yazılan Kural</div><div class="kpi-value kpi-blue" id="kpi-uc-written">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Use-Case Dönüşüm</div><div class="kpi-value kpi-purple" id="kpi-conversion">—</div></div>
+    </div>
+    <div class="dashboard-row">
+      <div class="dash-section">
+        <div class="section-title">Son Tuning Talepleri</div>
+        <table class="table"><thead><tr><th>Durum</th><th>Kural</th><th>Ortam</th><th>Raporlayan</th><th>Raporlandı</th></tr></thead>
+        <tbody id="dash-tune-tbody"></tbody></table>
+      </div>
+      <div class="dash-section">
+        <div class="section-title">Son Use-Case Talepleri</div>
+        <table class="table"><thead><tr><th>Durum</th><th>Use-Case</th><th>Ortam</th><th>Talep Eden</th><th>Tarih</th></tr></thead>
+        <tbody id="dash-uc-tbody"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== TUNING ===== -->
+  <section id="tab-tuning" class="tab-panel">
+    <div class="page-header">
+      <h1 class="page-title">Kural Tuning Talepleri</h1>
+      <button class="btn btn-primary" onclick="openTuneModal()">+ Yeni Talep</button>
+    </div>
+    <div class="filter-bar">
+      <input type="month" id="tune-filter-month" class="form-input input-sm"/>
+      <select id="tune-filter-env" class="form-input input-sm"><option value="">Tüm Ortamlar</option></select>
+      <select id="tune-filter-status" class="form-input input-sm">
+        <option value="">Tüm Durumlar</option>
+        <option>Açık</option><option>İnceleniyor</option><option>Tamamlandı</option><option>Tune Edilmedi</option>
+      </select>
+      <button class="btn btn-secondary" onclick="loadTune()">Filtrele</button>
+      <button class="btn-ghost-sm" onclick="clearTuneFilters()">Temizle</button>
+    </div>
+    <div class="table-wrapper">
+      <table class="table table-fixed">
+        <colgroup>
+          <col class="col-dot"/><col class="col-name"/><col class="col-env"/>
+          <col class="col-person"/><col class="col-reason"/><col class="col-freq"/>
+          <col class="col-analyst"/><col class="col-status"/>
+          <col class="col-date"/><col class="col-date"/><col class="col-act"/>
+        </colgroup>
+        <thead><tr>
+          <th></th>
+          <th>Kural İsmi</th><th>Ortam</th><th>Raporlayan</th>
+          <th>Tune Nedeni</th><th>Sıklık</th><th>Tune Eden</th>
+          <th>Durum</th><th>Raporlandı</th><th>Tamamlandı</th>
+          <th>İşlem</th>
+        </tr></thead>
+        <tbody id="tune-tbody"></tbody>
+      </table>
+      <div id="tune-empty" class="empty-state" style="display:none">Henüz tuning talebi yok.</div>
+    </div>
+  </section>
+
+  <!-- ===== USE-CASE ===== -->
+  <section id="tab-usecase" class="tab-panel">
+    <div class="page-header">
+      <h1 class="page-title">Use-Case / Kural Yazma</h1>
+      <button class="btn btn-primary" onclick="openUCModal()">+ Yeni Use-Case</button>
+    </div>
+    <div class="filter-bar">
+      <input type="month" id="uc-filter-month" class="form-input input-sm"/>
+      <select id="uc-filter-env" class="form-input input-sm"><option value="">Tüm Ortamlar</option></select>
+      <select id="uc-filter-status" class="form-input input-sm">
+        <option value="">Tüm Durumlar</option>
+        <option>Açık</option><option>İnceleniyor</option><option>Yazıldı</option><option>Yazılamaz</option>
+      </select>
+      <button class="btn btn-secondary" onclick="loadUC()">Filtrele</button>
+      <button class="btn-ghost-sm" onclick="clearUCFilters()">Temizle</button>
+    </div>
+    <div class="table-wrapper">
+      <table class="table">
+        <thead><tr>
+          <th style="width:30px"></th>
+          <th>Use-Case</th><th>Ortam</th><th>Talep Eden</th>
+          <th>Yazılan Kural</th><th>Analist</th>
+          <th>Durum</th><th>Talep Tarihi</th><th>Yazılma Tarihi</th>
+          <th>İşlem</th>
+        </tr></thead>
+        <tbody id="uc-tbody"></tbody>
+      </table>
+      <div id="uc-empty" class="empty-state" style="display:none">Henüz use-case talebi yok.</div>
+    </div>
+  </section>
+
+{% else %}
+
+  <!-- ===== SETTINGS ===== -->
+  <section id="tab-settings" class="tab-panel active">
+    <div class="page-header"><h1 class="page-title">Ayarlar</h1></div>
+    <div class="settings-grid">
+      <div class="settings-panel">
+        <div class="settings-panel-header">
+          <span class="settings-panel-title">Ortamlar</span>
+          <div class="settings-add-row">
+            <input type="text" id="new-env-input" class="form-input input-sm" placeholder="Yeni ortam…"/>
+            <button class="btn btn-primary" onclick="addEnvironment()">Ekle</button>
+          </div>
+        </div>
+        <ul class="settings-list" id="env-settings-list"></ul>
+      </div>
+      <div class="settings-panel">
+        <div class="settings-panel-header">
+          <span class="settings-panel-title">Analistler</span>
+          <div class="settings-add-row">
+            <input type="text" id="new-analyst-input" class="form-input input-sm" placeholder="Yeni analist…"/>
+            <button class="btn btn-primary" onclick="addAnalyst()">Ekle</button>
+          </div>
+        </div>
+        <ul class="settings-list" id="analyst-settings-list"></ul>
+      </div>
+    </div>
+  </section>
+
+{% endif %}
+</main>
+
+{% if not is_settings %}
+
+<!-- ===== MODAL: Yeni Tuning Talebi ===== -->
+<div id="tune-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="tune-modal-title">Yeni Tuning Talebi</h2>
+      <button class="modal-close" onclick="closeTuneModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="tune-id"/>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Raporlayan *</label>
+          <select class="form-input" id="tune-reporter"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ortam *</label>
+          <select class="form-input" id="tune-env"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Kural İsmi *</label>
+          <input class="form-input" id="tune-rule-name" type="text" placeholder="Kural adı"/>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Tune Nedeni / Kanıtı *
+            <span class="paste-hint">— Ctrl+V ile görsel yapıştırabilirsiniz</span>
+          </label>
+          <textarea class="form-input form-textarea" id="tune-reason"
+                    placeholder="Neden tune edilmeli? False positive açıklaması… (Ctrl+V ile görsel eklenebilir)"></textarea>
+          <div id="tune-evidence-preview" class="paste-preview-area"></div>
+          <input type="hidden" id="tune-evidence-image"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tetiklenme Sıklığı</label>
+          <select class="form-input" id="tune-freq">
+            <option value="">— Seçin —</option>
+            <option value="Düşük">Düşük</option>
+            <option value="Orta">Orta</option>
+            <option value="Yüksek">Yüksek</option>
+          </select>
+        </div>
+      </div>
+      <div id="tune-modal-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeTuneModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveTune()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Tuning Talebi Düzenle (full — corrections) ===== -->
+<div id="tune-edit-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Tuning Talebi Düzenle</h2>
+      <button class="modal-close" onclick="closeTuneEditModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-tune-id"/>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Raporlayan *</label>
+          <select class="form-input" id="edit-tune-reporter"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ortam *</label>
+          <select class="form-input" id="edit-tune-env"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Kural İsmi *</label>
+          <input class="form-input" id="edit-tune-rule-name" type="text"/>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Tune Nedeni / Kanıtı *
+            <span class="paste-hint">— Ctrl+V ile görsel yapıştırabilirsiniz</span>
+          </label>
+          <textarea class="form-input form-textarea" id="edit-tune-reason"></textarea>
+          <div id="edit-tune-evidence-preview" class="paste-preview-area"></div>
+          <input type="hidden" id="edit-tune-evidence-image"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tetiklenme Sıklığı</label>
+          <select class="form-input" id="edit-tune-freq">
+            <option value="">— Seçin —</option>
+            <option value="Düşük">Düşük</option>
+            <option value="Orta">Orta</option>
+            <option value="Yüksek">Yüksek</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Durum</label>
+          <select class="form-input" id="edit-tune-status">
+            <option>Açık</option><option>İnceleniyor</option>
+            <option>Tamamlandı</option><option>Tune Edilmedi</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tune Eden Analist</label>
+          <select class="form-input" id="edit-tune-analyst"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Nasıl Tune Edildi
+            <span class="paste-hint">— Ctrl+V ile görsel yapıştırabilirsiniz</span>
+          </label>
+          <textarea class="form-input form-textarea" id="edit-tune-how"></textarea>
+          <div id="edit-tune-resolution-preview" class="paste-preview-area"></div>
+          <input type="hidden" id="edit-tune-resolution-image"/>
+        </div>
+      </div>
+      <div id="tune-edit-modal-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeTuneEditModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveTuneEdit()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Tuning Üstlen ===== -->
+<div id="tune-claim-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Talebi Üstlen</h2>
+      <button class="modal-close" onclick="closeTuneClaimModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="claim-tune-id"/>
+      <div class="form-group">
+        <label class="form-label">Üstlenen Analist *</label>
+        <select class="form-input" id="claim-tune-analyst"><option value="">— Seçin —</option></select>
+      </div>
+      <div id="claim-tune-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeTuneClaimModal()">İptal</button>
+      <button class="btn btn-action-claim" onclick="saveTuneClaim()">Üstlen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Tuning Kapat ===== -->
+<div id="tune-close-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Tuning Talebini Kapat</h2>
+      <button class="modal-close" onclick="closeTuneCloseModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="close-tune-id"/>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Nasıl Tune Edildi *
+          <span class="paste-hint">— Ctrl+V ile görsel yapıştırabilirsiniz</span>
+        </label>
+        <textarea class="form-input form-textarea" id="close-tune-how"
+                  placeholder="Yapılan değişiklik, eklenen istisna… görsel için Ctrl+V"></textarea>
+        <div id="close-tune-img-preview" class="paste-preview-area"></div>
+        <input type="hidden" id="close-tune-resolution-image"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Final Durum</label>
+        <select class="form-input" id="close-tune-status">
+          <option>Tamamlandı</option>
+          <option>Tune Edilmedi</option>
+        </select>
+      </div>
+      <div id="close-tune-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeTuneCloseModal()">İptal</button>
+      <button class="btn btn-action-close" onclick="saveTuneClose()">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Yeni Use-Case ===== -->
+<div id="uc-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Yeni Use-Case Talebi</h2>
+      <button class="modal-close" onclick="closeUCModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="uc-id"/>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Talep Eden *</label>
+          <select class="form-input" id="uc-requester"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ortam *</label>
+          <select class="form-input" id="uc-env"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Use-Case Tanımı *</label>
+          <textarea class="form-input form-textarea" id="uc-desc"
+                    placeholder="Hangi senaryoyu tespit etmek istiyorsunuz? Detaylı açıklayın…"></textarea>
+        </div>
+      </div>
+      <div id="uc-modal-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeUCModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveUC()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Use-Case Düzenle (full) ===== -->
+<div id="uc-edit-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Use-Case Düzenle</h2>
+      <button class="modal-close" onclick="closeUCEditModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-uc-id"/>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Talep Eden *</label>
+          <select class="form-input" id="edit-uc-requester"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ortam *</label>
+          <select class="form-input" id="edit-uc-env"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Use-Case Tanımı *</label>
+          <textarea class="form-input form-textarea" id="edit-uc-desc"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Durum</label>
+          <select class="form-input" id="edit-uc-status">
+            <option>Açık</option><option>İnceleniyor</option>
+            <option>Yazıldı</option><option>Yazılamaz</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Analist</label>
+          <select class="form-input" id="edit-uc-rule-author"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Yazılan Kural Adı</label>
+          <input class="form-input" id="edit-uc-rule-name" type="text" placeholder="Kural adı"/>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Notlar</label>
+          <textarea class="form-input form-textarea" id="edit-uc-notes"></textarea>
+        </div>
+      </div>
+      <div id="uc-edit-modal-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeUCEditModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveUCEdit()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Use-Case Üstlen ===== -->
+<div id="uc-claim-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Use-Case'i Üstlen</h2>
+      <button class="modal-close" onclick="closeUCClaimModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="claim-uc-id"/>
+      <div class="form-group">
+        <label class="form-label">Üstlenen Analist *</label>
+        <select class="form-input" id="claim-uc-analyst"><option value="">— Seçin —</option></select>
+      </div>
+      <div id="claim-uc-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeUCClaimModal()">İptal</button>
+      <button class="btn btn-action-claim" onclick="saveUCClaim()">Üstlen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Use-Case Kapat ===== -->
+<div id="uc-close-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Use-Case Talebini Kapat</h2>
+      <button class="modal-close" onclick="closeUCCloseModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="close-uc-id"/>
+      <div class="form-grid">
+        <div class="form-group form-col-2">
+          <label class="form-label">Yazılan Kural Adı</label>
+          <input class="form-input" id="close-uc-rule-name" type="text" placeholder="Kural yazıldıysa buraya ekleyin"/>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Kapatma Notu</label>
+          <textarea class="form-input form-textarea" id="close-uc-notes"
+                    placeholder="Ek notlar, kısıtlamalar, referanslar…"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Final Durum</label>
+          <select class="form-input" id="close-uc-status">
+            <option>Yazıldı</option>
+            <option>Yazılamaz</option>
+          </select>
+        </div>
+      </div>
+      <div id="close-uc-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeUCCloseModal()">İptal</button>
+      <button class="btn btn-action-close" onclick="saveUCClose()">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Tuning Detay (read-only) ===== -->
+<div id="tune-detail-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-detail">
+    <div class="modal-header">
+      <h2 class="modal-title" id="tune-detail-title"></h2>
+      <button class="modal-close" onclick="document.getElementById('tune-detail-modal').style.display='none'">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="tune-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('tune-detail-modal').style.display='none'">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Use-Case Detay (read-only) ===== -->
+<div id="uc-detail-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-detail">
+    <div class="modal-header">
+      <h2 class="modal-title" id="uc-detail-title"></h2>
+      <button class="modal-close" onclick="document.getElementById('uc-detail-modal').style.display='none'">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="uc-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('uc-detail-modal').style.display='none'">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" style="display:none" onclick="this.style.display='none'">
+  <img id="lightbox-img" src="" alt=""/>
+</div>
+
+{% endif %}
+
+<script src="/static/app.js?v=5"></script>
+</body>
+</html>

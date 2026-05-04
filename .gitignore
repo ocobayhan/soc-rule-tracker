@@ -1,0 +1,9 @@
+tracker.db
+static/uploads/
+__pycache__/
+.venv/
+*.pyc
+*.pyo
+.claude/
+data/
+*.db
