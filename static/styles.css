@@ -1056,3 +1056,94 @@ a:hover { color: var(--text-primary); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-skeleton-glow); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-soft-stone); }
+
+/* ============================================================
+   MITRE / IOC / RELATED TAG COMPONENTS
+   ============================================================ */
+.mitre-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.mitre-add-row .form-input { flex: 1; min-width: 140px; }
+.mitre-add-row .btn { flex-shrink: 0; }
+
+.mitre-entry {
+  background: rgba(247,247,247,.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+.mitre-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Tag list containers */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Base tag style */
+.mitre-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(96,165,250,.10);
+  color: #60a5fa;
+  border: 1px solid rgba(96,165,250,.20);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  letter-spacing: var(--ls-sm);
+  white-space: nowrap;
+}
+.ioc-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(251,191,36,.08);
+  color: #fbbf24;
+  border: 1px solid rgba(251,191,36,.18);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.related-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(167,139,250,.10);
+  color: #a78bfa;
+  border: 1px solid rgba(167,139,250,.20);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+/* Remove button inside tags */
+.tag-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+  opacity: 0.7;
+  line-height: 1;
+  transition: opacity .15s;
+}
+.tag-remove:hover { opacity: 1; }

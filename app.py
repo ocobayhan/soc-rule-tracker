@@ -117,29 +117,41 @@ def init_db():
         CREATE TABLE IF NOT EXISTS threat_hunt_requests (
             id                   INTEGER PRIMARY KEY AUTOINCREMENT,
             hunt_subject         TEXT NOT NULL,
-            environment          TEXT NOT NULL DEFAULT '',
             requester            TEXT NOT NULL DEFAULT '',
             assigned_analyst     TEXT DEFAULT '',
             notes                TEXT DEFAULT '',
             status               TEXT NOT NULL DEFAULT 'Açık',
             report_status        TEXT DEFAULT 'Taslak',
+            hunt_environment     TEXT DEFAULT '',
             scope                TEXT DEFAULT '',
             scope_image          TEXT,
-            method               TEXT DEFAULT '',
-            method_image         TEXT,
+            mitre_techniques     TEXT DEFAULT '[]',
+            has_findings         TEXT DEFAULT 'Hayır',
             findings             TEXT DEFAULT '',
             findings_image       TEXT,
-            mitre_techniques     TEXT DEFAULT '',
+            ioc_list             TEXT DEFAULT '[]',
+            affected_assets      TEXT DEFAULT '',
+            severity             TEXT DEFAULT '',
             detection_suggestion TEXT DEFAULT 'Hayır',
             detection_detail     TEXT DEFAULT '',
             recommendations      TEXT DEFAULT '',
             recommendations_image TEXT,
+            related_requests     TEXT DEFAULT '[]',
             hunt_result          TEXT DEFAULT '',
             started_at           TEXT,
             completed_at         TEXT,
             report_updated_at    TEXT,
             created_at           TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS mitre_cache (
+            id     TEXT PRIMARY KEY,
+            name   TEXT NOT NULL,
+            tactic TEXT NOT NULL,
+            url    TEXT DEFAULT ''
         )
     """)
 
@@ -153,6 +165,20 @@ def init_db():
         db.execute("ALTER TABLE usecase_requests ADD COLUMN completed_at TEXT")
     if not _col_exists(db, "users", "role"):
         db.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'analyst'")
+    # Use-case MITRE columns
+    for col, default in [("mitre_classified", "'Hayır'"), ("mitre_data", "'[]'")]:
+        if not _col_exists(db, "usecase_requests", col):
+            db.execute(f"ALTER TABLE usecase_requests ADD COLUMN {col} TEXT DEFAULT {default}")
+    # Threat hunt new report columns (for existing deployments that have old schema)
+    hunt_new_cols = [
+        ("hunt_environment",     "''"),  ("has_findings",         "'Hayır'"),
+        ("ioc_list",             "'[]'"), ("affected_assets",      "''"),
+        ("severity",             "''"),  ("related_requests",     "'[]'"),
+    ]
+    for col, default in hunt_new_cols:
+        if not _col_exists(db, "threat_hunt_requests", col):
+            db.execute(f"ALTER TABLE threat_hunt_requests ADD COLUMN {col} TEXT DEFAULT {default}")
+    # Drop old environment/method columns gracefully (SQLite can't DROP, just stop using)
 
     # Migrate legacy 'user' role → 'admin'
     db.execute("UPDATE users SET role='admin' WHERE role='user'")
@@ -307,6 +333,62 @@ def list_analysts():
         "WHERE role != 'settings' ORDER BY username"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+# ---------------------------------------------------------------------------
+# MITRE ATT&CK cache
+# ---------------------------------------------------------------------------
+@app.route("/api/mitre")
+@login_required
+def get_mitre():
+    db    = get_db()
+    count = db.execute("SELECT COUNT(*) c FROM mitre_cache").fetchone()["c"]
+    if count == 0:
+        try:
+            import urllib.request, json as _json
+            url = ("https://raw.githubusercontent.com/mitre-attack/attack-stix-data"
+                   "/master/enterprise-attack/enterprise-attack-16.1.json")
+            req = urllib.request.Request(url, headers={"User-Agent": "SOC-Tracker/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = _json.loads(resp.read().decode())
+            tactic_map = {}
+            for obj in data.get("objects", []):
+                if obj.get("type") == "x-mitre-tactic":
+                    tactic_map[obj.get("x_mitre_shortname", "")] = obj.get("name", "")
+            rows = []
+            for obj in data.get("objects", []):
+                if (obj.get("type") == "attack-pattern"
+                        and not obj.get("x_mitre_deprecated", False)
+                        and not obj.get("revoked", False)):
+                    ext = obj.get("external_references", [])
+                    tid = next((r["external_id"] for r in ext
+                                if r.get("source_name") == "mitre-attack"), None)
+                    if not tid:
+                        continue
+                    tactics = [tactic_map.get(p["phase_name"], p["phase_name"])
+                               for p in obj.get("kill_chain_phases", [])]
+                    turl = next((r.get("url", "") for r in ext
+                                 if r.get("source_name") == "mitre-attack"), "")
+                    rows.append((tid, obj["name"], ", ".join(tactics), turl))
+            rows.sort(key=lambda x: x[0])
+            db.executemany(
+                "INSERT OR IGNORE INTO mitre_cache (id, name, tactic, url) VALUES (?,?,?,?)",
+                rows
+            )
+            db.commit()
+        except Exception as e:
+            app.logger.warning("MITRE fetch failed: %s", e)
+            return jsonify([])
+    rows = db.execute("SELECT id, name, tactic, url FROM mitre_cache ORDER BY id").fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/mitre/refresh", methods=["POST"])
+@login_required
+def refresh_mitre():
+    if session.get("role") != "admin":
+        return jsonify({"error": "Forbidden"}), 403
+    get_db().execute("DELETE FROM mitre_cache")
+    get_db().commit()
+    return get_mitre()
 
 # ---------------------------------------------------------------------------
 # KPI
@@ -588,7 +670,7 @@ def update_usecase(item_id):
                 data[f] = row[f]
         # Çalışma alanları yalnızca atanmış analist tarafından değiştirilebilir
         if not is_assigned:
-            for f in ("rule_name", "notes"):
+            for f in ("rule_name", "notes", "mitre_classified", "mitre_data"):
                 data[f] = row[f]
 
     now        = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -601,10 +683,18 @@ def update_usecase(item_id):
     else:
         completed_at = row["completed_at"]
 
+    import json as _j
+    def _jv_uc(key, fallback="[]"):
+        v = data.get(key)
+        if v is not None:
+            return _j.dumps(v) if isinstance(v, (list, dict)) else str(v)
+        return row[key] or fallback
+
     db.execute("""
         UPDATE usecase_requests SET
           requester=?,usecase_description=?,environment=?,rule_name=?,
-          rule_author=?,notes=?,status=?,completed_at=?,updated_at=?
+          rule_author=?,notes=?,status=?,mitre_classified=?,mitre_data=?,
+          completed_at=?,updated_at=?
         WHERE id=?
     """, (
         data.get("requester",           row["requester"]).strip(),
@@ -613,7 +703,10 @@ def update_usecase(item_id):
         data.get("rule_name",           row["rule_name"] or "").strip(),
         data.get("rule_author",         row["rule_author"] or "").strip(),
         data.get("notes",               row["notes"] or "").strip(),
-        new_status, completed_at, now, item_id
+        new_status,
+        data.get("mitre_classified",    row["mitre_classified"] if "mitre_classified" in row.keys() else "Hayır"),
+        _jv_uc("mitre_data"),
+        completed_at, now, item_id
     ))
     db.commit()
     updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
@@ -671,19 +764,18 @@ def create_hunt():
     db   = get_db()
 
     hunt_subject = data.get("hunt_subject", "").strip()
-    environment  = data.get("environment",  "").strip()
     requester    = data.get("requester",    "").strip()
 
-    if not hunt_subject or not environment or not requester:
-        return jsonify({"error": "Hunt Konusu, Ortam ve Talep Eden zorunludur."}), 400
+    if not hunt_subject or not requester:
+        return jsonify({"error": "Hunt Konusu ve Talep Eden zorunludur."}), 400
     if session.get("role") == "analyst":
         requester = session.get("username", "")
 
     cur = db.execute("""
         INSERT INTO threat_hunt_requests
-          (hunt_subject, environment, requester, assigned_analyst, notes, status, created_at, updated_at)
-        VALUES (?,?,?,?,?,?,?,?)
-    """, (hunt_subject, environment, requester,
+          (hunt_subject, requester, assigned_analyst, notes, status, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?)
+    """, (hunt_subject, requester,
           data.get("assigned_analyst", "").strip(),
           data.get("notes", "").strip(), "Açık", now, now))
     db.commit()
@@ -734,14 +826,15 @@ def update_hunt(item_id):
 
         data["requester"] = row["requester"]
         if not is_requester:
-            for f in ("hunt_subject", "environment"):
+            for f in ("hunt_subject",):
                 data[f] = row[f]
         if not is_assigned:
-            for f in ("scope", "scope_image", "method", "method_image",
-                      "findings", "findings_image", "mitre_techniques",
+            for f in ("hunt_environment", "scope", "scope_image",
+                      "mitre_techniques", "has_findings",
+                      "findings", "findings_image", "ioc_list", "affected_assets", "severity",
                       "detection_suggestion", "detection_detail",
                       "recommendations", "recommendations_image",
-                      "hunt_result", "report_status"):
+                      "related_requests", "hunt_result", "report_status"):
                 data[f] = row[f]
 
     now        = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -758,10 +851,11 @@ def update_hunt(item_id):
     else:
         completed_at = row["completed_at"]
 
-    report_fields = ("scope", "method", "findings", "mitre_techniques",
+    report_fields = ("hunt_environment", "scope", "mitre_techniques", "has_findings",
+                     "findings", "ioc_list", "affected_assets", "severity",
                      "detection_suggestion", "detection_detail", "recommendations",
-                     "hunt_result", "report_status",
-                     "scope_image", "method_image", "findings_image", "recommendations_image")
+                     "hunt_result", "report_status", "related_requests",
+                     "scope_image", "findings_image", "recommendations_image")
     report_changed = any(
         str(data.get(f) if data.get(f) is not None else row[f] or "") != str(row[f] or "")
         for f in report_fields
@@ -775,24 +869,33 @@ def update_hunt(item_id):
     def nv(key):
         return data[key] or None if key in data else row[key]
 
+    def jv(key, fallback="[]"):
+        """JSON field — store as-is string."""
+        v = data.get(key)
+        if v is not None:
+            import json as _j
+            return _j.dumps(v) if isinstance(v, (list, dict)) else str(v)
+        return row[key] or fallback
+
     db.execute("""
         UPDATE threat_hunt_requests SET
-          hunt_subject=?, environment=?, requester=?, assigned_analyst=?, notes=?, status=?,
-          scope=?, scope_image=?, method=?, method_image=?,
-          findings=?, findings_image=?, mitre_techniques=?,
+          hunt_subject=?, requester=?, assigned_analyst=?, notes=?, status=?,
+          hunt_environment=?, scope=?, scope_image=?,
+          mitre_techniques=?, has_findings=?,
+          findings=?, findings_image=?, ioc_list=?, affected_assets=?, severity=?,
           detection_suggestion=?, detection_detail=?,
           recommendations=?, recommendations_image=?,
-          hunt_result=?, report_status=?,
+          related_requests=?, hunt_result=?, report_status=?,
           started_at=?, completed_at=?, report_updated_at=?, updated_at=?
         WHERE id=?
     """, (
-        sv("hunt_subject"), sv("environment"), sv("requester"),
-        sv("assigned_analyst"), sv("notes"), new_status,
-        sv("scope"), nv("scope_image"), sv("method"), nv("method_image"),
-        sv("findings"), nv("findings_image"), sv("mitre_techniques"),
+        sv("hunt_subject"), sv("requester"), sv("assigned_analyst"), sv("notes"), new_status,
+        sv("hunt_environment"), sv("scope"), nv("scope_image"),
+        jv("mitre_techniques"), sv("has_findings", "Hayır"),
+        sv("findings"), nv("findings_image"), jv("ioc_list"), sv("affected_assets"), sv("severity"),
         sv("detection_suggestion", "Hayır"), sv("detection_detail"),
         sv("recommendations"), nv("recommendations_image"),
-        sv("hunt_result"), sv("report_status", "Taslak"),
+        jv("related_requests"), sv("hunt_result"), sv("report_status", "Taslak"),
         started_at, completed_at, report_updated_at, now, item_id
     ))
     db.commit()
@@ -978,17 +1081,34 @@ def export_data():
     # ── Sheet 3 : Threat Hunt Talepleri ───────────────────────────────────
     ws3 = wb.create_sheet("Threat Hunt Talepleri")
     hunt_cols = ["ID", "Hunt Konusu", "Ortam", "Talep Eden", "Atanan Analist",
-                 "Durum", "Sonuç", "MITRE Teknikleri",
-                 "Hedef & Kapsam", "Analiz Yöntemi", "Bulgular",
+                 "Durum", "Rapor Durumu", "Sonuç", "Şiddet",
+                 "MITRE Teknikleri", "Bulgular", "IOC Listesi",
+                 "Etkilenen Varlıklar", "Hedef & Kapsam",
                  "Detection Önerisi", "Öneriler",
                  "Talep Tarihi", "Başlama", "Tamamlanma"]
     write_headers(ws3, hunt_cols)
 
+    import json as _json
     for r in db.execute("SELECT * FROM threat_hunt_requests ORDER BY id").fetchall():
-        row = [r["id"], r["hunt_subject"], r["environment"], r["requester"],
-               r["assigned_analyst"] or "", r["status"], r["hunt_result"] or "",
-               r["mitre_techniques"] or "",
-               r["scope"] or "", r["method"] or "", r["findings"] or "",
+        # Summarize MITRE entries to text
+        try:
+            mitre_list = _json.loads(r["mitre_techniques"] or "[]")
+            mitre_txt  = ", ".join(e.get("id","") + " " + e.get("name","") for e in mitre_list if isinstance(e, dict))
+        except Exception:
+            mitre_txt  = r["mitre_techniques"] or ""
+        try:
+            ioc_list = _json.loads(r["ioc_list"] or "[]")
+            ioc_txt  = ", ".join(ioc_list) if isinstance(ioc_list, list) else ""
+        except Exception:
+            ioc_txt  = ""
+        env_val = r["hunt_environment"] if "hunt_environment" in r.keys() and r["hunt_environment"] else (r["environment"] if "environment" in r.keys() else "")
+        row = [r["id"], r["hunt_subject"], env_val, r["requester"],
+               r["assigned_analyst"] or "", r["status"],
+               r["report_status"] or "", r["hunt_result"] or "",
+               r["severity"] if "severity" in r.keys() else "",
+               mitre_txt, r["findings"] or "", ioc_txt,
+               r["affected_assets"] if "affected_assets" in r.keys() else "",
+               r["scope"] or "",
                (r["detection_suggestion"] or "") + ((" — " + r["detection_detail"]) if r["detection_detail"] else ""),
                r["recommendations"] or "",
                fmt_date(r["created_at"]), fmt_date(r["started_at"]), fmt_date(r["completed_at"])]

@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
-  <link rel="stylesheet" href="/static/styles.css?v=9"/>
+  <link rel="stylesheet" href="/static/styles.css?v=10"/>
 </head>
 <body>
 
@@ -180,7 +180,7 @@
                placeholder="Hunt konusu, analist…" oninput="onHuntSearch(this.value)"/>
       </div>
       <input type="month" id="hunt-filter-month" class="form-input input-sm"/>
-      <select id="hunt-filter-env" class="form-input input-sm"><option value="">Tüm Ortamlar</option></select>
+      <select id="hunt-filter-status-env" class="form-input input-sm" style="display:none"></select>
       <select id="hunt-filter-status" class="form-input input-sm">
         <option value="">Tüm Durumlar</option>
         <option>Açık</option><option>İnceleniyor</option><option>Tamamlandı</option><option>İptal</option>
@@ -192,7 +192,7 @@
       <table class="table table-fixed" id="hunt-table">
         <colgroup>
           <col class="col-dot"/><col class="col-id"/>
-          <col class="col-desc"/><col class="col-env"/>
+          <col class="col-desc"/>
           <col class="col-person"/><col class="col-analyst"/>
           <col class="col-status"/>
           <col class="col-date"/><col class="col-date"/><col class="col-act"/>
@@ -201,7 +201,7 @@
           <th></th>
           <th class="th-sortable" id="th-hunt-id" onclick="sortHunt('id')"># <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-hunt-hunt_subject" onclick="sortHunt('hunt_subject')">Hunt Konusu <span class="sort-arrow"></span></th>
-          <th>Ortam</th><th>Talep Eden</th><th>Analist</th>
+          <th>Talep Eden</th><th>Analist</th>
           <th class="th-sortable" id="th-hunt-status" onclick="sortHunt('status')">Durum <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-hunt-created_at" onclick="sortHunt('created_at')">Talep Tarihi <span class="sort-arrow"></span></th>
           <th>Tamamlandı</th>
@@ -559,13 +559,14 @@
 
 <!-- ===== MODAL: Use-Case Kapat ===== -->
 <div id="uc-close-modal" class="modal-overlay" style="display:none">
-  <div class="modal">
+  <div class="modal modal-wide">
     <div class="modal-header">
       <h2 class="modal-title">Use-Case Talebini Kapat</h2>
       <button class="modal-close" onclick="closeUCCloseModal()">&#x2715;</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="close-uc-id"/>
+      <input type="hidden" id="close-uc-mitre-json" value="[]"/>
       <div class="form-grid">
         <div class="form-group form-col-2">
           <label class="form-label">Yazılan Kural Adı</label>
@@ -584,6 +585,30 @@
           </select>
         </div>
       </div>
+
+      <!-- MITRE ATT&CK sınıflandırma -->
+      <div class="form-group form-col-2" style="margin-top:12px">
+        <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" id="close-uc-mitre-check" onchange="toggleUCMitre()" style="width:16px;height:16px;accent-color:var(--accent-blue)"/>
+          MITRE ATT&amp;CK ile sınıflandır
+        </label>
+      </div>
+      <div id="close-uc-mitre-section" style="display:none;margin-top:8px">
+        <div class="form-group form-col-2">
+          <label class="form-label">Teknik Ekle</label>
+          <div class="mitre-add-row">
+            <select class="form-input input-sm" id="uc-mitre-tactic-select" onchange="onUCMitreTacticChange()">
+              <option value="">— Taktik seçin —</option>
+            </select>
+            <select class="form-input input-sm" id="uc-mitre-technique-select">
+              <option value="">— Teknik seçin —</option>
+            </select>
+            <button type="button" class="btn btn-secondary" onclick="addUCMitreTechnique()">+ Ekle</button>
+          </div>
+          <div id="uc-mitre-list" class="tag-list"></div>
+        </div>
+      </div>
+
       <div id="close-uc-error" class="form-error" style="display:none"></div>
     </div>
     <div class="modal-footer">
@@ -630,13 +655,9 @@
     </div>
     <div class="modal-body">
       <div class="form-grid">
-        <div class="form-group">
+        <div class="form-group form-col-2">
           <label class="form-label">Talep Eden *</label>
           <select class="form-input" id="hunt-requester"><option value="">— Seçin —</option></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ortam *</label>
-          <select class="form-input" id="hunt-env"><option value="">— Seçin —</option></select>
         </div>
         <div class="form-group form-col-2">
           <label class="form-label">Hunt Konusu *</label>
@@ -666,13 +687,9 @@
     <div class="modal-body">
       <input type="hidden" id="edit-hunt-id"/>
       <div class="form-grid">
-        <div class="form-group">
+        <div class="form-group form-col-2">
           <label class="form-label">Talep Eden *</label>
           <select class="form-input" id="edit-hunt-requester"><option value="">— Seçin —</option></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Ortam *</label>
-          <select class="form-input" id="edit-hunt-env"><option value="">— Seçin —</option></select>
         </div>
         <div class="form-group form-col-2">
           <label class="form-label">Hunt Konusu *</label>
@@ -723,6 +740,7 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="report-hunt-id"/>
+      <input type="hidden" id="report-hunt-mitre-json" value="[]"/>
 
       <!-- Hedef & Kapsam -->
       <div class="form-group form-col-2" style="margin-bottom:0">
@@ -735,35 +753,74 @@
         <input type="hidden" id="report-hunt-scope-image"/>
       </div>
 
-      <!-- Analiz Yöntemi -->
-      <div class="form-group form-col-2" style="margin-top:16px;margin-bottom:0">
-        <label class="form-label">Analiz Yöntemi
-          <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
-        </label>
-        <textarea class="form-input form-textarea" id="report-hunt-method"
-                  placeholder="Hangi araçlar ve sorgular kullanıldı?"></textarea>
-        <div id="report-hunt-method-preview" class="paste-preview-area"></div>
-        <input type="hidden" id="report-hunt-method-image"/>
+      <!-- MITRE ATT&CK Teknikleri -->
+      <div class="form-group form-col-2" style="margin-top:16px">
+        <label class="form-label">MITRE ATT&amp;CK Teknikleri</label>
+        <div class="mitre-add-row">
+          <select class="form-input input-sm" id="mitre-tactic-select" onchange="onMitreTacticChange()">
+            <option value="">— Taktik seçin —</option>
+          </select>
+          <select class="form-input input-sm" id="mitre-technique-select">
+            <option value="">— Teknik seçin —</option>
+          </select>
+          <button type="button" class="btn btn-secondary" onclick="addMitreTechniqueEntry()">+ Ekle</button>
+        </div>
+        <div id="hunt-mitre-entries"></div>
+      </div>
+
+      <!-- Bulgu var mı? + Şiddet -->
+      <div class="form-grid" style="margin-top:4px">
+        <div class="form-group">
+          <label class="form-label">Bulgu var mı?</label>
+          <select class="form-input" id="report-hunt-has-findings" onchange="toggleFindingsSection()">
+            <option value="Hayır">Hayır</option>
+            <option value="Evet">Evet</option>
+          </select>
+        </div>
+        <div class="form-group" id="hunt-severity-group" style="display:none">
+          <label class="form-label">Şiddet</label>
+          <select class="form-input" id="report-hunt-severity">
+            <option value="">— Seçin —</option>
+            <option>Kritik</option>
+            <option>Yüksek</option>
+            <option>Orta</option>
+            <option>Düşük</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- IOC + Etkilenen Varlıklar (conditional) -->
+      <div id="hunt-findings-section" style="display:none">
+        <div class="form-group form-col-2" style="margin-top:8px;margin-bottom:8px">
+          <label class="form-label">IOC Listesi</label>
+          <div class="mitre-add-row">
+            <input class="form-input input-sm" type="text" id="ioc-input" placeholder="IP, domain, hash, URL…"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addIOC();}"/>
+            <button type="button" class="btn btn-secondary" onclick="addIOC()">+ Ekle</button>
+          </div>
+          <div id="hunt-ioc-list" class="tag-list"></div>
+          <input type="hidden" id="report-hunt-ioc-json" value="[]"/>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Etkilenen Varlıklar</label>
+          <textarea class="form-input form-textarea" id="report-hunt-affected-assets" rows="3"
+                    placeholder="Etkilenen sistemler, kullanıcılar, IP adresleri…"></textarea>
+        </div>
       </div>
 
       <!-- Bulgular -->
-      <div class="form-group form-col-2" style="margin-top:16px;margin-bottom:0">
+      <div class="form-group form-col-2" style="margin-top:8px;margin-bottom:0">
         <label class="form-label">Bulgular
           <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
         </label>
         <textarea class="form-input form-textarea" id="report-hunt-findings"
-                  placeholder="Neler bulundu? IOC'ler, etkilenen sistemler, kullanıcılar…"></textarea>
+                  placeholder="Neler bulundu? Detaylar, analizler, gözlemler…"></textarea>
         <div id="report-hunt-findings-preview" class="paste-preview-area"></div>
         <input type="hidden" id="report-hunt-findings-image"/>
       </div>
 
-      <!-- MITRE + Detection grid -->
+      <!-- Detection Önerisi -->
       <div class="form-grid" style="margin-top:16px">
-        <div class="form-group">
-          <label class="form-label">MITRE ATT&amp;CK</label>
-          <input class="form-input" type="text" id="report-hunt-mitre"
-                 placeholder="T1059.001, T1078…"/>
-        </div>
         <div class="form-group">
           <label class="form-label">Detection Önerisi</label>
           <select class="form-input" id="report-hunt-detection-suggest" onchange="toggleDetectionDetail()">
@@ -779,7 +836,7 @@
       </div>
 
       <!-- Öneriler -->
-      <div class="form-group form-col-2" style="margin-bottom:0">
+      <div class="form-group form-col-2" style="margin-top:8px;margin-bottom:0">
         <label class="form-label">Öneriler
           <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
         </label>
@@ -789,8 +846,30 @@
         <input type="hidden" id="report-hunt-recommendations-image"/>
       </div>
 
-      <!-- Sonuç + Rapor Durumu + Hunt Durumu -->
-      <div class="form-grid" style="margin-top:16px">
+      <!-- İlişkili Talepler -->
+      <div class="form-group form-col-2" style="margin-top:16px">
+        <label class="form-label">İlişkili Talepler</label>
+        <div class="mitre-add-row">
+          <select class="form-input input-sm" id="related-req-type">
+            <option value="tune">Tuning</option>
+            <option value="uc">Use-Case</option>
+          </select>
+          <input class="form-input input-sm" type="number" id="related-req-id" placeholder="#ID" min="1"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addRelatedRequest();}"/>
+          <button type="button" class="btn btn-secondary" onclick="addRelatedRequest()">+ Ekle</button>
+        </div>
+        <div id="hunt-related-list" class="tag-list"></div>
+        <input type="hidden" id="report-hunt-related-json" value="[]"/>
+      </div>
+
+      <!-- Ortam + Sonuç + Rapor Durumu + Hunt Durumu -->
+      <div class="form-grid" style="margin-top:8px">
+        <div class="form-group">
+          <label class="form-label">Hunt Ortamı</label>
+          <select class="form-input" id="report-hunt-environment">
+            <option value="">— Seçin —</option>
+          </select>
+        </div>
         <div class="form-group">
           <label class="form-label">Sonuç</label>
           <select class="form-input" id="report-hunt-result">
@@ -851,6 +930,6 @@
   const USER_ROLE    = "{{ user_role }}";
   const CURRENT_USER = "{{ username }}";
 </script>
-<script src="/static/app.js?v=11"></script>
+<script src="/static/app.js?v=12"></script>
 </body>
 </html>

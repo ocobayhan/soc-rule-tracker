@@ -172,11 +172,12 @@ function analystOpts(cur = "", allowEmpty = true) {
 }
 
 function populateEnvDropdowns() {
-  ["tune-env","edit-tune-env","uc-env","edit-uc-env","hunt-env","edit-hunt-env"].forEach(id => {
+  ["tune-env","edit-tune-env","uc-env","edit-uc-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value; el.innerHTML = envOpts(cur);
   });
-  ["tune-filter-env","uc-filter-env","hunt-filter-env"].forEach(id => {
+  // report-hunt-environment is populated separately in openHuntReportModal
+  ["tune-filter-env","uc-filter-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value;
     el.innerHTML = `<option value="">Tüm Ortamlar</option>` +
@@ -835,13 +836,64 @@ async function saveUCClaim() {
 }
 
 // ---------------------------------------------------------------------------
+// UC MITRE state
+// ---------------------------------------------------------------------------
+let _ucMitreList = [];
+
+function toggleUCMitre() {
+  const checked = document.getElementById("close-uc-mitre-check").checked;
+  const section = document.getElementById("close-uc-mitre-section");
+  if (section) section.style.display = checked ? "block" : "none";
+}
+
+function onUCMitreTacticChange() {
+  const tactic = document.getElementById("uc-mitre-tactic-select").value;
+  populateMitreTechniqueSelect("uc-mitre-technique-select", tactic);
+}
+
+function addUCMitreTechnique() {
+  const tactic  = document.getElementById("uc-mitre-tactic-select").value;
+  const techSel = document.getElementById("uc-mitre-technique-select");
+  const techId  = techSel.value;
+  if (!tactic || !techId) return;
+  if (_ucMitreList.find(e => e.id === techId)) return;
+  const rawName = techSel.options[techSel.selectedIndex]?.text || "";
+  const name = rawName.replace(/^[^—]*—\s*/, "");
+  _ucMitreList.push({ id: techId, name, tactic });
+  renderUCMitreList();
+}
+
+function removeUCMitre(techId) {
+  _ucMitreList = _ucMitreList.filter(e => e.id !== techId);
+  renderUCMitreList();
+}
+
+function renderUCMitreList() {
+  const container = document.getElementById("uc-mitre-list"); if (!container) return;
+  document.getElementById("close-uc-mitre-json").value = JSON.stringify(_ucMitreList);
+  container.innerHTML = _ucMitreList.map(e =>
+    `<span class="mitre-tag">${esc(e.id)} — ${esc(e.name)}<button type="button" class="tag-remove"
+       onclick="removeUCMitre('${esc(e.id).replace(/'/g,"\\'")}')">&#x2715;</button></span>`
+  ).join("");
+}
+
+// ---------------------------------------------------------------------------
 // UC — Close (Kapat)
 // ---------------------------------------------------------------------------
-function openUCCloseModal(id) {
+async function openUCCloseModal(id) {
+  await loadMitreData();
   document.getElementById("close-uc-id").value        = id;
   document.getElementById("close-uc-rule-name").value = "";
   document.getElementById("close-uc-notes").value     = "";
   document.getElementById("close-uc-status").value    = "Yazıldı";
+  // Reset MITRE
+  _ucMitreList = [];
+  const mitreCk = document.getElementById("close-uc-mitre-check");
+  if (mitreCk) mitreCk.checked = false;
+  toggleUCMitre();
+  populateMitreTacticSelect("uc-mitre-tactic-select");
+  populateMitreTechniqueSelect("uc-mitre-technique-select", "");
+  renderUCMitreList();
   document.getElementById("close-uc-error").style.display = "none";
   document.getElementById("uc-close-modal").style.display = "flex";
 }
@@ -851,10 +903,13 @@ async function saveUCClose() {
   const id    = document.getElementById("close-uc-id").value;
   const errEl = document.getElementById("close-uc-error");
   errEl.style.display = "none";
+  const mitreCk = document.getElementById("close-uc-mitre-check");
   const payload = {
-    rule_name:   document.getElementById("close-uc-rule-name").value.trim(),
-    notes:       document.getElementById("close-uc-notes").value.trim(),
-    status:      document.getElementById("close-uc-status").value,
+    rule_name:        document.getElementById("close-uc-rule-name").value.trim(),
+    notes:            document.getElementById("close-uc-notes").value.trim(),
+    status:           document.getElementById("close-uc-status").value,
+    mitre_classified: (mitreCk && mitreCk.checked) ? "Evet" : "Hayır",
+    mitre_data:       (mitreCk && mitreCk.checked) ? _ucMitreList : [],
   };
   try {
     await apiFetch(`/api/usecase/${id}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -1020,7 +1075,6 @@ function setupAllPaste() {
   setupPaste("close-tune-how",    "close-tune-img-preview",     "close-tune-resolution-image");
   // Hunt report paste targets
   setupPaste("report-hunt-scope",           "report-hunt-scope-preview",           "report-hunt-scope-image");
-  setupPaste("report-hunt-method",          "report-hunt-method-preview",          "report-hunt-method-image");
   setupPaste("report-hunt-findings",        "report-hunt-findings-preview",        "report-hunt-findings-image");
   setupPaste("report-hunt-recommendations","report-hunt-recommendations-preview",  "report-hunt-recommendations-image");
 }
@@ -1154,7 +1208,6 @@ function renderHuntRows() {
     <td class="td-truncate" title="${esc(r.hunt_subject)}">
       <span class="cell-link" onclick="openHuntDetail(${r.id})" style="cursor:pointer">${esc(r.hunt_subject)}</span>
     </td>
-    <td class="td-truncate">${esc(r.environment)}</td>
     <td class="td-truncate">${esc(r.requester)}</td>
     <td class="td-truncate">${esc(r.assigned_analyst)||'<span class="text-muted">—</span>'}</td>
     <td>${badge(r.status, HUNT_CLS)}</td>
@@ -1167,10 +1220,8 @@ function renderHuntRows() {
 async function loadHunt() {
   const p = new URLSearchParams();
   const month  = document.getElementById("hunt-filter-month")?.value;
-  const env    = document.getElementById("hunt-filter-env")?.value;
   const status = document.getElementById("hunt-filter-status")?.value;
   if (month)  p.set("month", month);
-  if (env)    p.set("environment", env);
   if (status) p.set("status", status);
   try {
     huntRows = await apiFetch(`/api/hunt?${p}`);
@@ -1179,7 +1230,7 @@ async function loadHunt() {
 }
 
 function clearHuntFilters() {
-  ["hunt-filter-month","hunt-filter-env","hunt-filter-status"].forEach(id => {
+  ["hunt-filter-month","hunt-filter-status"].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = "";
   });
   const s = document.getElementById("hunt-search"); if (s) s.value = "";
@@ -1191,7 +1242,7 @@ function clearHuntFilters() {
 // Hunt — Create
 // ---------------------------------------------------------------------------
 function openHuntModal() {
-  populateEnvDropdowns(); populateAnalystDropdowns();
+  populateAnalystDropdowns();
   document.getElementById("hunt-subject").value = "";
   document.getElementById("hunt-notes").value   = "";
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
@@ -1209,7 +1260,6 @@ async function saveHunt() {
   errEl.style.display = "none";
   const payload = {
     hunt_subject: document.getElementById("hunt-subject").value.trim(),
-    environment:  document.getElementById("hunt-env").value,
     requester:    document.getElementById("hunt-requester").value,
     notes:        document.getElementById("hunt-notes").value.trim(),
   };
@@ -1224,7 +1274,7 @@ async function saveHunt() {
 // ---------------------------------------------------------------------------
 function openHuntEditModal(id) {
   const r = huntRows.find(x => x.id === id); if (!r) return;
-  populateEnvDropdowns(); populateAnalystDropdowns();
+  populateAnalystDropdowns();
   document.getElementById("edit-hunt-id").value      = r.id;
   document.getElementById("edit-hunt-subject").value = r.hunt_subject || "";
   document.getElementById("edit-hunt-notes").value   = r.notes || "";
@@ -1254,7 +1304,6 @@ async function saveHuntEdit() {
   errEl.style.display = "none";
   const payload = {
     hunt_subject: document.getElementById("edit-hunt-subject").value.trim(),
-    environment:  document.getElementById("edit-hunt-env").value,
     requester:    document.getElementById("edit-hunt-requester").value,
     notes:        document.getElementById("edit-hunt-notes").value.trim(),
   };
@@ -1299,6 +1348,165 @@ async function saveHuntClaim() {
 }
 
 // ---------------------------------------------------------------------------
+// MITRE ATT&CK cache
+// ---------------------------------------------------------------------------
+let _mitreData = [];
+
+async function loadMitreData() {
+  if (_mitreData.length) return _mitreData;
+  try {
+    _mitreData = await apiFetch("/api/mitre");
+    return _mitreData;
+  } catch (e) { console.error("MITRE yüklenemedi:", e); return []; }
+}
+
+function getMitreTactics() {
+  const seen = new Set(), tactics = [];
+  for (const t of _mitreData) {
+    if (!seen.has(t.tactic)) { seen.add(t.tactic); tactics.push(t.tactic); }
+  }
+  return tactics.sort();
+}
+
+function getMitreTechniquesByTactic(tactic) {
+  return _mitreData.filter(t => t.tactic === tactic);
+}
+
+function populateMitreTacticSelect(selectId) {
+  const el = document.getElementById(selectId); if (!el) return;
+  el.innerHTML = `<option value="">— Taktik seçin —</option>` +
+    getMitreTactics().map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+}
+
+function populateMitreTechniqueSelect(selectId, tactic) {
+  const el = document.getElementById(selectId); if (!el) return;
+  el.innerHTML = `<option value="">— Teknik seçin —</option>`;
+  if (!tactic) return;
+  getMitreTechniquesByTactic(tactic).forEach(t => {
+    el.innerHTML += `<option value="${esc(t.id)}">${esc(t.id)} — ${esc(t.name)}</option>`;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Hunt MITRE entry state
+// ---------------------------------------------------------------------------
+let _huntMitreEntries = [];
+
+function onMitreTacticChange() {
+  const tactic = document.getElementById("mitre-tactic-select").value;
+  populateMitreTechniqueSelect("mitre-technique-select", tactic);
+}
+
+function addMitreTechniqueEntry() {
+  const tactic  = document.getElementById("mitre-tactic-select").value;
+  const techSel = document.getElementById("mitre-technique-select");
+  const techId  = techSel.value;
+  if (!tactic || !techId) return;
+  if (_huntMitreEntries.find(e => e.id === techId)) return; // no duplicates
+  const rawName = techSel.options[techSel.selectedIndex]?.text || "";
+  const name = rawName.replace(/^[^—]*—\s*/, "");
+  _huntMitreEntries.push({ id: techId, name, tactic, method: "", method_image: "" });
+  renderHuntMitreEntries();
+}
+
+function removeHuntMitreEntry(techId) {
+  _huntMitreEntries = _huntMitreEntries.filter(e => e.id !== techId);
+  renderHuntMitreEntries();
+}
+
+function updateHuntMitreMethod(techId, value) {
+  const entry = _huntMitreEntries.find(e => e.id === techId);
+  if (entry) entry.method = value;
+  document.getElementById("report-hunt-mitre-json").value = JSON.stringify(_huntMitreEntries);
+}
+
+function renderHuntMitreEntries() {
+  const container = document.getElementById("hunt-mitre-entries"); if (!container) return;
+  document.getElementById("report-hunt-mitre-json").value = JSON.stringify(_huntMitreEntries);
+  if (!_huntMitreEntries.length) { container.innerHTML = ""; return; }
+  container.innerHTML = _huntMitreEntries.map(e => `
+    <div class="mitre-entry">
+      <div class="mitre-entry-header">
+        <span class="mitre-tag">${esc(e.id)}</span>
+        <span class="text-muted" style="font-size:11px;margin-left:4px">${esc(e.tactic)}</span>
+        <span style="font-size:12px;margin-left:6px">${esc(e.name)}</span>
+        <button type="button" class="btn-icon danger" style="margin-left:auto;font-size:11px"
+                onclick="removeHuntMitreEntry('${esc(e.id)}')">&#x2715;</button>
+      </div>
+      <textarea class="form-input form-textarea" style="margin-top:6px;min-height:60px"
+        placeholder="Bu teknikle ilgili bulgular, araçlar, gözlemler…"
+        oninput="updateHuntMitreMethod('${esc(e.id)}',this.value)">${esc(e.method)}</textarea>
+    </div>`).join("");
+}
+
+// ---------------------------------------------------------------------------
+// Hunt IOC list state
+// ---------------------------------------------------------------------------
+let _huntIOCList = [];
+
+function addIOC() {
+  const input = document.getElementById("ioc-input");
+  const val = input.value.trim(); if (!val) return;
+  if (!_huntIOCList.includes(val)) { _huntIOCList.push(val); renderIOCList(); }
+  input.value = "";
+}
+
+function removeIOC(val) {
+  _huntIOCList = _huntIOCList.filter(x => x !== val);
+  renderIOCList();
+}
+
+function renderIOCList() {
+  const container = document.getElementById("hunt-ioc-list"); if (!container) return;
+  document.getElementById("report-hunt-ioc-json").value = JSON.stringify(_huntIOCList);
+  container.innerHTML = _huntIOCList.map(v =>
+    `<span class="ioc-tag">${esc(v)}<button type="button" class="tag-remove"
+       onclick="removeIOC('${esc(v).replace(/'/g,"\\'")}')">&#x2715;</button></span>`
+  ).join("");
+}
+
+// ---------------------------------------------------------------------------
+// Hunt findings section toggle
+// ---------------------------------------------------------------------------
+function toggleFindingsSection() {
+  const val = document.getElementById("report-hunt-has-findings")?.value;
+  const section   = document.getElementById("hunt-findings-section");
+  const sevGrp    = document.getElementById("hunt-severity-group");
+  if (section) section.style.display = val === "Evet" ? "block" : "none";
+  if (sevGrp)  sevGrp.style.display  = val === "Evet" ? "" : "none";
+}
+
+// ---------------------------------------------------------------------------
+// Hunt related requests state
+// ---------------------------------------------------------------------------
+let _huntRelatedRequests = [];
+
+function addRelatedRequest() {
+  const type  = document.getElementById("related-req-type").value;
+  const idEl  = document.getElementById("related-req-id");
+  const reqId = parseInt(idEl.value); if (!reqId || reqId < 1) return;
+  if (_huntRelatedRequests.find(r => r.type === type && r.id === reqId)) return;
+  _huntRelatedRequests.push({ type, id: reqId });
+  renderRelatedRequests();
+  idEl.value = "";
+}
+
+function removeRelatedRequest(type, id) {
+  _huntRelatedRequests = _huntRelatedRequests.filter(r => !(r.type === type && r.id === id));
+  renderRelatedRequests();
+}
+
+function renderRelatedRequests() {
+  const container = document.getElementById("hunt-related-list"); if (!container) return;
+  document.getElementById("report-hunt-related-json").value = JSON.stringify(_huntRelatedRequests);
+  const label = { tune: "Tuning", uc: "Use-Case" };
+  container.innerHTML = _huntRelatedRequests.map(r =>
+    `<span class="related-tag">${label[r.type]||r.type} #${r.id}<button type="button" class="tag-remove"
+       onclick="removeRelatedRequest('${r.type}',${r.id})">&#x2715;</button></span>`
+  ).join("");
+}
+
+// ---------------------------------------------------------------------------
 // Hunt — Report modal
 // ---------------------------------------------------------------------------
 function toggleDetectionDetail() {
@@ -1307,27 +1515,70 @@ function toggleDetectionDetail() {
   if (grp) grp.style.display = val === "Evet" ? "contents" : "none";
 }
 
-function openHuntReportModal(id) {
+async function openHuntReportModal(id) {
   const r = huntRows.find(x => x.id === id); if (!r) return;
+  await loadMitreData();
   setupAllPaste();
+
+  // Env dropdown
+  const envSel = document.getElementById("report-hunt-environment");
+  if (envSel) {
+    envSel.innerHTML = `<option value="">— Seçin —</option>` +
+      _envs.map(e => `<option value="${esc(e.name)}">${esc(e.name)}</option>`).join("");
+    envSel.value = r.hunt_environment || "";
+  }
+
+  // MITRE tactic/technique dropdowns
+  populateMitreTacticSelect("mitre-tactic-select");
+  populateMitreTechniqueSelect("mitre-technique-select", "");
+
   document.getElementById("report-hunt-id").value = r.id;
   document.getElementById("hunt-report-title").textContent = `Hunt Raporu — #${r.id}`;
-  document.getElementById("report-hunt-scope").value       = r.scope || "";
-  document.getElementById("report-hunt-method").value      = r.method || "";
-  document.getElementById("report-hunt-findings").value    = r.findings || "";
-  document.getElementById("report-hunt-mitre").value       = r.mitre_techniques || "";
-  document.getElementById("report-hunt-detection-suggest").value  = r.detection_suggestion || "Hayır";
-  document.getElementById("report-hunt-detection-detail").value   = r.detection_detail || "";
-  document.getElementById("report-hunt-recommendations").value    = r.recommendations || "";
-  document.getElementById("report-hunt-result").value      = r.hunt_result || "";
-  document.getElementById("report-hunt-report-status").value = r.report_status || "Taslak";
-  document.getElementById("report-hunt-status").value      = r.status || "İnceleniyor";
+  document.getElementById("report-hunt-scope").value = r.scope || "";
+
+  // MITRE entries
+  try {
+    _huntMitreEntries = JSON.parse(r.mitre_techniques || "[]");
+    if (!Array.isArray(_huntMitreEntries)) _huntMitreEntries = [];
+  } catch { _huntMitreEntries = []; }
+  renderHuntMitreEntries();
+
+  // Findings section
+  document.getElementById("report-hunt-has-findings").value = r.has_findings || "Hayır";
+  toggleFindingsSection();
+  document.getElementById("report-hunt-severity").value = r.severity || "";
+
+  // IOC list
+  try {
+    _huntIOCList = JSON.parse(r.ioc_list || "[]");
+    if (!Array.isArray(_huntIOCList)) _huntIOCList = [];
+  } catch { _huntIOCList = []; }
+  renderIOCList();
+
+  document.getElementById("report-hunt-affected-assets").value = r.affected_assets || "";
+  document.getElementById("report-hunt-findings").value        = r.findings || "";
+  document.getElementById("report-hunt-detection-suggest").value = r.detection_suggestion || "Hayır";
+  document.getElementById("report-hunt-detection-detail").value  = r.detection_detail || "";
   toggleDetectionDetail();
+  document.getElementById("report-hunt-recommendations").value  = r.recommendations || "";
+
+  // Related requests
+  try {
+    _huntRelatedRequests = JSON.parse(r.related_requests || "[]");
+    if (!Array.isArray(_huntRelatedRequests)) _huntRelatedRequests = [];
+  } catch { _huntRelatedRequests = []; }
+  renderRelatedRequests();
+
+  document.getElementById("report-hunt-result").value        = r.hunt_result || "";
+  document.getElementById("report-hunt-report-status").value = r.report_status || "Taslak";
+  document.getElementById("report-hunt-status").value        = r.status || "İnceleniyor";
+
   // Images
-  ["scope","method","findings","recommendations"].forEach(f => {
+  ["scope","findings","recommendations"].forEach(f => {
     clearPastePreview(`report-hunt-${f}-preview`, `report-hunt-${f}-image`);
     if (r[`${f}_image`]) restorePreview(r[`${f}_image`], `report-hunt-${f}-preview`, `report-hunt-${f}-image`);
   });
+
   document.getElementById("hunt-report-modal-error").style.display = "none";
   document.getElementById("hunt-report-modal").style.display = "flex";
 }
@@ -1338,20 +1589,24 @@ async function saveHuntReport() {
   const errEl = document.getElementById("hunt-report-modal-error");
   errEl.style.display = "none";
   const payload = {
-    scope:                document.getElementById("report-hunt-scope").value.trim(),
-    scope_image:          document.getElementById("report-hunt-scope-image").value || null,
-    method:               document.getElementById("report-hunt-method").value.trim(),
-    method_image:         document.getElementById("report-hunt-method-image").value || null,
-    findings:             document.getElementById("report-hunt-findings").value.trim(),
-    findings_image:       document.getElementById("report-hunt-findings-image").value || null,
-    mitre_techniques:     document.getElementById("report-hunt-mitre").value.trim(),
-    detection_suggestion: document.getElementById("report-hunt-detection-suggest").value,
-    detection_detail:     document.getElementById("report-hunt-detection-detail").value.trim(),
-    recommendations:      document.getElementById("report-hunt-recommendations").value.trim(),
+    scope:                 document.getElementById("report-hunt-scope").value.trim(),
+    scope_image:           document.getElementById("report-hunt-scope-image").value || null,
+    mitre_techniques:      _huntMitreEntries,
+    has_findings:          document.getElementById("report-hunt-has-findings").value,
+    severity:              document.getElementById("report-hunt-severity").value,
+    ioc_list:              _huntIOCList,
+    affected_assets:       document.getElementById("report-hunt-affected-assets").value.trim(),
+    findings:              document.getElementById("report-hunt-findings").value.trim(),
+    findings_image:        document.getElementById("report-hunt-findings-image").value || null,
+    detection_suggestion:  document.getElementById("report-hunt-detection-suggest").value,
+    detection_detail:      document.getElementById("report-hunt-detection-detail").value.trim(),
+    recommendations:       document.getElementById("report-hunt-recommendations").value.trim(),
     recommendations_image: document.getElementById("report-hunt-recommendations-image").value || null,
-    hunt_result:          document.getElementById("report-hunt-result").value,
-    report_status:        document.getElementById("report-hunt-report-status").value,
-    status:               document.getElementById("report-hunt-status").value,
+    related_requests:      _huntRelatedRequests,
+    hunt_environment:      document.getElementById("report-hunt-environment").value,
+    hunt_result:           document.getElementById("report-hunt-result").value,
+    report_status:         document.getElementById("report-hunt-report-status").value,
+    status:                document.getElementById("report-hunt-status").value,
   };
   try {
     await apiFetch(`/api/hunt/${id}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -1370,28 +1625,57 @@ async function openHuntDetail(id) {
     const reportBadge = r.report_status === "Tamamlandı"
       ? `<span class="status-dot status-done">${esc(r.report_status)}</span>`
       : `<span class="status-dot status-open">${esc(r.report_status||"Taslak")}</span>`;
+
+    // Parse JSON fields safely
+    let mitreEntries = [];
+    try { mitreEntries = JSON.parse(r.mitre_techniques || "[]"); if (!Array.isArray(mitreEntries)) mitreEntries = []; } catch {}
+    let iocList = [];
+    try { iocList = JSON.parse(r.ioc_list || "[]"); if (!Array.isArray(iocList)) iocList = []; } catch {}
+    let relatedReqs = [];
+    try { relatedReqs = JSON.parse(r.related_requests || "[]"); if (!Array.isArray(relatedReqs)) relatedReqs = []; } catch {}
+
+    const mitreBadges = mitreEntries.length
+      ? mitreEntries.map(e => `<span class="mitre-tag">${esc(e.id)} — ${esc(e.name)}</span>`).join(" ")
+      : "";
+    const iocBadges = iocList.length
+      ? iocList.map(v => `<span class="ioc-tag" style="cursor:default">${esc(v)}</span>`).join(" ")
+      : "";
+    const relatedBadges = relatedReqs.length
+      ? relatedReqs.map(r2 => `<span class="related-tag" style="cursor:default">${r2.type==="tune"?"Tuning":"UC"} #${r2.id}</span>`).join(" ")
+      : "";
+
+    // MITRE detail section
+    const mitreDetail = mitreEntries.filter(e => e.method).map(e =>
+      `<div style="margin-top:8px"><span class="mitre-tag">${esc(e.id)}</span> <span class="text-muted" style="font-size:11px">${esc(e.tactic)}</span><br/><span style="white-space:pre-wrap;font-size:13px">${esc(e.method)}</span></div>`
+    ).join("");
+
     let body = `
       <div class="detail-section">
         ${detailRow("Durum", r.status)}
         ${detailRow("Talep Eden", r.requester)}
         ${detailRow("Atanan Analist", r.assigned_analyst)}
-        ${detailRow("Ortam", r.environment)}
+        ${r.hunt_environment ? detailRow("Ortam", r.hunt_environment) : ""}
         ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
         ${detailRow("Başlama Tarihi", fmtDate(r.started_at))}
         ${detailRow("Tamamlanma Tarihi", fmtDate(r.completed_at))}
         ${detailRow("Rapor Güncelleme", r.report_updated_at ? r.report_updated_at.slice(0,16) : "")}
-        ${detailRow("Notlar", r.notes)}
+        ${r.notes ? detailRow("Notlar", r.notes) : ""}
       </div>
       <div class="detail-section">
         <div class="detail-section-title">Rapor</div>
         <div class="detail-row"><span class="detail-label">Rapor Durumu</span><span class="detail-value">${reportBadge}</span></div>
         ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="status-dot ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
-        ${detailRow("MITRE ATT&CK", r.mitre_techniques)}
-        ${r.scope    ? `<div class="detail-section-title" style="margin-top:12px">Hedef &amp; Kapsam</div>${detailRow("", r.scope)}${r.scope_image    ? detailImgRow("Görsel", [r.scope_image])    : ""}` : ""}
-        ${r.method   ? `<div class="detail-section-title" style="margin-top:12px">Analiz Yöntemi</div>${detailRow("", r.method)}${r.method_image   ? detailImgRow("Görsel", [r.method_image])   : ""}` : ""}
+        ${r.has_findings === "Evet" ? `<div class="detail-row"><span class="detail-label">Bulgu</span><span class="detail-value"><span class="status-dot status-done">Evet</span></span></div>` : ""}
+        ${r.severity ? detailRow("Şiddet", r.severity) : ""}
+        ${mitreBadges ? `<div class="detail-row"><span class="detail-label">MITRE ATT&amp;CK</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${mitreBadges}</span></div>` : ""}
+        ${mitreDetail ? `<div style="padding:8px 0">${mitreDetail}</div>` : ""}
+        ${r.scope ? `<div class="detail-section-title" style="margin-top:12px">Hedef &amp; Kapsam</div>${detailRow("", r.scope)}${r.scope_image ? detailImgRow("Görsel", [r.scope_image]) : ""}` : ""}
+        ${iocBadges ? `<div class="detail-row"><span class="detail-label">IOC Listesi</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${iocBadges}</span></div>` : ""}
+        ${r.affected_assets ? detailRow("Etkilenen Varlıklar", r.affected_assets) : ""}
         ${r.findings ? `<div class="detail-section-title" style="margin-top:12px">Bulgular</div>${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : ""}
         ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title" style="margin-top:12px">Detection Önerisi</div>${detailRow("", r.detection_detail)}` : ""}
         ${r.recommendations ? `<div class="detail-section-title" style="margin-top:12px">Öneriler</div>${detailRow("", r.recommendations)}${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}
+        ${relatedBadges ? `<div class="detail-row" style="margin-top:8px"><span class="detail-label">İlişkili Talepler</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${relatedBadges}</span></div>` : ""}
       </div>`;
     document.getElementById("hunt-detail-body").innerHTML = body;
     document.getElementById("hunt-detail-modal").style.display = "flex";
