@@ -272,6 +272,45 @@
     </div>
   </section>
 
+{% if is_settings %}
+<!-- ===== MODAL: Kullanıcı Düzenle (settings only) ===== -->
+<div id="edit-user-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title" id="edit-user-modal-title">Kullanıcı Düzenle</h2>
+      <button class="modal-close" onclick="closeEditUserModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-user-id"/>
+      <div class="form-grid">
+        <div class="form-group form-col-2">
+          <label class="form-label">Kullanıcı Adı</label>
+          <input class="form-input" id="edit-user-name-display" type="text" disabled/>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Rol</label>
+          <select class="form-input" id="edit-user-role">
+            <option value="analyst">Analist</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Yeni Şifre <span class="text-muted" style="font-weight:400">(boş bırakırsan değişmez)</span></label>
+          <input class="form-input" id="edit-user-password" type="password" placeholder="En az 6 karakter…" autocomplete="new-password"/>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Şifre Tekrar</label>
+          <input class="form-input" id="edit-user-password2" type="password" placeholder="Yukarıdakini tekrarla…" autocomplete="new-password"/>
+        </div>
+      </div>
+      <div id="edit-user-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeEditUserModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveEditUser()">Kaydet</button>
+    </div>
+  </div>
+</div>
 {% endif %}
 </main>
 
@@ -930,6 +969,6 @@
   const USER_ROLE    = "{{ user_role }}";
   const CURRENT_USER = "{{ username }}";
 </script>
-<script src="/static/app.js?v=13"></script>
+<script src="/static/app.js?v=14"></script>
 </body>
 </html>

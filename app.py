@@ -989,6 +989,44 @@ def create_user():
     write_audit("CREATE_USER", "user", user["id"], f"Kullanıcı: {username} | Rol: {role}")
     return jsonify(dict(user)), 201
 
+@app.route("/api/users/<int:user_id>", methods=["PUT"])
+@login_required
+@settings_required
+def update_user(user_id):
+    data = request.json or {}
+    db   = get_db()
+    user = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user:
+        return jsonify({"error": "Kullanıcı bulunamadı"}), 404
+    if user["role"] == "settings":
+        return jsonify({"error": "Settings kullanıcısı düzenlenemez"}), 403
+
+    new_role = data.get("role", user["role"])
+    if new_role not in ("admin", "analyst"):
+        return jsonify({"error": "Geçersiz rol (admin veya analyst olmalı)"}), 400
+
+    new_password = data.get("password", "").strip()
+    if new_password:
+        if len(new_password) < 6:
+            return jsonify({"error": "Şifre en az 6 karakter olmalıdır"}), 400
+        db.execute(
+            "UPDATE users SET role=?, password_hash=? WHERE id=?",
+            (new_role, generate_password_hash(new_password), user_id)
+        )
+    else:
+        db.execute("UPDATE users SET role=? WHERE id=?", (new_role, user_id))
+    db.commit()
+
+    audit_parts = []
+    if new_role != user["role"]:
+        audit_parts.append(f"Rol: {user['role']} → {new_role}")
+    if new_password:
+        audit_parts.append("Şifre değiştirildi")
+    write_audit("EDIT_USER", "user", user_id,
+                f"Kullanıcı: {user['username']} | " + " | ".join(audit_parts))
+    updated = db.execute("SELECT id,username,role,created_at FROM users WHERE id=?", (user_id,)).fetchone()
+    return jsonify(dict(updated))
+
 @app.route("/api/users/<int:user_id>", methods=["DELETE"])
 @login_required
 @settings_required

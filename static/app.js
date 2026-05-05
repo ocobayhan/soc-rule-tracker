@@ -948,6 +948,7 @@ const ACTION_TR = {
   "EDIT_UC":     "Use-Case düzenlendi",
   "DELETE_UC":   "Use-Case silindi",
   "CREATE_USER":  "Kullanıcı oluşturuldu",
+  "EDIT_USER":    "Kullanıcı düzenlendi",
   "DELETE_USER":  "Kullanıcı silindi",
   "CREATE_HUNT":  "Hunt oluşturuldu",
   "CLAIM_HUNT":   "Hunt üstlenildi",
@@ -961,7 +962,7 @@ const ACTION_CLS = {
   "CREATE_TUNE": "audit-create", "CREATE_UC": "audit-create", "CREATE_USER": "audit-create", "CREATE_HUNT": "audit-create",
   "CLAIM_TUNE":  "audit-claim",  "CLAIM_UC":  "audit-claim",  "CLAIM_HUNT":  "audit-claim",
   "CLOSE_TUNE":  "audit-close",  "CLOSE_UC":  "audit-close",  "CLOSE_HUNT":  "audit-close",
-  "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",   "EDIT_HUNT":   "audit-edit",   "REPORT_HUNT": "audit-edit",
+  "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",   "EDIT_HUNT":   "audit-edit",   "EDIT_USER":   "audit-edit",  "REPORT_HUNT": "audit-edit",
   "DELETE_TUNE": "audit-delete", "DELETE_UC": "audit-delete", "DELETE_USER": "audit-delete", "DELETE_HUNT": "audit-delete",
 };
 
@@ -1003,18 +1004,24 @@ async function loadSettings() {
   await loadUsersList();
 }
 
+const ROLE_LABEL = { admin: "Admin", analyst: "Analist" };
+
 async function loadUsersList() {
   const list = document.getElementById("user-settings-list");
   if (!list) return;
   try {
     const users = await apiFetch("/api/users");
-    const ROLE_LABEL = { admin: "Admin", analyst: "Analist" };
     list.innerHTML = users.length
       ? users.map(u => `<li>
           <span>${esc(u.username)}
             <span class="user-role-badge role-${u.role}">${ROLE_LABEL[u.role] || u.role}</span>
           </span>
-          <button class="btn-icon danger" onclick="deleteUser(${u.id}, '${esc(u.username)}')">&#x1F5D1;</button>
+          <span style="display:flex;gap:4px">
+            <button class="btn-icon" title="Düzenle"
+              onclick="openEditUserModal(${u.id},'${esc(u.username)}','${u.role}')">&#9998;</button>
+            <button class="btn-icon danger" title="Sil"
+              onclick="deleteUser(${u.id},'${esc(u.username)}')">&#x1F5D1;</button>
+          </span>
         </li>`).join("")
       : `<li class="text-muted" style="justify-content:center">Henüz kullanıcı eklenmedi.</li>`;
   } catch (e) { console.error(e); }
@@ -1042,6 +1049,50 @@ async function deleteUser(id, name) {
   if (!confirm(`"${name}" kullanıcısını silmek istediğinize emin misiniz?`)) return;
   try { await apiFetch(`/api/users/${id}`, { method: "DELETE" }); loadUsersList(); }
   catch (e) { alert(e.message); }
+}
+
+// ---------------------------------------------------------------------------
+// User edit modal
+// ---------------------------------------------------------------------------
+function openEditUserModal(id, username, role) {
+  document.getElementById("edit-user-id").value           = id;
+  document.getElementById("edit-user-modal-title").textContent = `Kullanıcı Düzenle — ${username}`;
+  document.getElementById("edit-user-name-display").value = username;
+  document.getElementById("edit-user-role").value         = role;
+  document.getElementById("edit-user-password").value     = "";
+  document.getElementById("edit-user-password2").value    = "";
+  document.getElementById("edit-user-error").style.display = "none";
+  document.getElementById("edit-user-modal").style.display = "flex";
+}
+function closeEditUserModal() {
+  document.getElementById("edit-user-modal").style.display = "none";
+}
+
+async function saveEditUser() {
+  const id      = document.getElementById("edit-user-id").value;
+  const role    = document.getElementById("edit-user-role").value;
+  const pw1     = document.getElementById("edit-user-password").value;
+  const pw2     = document.getElementById("edit-user-password2").value;
+  const errEl   = document.getElementById("edit-user-error");
+  errEl.style.display = "none";
+
+  if (pw1 && pw1 !== pw2) {
+    errEl.textContent = "Şifreler eşleşmiyor.";
+    errEl.style.display = "block"; return;
+  }
+  if (pw1 && pw1.length < 6) {
+    errEl.textContent = "Şifre en az 6 karakter olmalıdır.";
+    errEl.style.display = "block"; return;
+  }
+
+  const payload = { role };
+  if (pw1) payload.password = pw1;
+
+  try {
+    await apiFetch(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    closeEditUserModal();
+    loadUsersList();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
 }
 
 async function addEnvironment() {
