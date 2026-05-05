@@ -109,17 +109,17 @@ CREATE TABLE IF NOT EXISTS threat_hunt_requests (
 
 ## 6. Uygulama Adımları
 
-- [ ] `init_db()` içine `threat_hunt_requests` tablosu ekle
-- [ ] Backend: CRUD endpoint'leri (`/api/hunt` GET/POST, `/api/hunt/<id>` GET/PUT/DELETE)
-- [ ] Backend: İzin kontrolleri (reporter/assigned mantığı)
-- [ ] Backend: Audit log entegrasyonu
-- [ ] Frontend: Nav'a "Threat Hunting" sekmesi ekle
-- [ ] Frontend: Talep listesi tablosu (diğerleriyle tutarlı stil)
-- [ ] Frontend: Yeni talep modal'ı
-- [ ] Frontend: Düzenle modal'ı (talep alanları)
-- [ ] Frontend: Rapor modal'ı (6 bölüm + görsel + kademeli kayıt)
-- [ ] Frontend: Üstlen / Kapat modal'ları
-- [ ] Frontend: Detay görünümü
-- [ ] Excel export'a 4. sheet olarak ekle
-- [ ] KPI / Dashboard entegrasyonu
-- [ ] Test & commit
+- [x] `init_db()` içine `threat_hunt_requests` tablosu ekle
+- [x] Backend: CRUD endpoint'leri (`/api/hunt` GET/POST, `/api/hunt/<id>` GET/PUT/DELETE)
+- [x] Backend: İzin kontrolleri (reporter/assigned mantığı)
+- [x] Backend: Audit log entegrasyonu
+- [x] Frontend: Nav'a "Threat Hunting" sekmesi ekle
+- [x] Frontend: Talep listesi tablosu (diğerleriyle tutarlı stil)
+- [x] Frontend: Yeni talep modal'ı
+- [x] Frontend: Düzenle modal'ı (talep alanları)
+- [x] Frontend: Rapor modal'ı (MITRE ATT&CK tactic/technique + Bulgular koşullu bölüm + Hunt Ortamı multi-select)
+- [x] Frontend: Üstlen / Kapat modal'ları
+- [x] Frontend: Detay görünümü
+- [x] Excel export'a 4. sheet olarak ekle
+- [x] KPI / Dashboard entegrasyonu
+- [ ] Test & commit (sunucu testi bekliyor)
