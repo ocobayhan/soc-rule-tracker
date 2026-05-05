@@ -178,7 +178,10 @@ def init_db():
     for col, default in hunt_new_cols:
         if not _col_exists(db, "threat_hunt_requests", col):
             db.execute(f"ALTER TABLE threat_hunt_requests ADD COLUMN {col} TEXT DEFAULT {default}")
-    # Drop old environment/method columns gracefully (SQLite can't DROP, just stop using)
+    # Clear MITRE cache if it contains stale multi-tactic entries (force re-fetch with clean data)
+    stale = db.execute("SELECT COUNT(*) c FROM mitre_cache WHERE tactic LIKE '%, %'").fetchone()["c"]
+    if stale > 0:
+        db.execute("DELETE FROM mitre_cache")
 
     # Migrate legacy 'user' role → 'admin'
     db.execute("UPDATE users SET role='admin' WHERE role='user'")
@@ -364,11 +367,11 @@ def get_mitre():
                                 if r.get("source_name") == "mitre-attack"), None)
                     if not tid:
                         continue
-                    tactics = [tactic_map.get(p["phase_name"], p["phase_name"])
-                               for p in obj.get("kill_chain_phases", [])]
+                    phases  = obj.get("kill_chain_phases", [])
+                    tactic  = tactic_map.get(phases[0]["phase_name"], phases[0]["phase_name"]) if phases else ""
                     turl = next((r.get("url", "") for r in ext
                                  if r.get("source_name") == "mitre-attack"), "")
-                    rows.append((tid, obj["name"], ", ".join(tactics), turl))
+                    rows.append((tid, obj["name"], tactic, turl))
             rows.sort(key=lambda x: x[0])
             db.executemany(
                 "INSERT OR IGNORE INTO mitre_cache (id, name, tactic, url) VALUES (?,?,?,?)",
@@ -591,7 +594,7 @@ def list_usecase():
     status = request.args.get("status","")
     q = "SELECT * FROM usecase_requests WHERE 1=1"
     p = []
-    if env:    q += " AND environment=?";                   p.append(env)
+    if env:    q += " AND INSTR(',' || environment || ',', ',' || ? || ',') > 0"; p.append(env)
     if month:  q += " AND strftime('%Y-%m',created_at)=?";  p.append(month)
     if status: q += " AND status=?";                        p.append(status)
     q += " ORDER BY created_at DESC"
@@ -601,6 +604,12 @@ def list_usecase():
 @login_required
 def create_usecase():
     data = request.json or {}
+    # Normalize environment: accept array or string, store as comma-separated
+    env_raw = data.get("environment", "")
+    if isinstance(env_raw, list):
+        data["environment"] = ",".join(e.strip() for e in env_raw if str(e).strip())
+    else:
+        data["environment"] = str(env_raw).strip()
     for f in ["requester","usecase_description","environment"]:
         if not data.get(f,"").strip():
             return jsonify({"error": f"{f} zorunludur"}), 400
@@ -618,7 +627,7 @@ def create_usecase():
         VALUES (?,?,?,?,?,?,?,?,?,?)
     """, (
         data["requester"].strip(), data["usecase_description"].strip(),
-        data["environment"].strip(),
+        data["environment"],
         data.get("rule_name","").strip(), data.get("rule_author","").strip(),
         data.get("notes","").strip(), data.get("status","Açık"),
         now, None, now
@@ -633,6 +642,13 @@ def create_usecase():
 @login_required
 def update_usecase(item_id):
     data = request.json or {}
+    # Normalize environment (may arrive as array from multi-select)
+    env_raw = data.get("environment")
+    if env_raw is not None:
+        if isinstance(env_raw, list):
+            data["environment"] = ",".join(e.strip() for e in env_raw if str(e).strip())
+        else:
+            data["environment"] = str(env_raw).strip()
     db   = get_db()
     row  = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
     if not row:
@@ -699,7 +715,7 @@ def update_usecase(item_id):
     """, (
         data.get("requester",           row["requester"]).strip(),
         data.get("usecase_description", row["usecase_description"]).strip(),
-        data.get("environment",         row["environment"]).strip(),
+        data.get("environment",         row["environment"] or ""),
         data.get("rule_name",           row["rule_name"] or "").strip(),
         data.get("rule_author",         row["rule_author"] or "").strip(),
         data.get("notes",               row["notes"] or "").strip(),

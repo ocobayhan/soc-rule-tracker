@@ -467,7 +467,13 @@
         </div>
         <div class="form-group">
           <label class="form-label">Ortam *</label>
-          <select class="form-input" id="uc-env"><option value="">— Seçin —</option></select>
+          <div class="mitre-add-row" id="uc-env-add-row">
+            <select class="form-input input-sm" id="uc-env-select">
+              <option value="">— Ortam seçin —</option>
+            </select>
+            <button type="button" class="btn btn-secondary" onclick="addUCEnvCreate()">+ Ekle</button>
+          </div>
+          <div id="uc-env-list" class="tag-list"></div>
         </div>
         <div class="form-group form-col-2">
           <label class="form-label">Use-Case Tanımı *</label>
@@ -500,7 +506,13 @@
         </div>
         <div class="form-group">
           <label class="form-label">Ortam *</label>
-          <select class="form-input" id="edit-uc-env"><option value="">— Seçin —</option></select>
+          <div class="mitre-add-row" id="edit-uc-env-add-row">
+            <select class="form-input input-sm" id="edit-uc-env-select">
+              <option value="">— Ortam seçin —</option>
+            </select>
+            <button type="button" class="btn btn-secondary" id="edit-uc-env-btn" onclick="addUCEnvEdit()">+ Ekle</button>
+          </div>
+          <div id="edit-uc-env-list" class="tag-list"></div>
         </div>
         <div class="form-group form-col-2">
           <label class="form-label">Use-Case Tanımı *</label>
@@ -590,7 +602,7 @@
       <div class="form-group form-col-2" style="margin-top:12px">
         <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer">
           <input type="checkbox" id="close-uc-mitre-check" onchange="toggleUCMitre()" style="width:16px;height:16px;accent-color:var(--accent-blue)"/>
-          MITRE ATT&amp;CK ile sınıflandır
+          MITRE ATT&amp;CK sınıflandırması yapıldı
         </label>
       </div>
       <div id="close-uc-mitre-section" style="display:none;margin-top:8px">
@@ -846,29 +858,17 @@
         <input type="hidden" id="report-hunt-recommendations-image"/>
       </div>
 
-      <!-- İlişkili Talepler -->
-      <div class="form-group form-col-2" style="margin-top:16px">
-        <label class="form-label">İlişkili Talepler</label>
-        <div class="mitre-add-row">
-          <select class="form-input input-sm" id="related-req-type">
-            <option value="tune">Tuning</option>
-            <option value="uc">Use-Case</option>
-          </select>
-          <input class="form-input input-sm" type="number" id="related-req-id" placeholder="#ID" min="1"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();addRelatedRequest();}"/>
-          <button type="button" class="btn btn-secondary" onclick="addRelatedRequest()">+ Ekle</button>
-        </div>
-        <div id="hunt-related-list" class="tag-list"></div>
-        <input type="hidden" id="report-hunt-related-json" value="[]"/>
-      </div>
-
-      <!-- Ortam + Sonuç + Rapor Durumu + Hunt Durumu -->
+      <!-- Hunt Ortamı + Sonuç + Rapor Durumu + Hunt Durumu -->
       <div class="form-grid" style="margin-top:8px">
-        <div class="form-group">
+        <div class="form-group form-col-2">
           <label class="form-label">Hunt Ortamı</label>
-          <select class="form-input" id="report-hunt-environment">
-            <option value="">— Seçin —</option>
-          </select>
+          <div class="mitre-add-row" id="hunt-report-env-add-row">
+            <select class="form-input input-sm" id="hunt-report-env-select">
+              <option value="">— Ortam seçin —</option>
+            </select>
+            <button type="button" class="btn btn-secondary" onclick="addHuntEnv()">+ Ekle</button>
+          </div>
+          <div id="hunt-env-list" class="tag-list"></div>
         </div>
         <div class="form-group">
           <label class="form-label">Sonuç</label>
@@ -930,6 +930,6 @@
   const USER_ROLE    = "{{ user_role }}";
   const CURRENT_USER = "{{ username }}";
 </script>
-<script src="/static/app.js?v=12"></script>
+<script src="/static/app.js?v=13"></script>
 </body>
 </html>

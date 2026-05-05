@@ -172,11 +172,18 @@ function analystOpts(cur = "", allowEmpty = true) {
 }
 
 function populateEnvDropdowns() {
-  ["tune-env","edit-tune-env","uc-env","edit-uc-env"].forEach(id => {
+  // Tune still uses plain selects
+  ["tune-env","edit-tune-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value; el.innerHTML = envOpts(cur);
   });
-  // report-hunt-environment is populated separately in openHuntReportModal
+  // UC + Hunt use tag-based selectors — populate their hidden selects
+  const envOpsSimple = `<option value="">— Ortam seçin —</option>` +
+    _envs.map(e => `<option value="${esc(e.name)}">${esc(e.name)}</option>`).join("");
+  ["uc-env-select","edit-uc-env-select","hunt-report-env-select"].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.innerHTML = envOpsSimple;
+  });
   ["tune-filter-env","uc-filter-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value;
@@ -291,7 +298,7 @@ function openUCDetail(id) {
   document.getElementById("uc-detail-title").textContent = r.usecase_description.slice(0, 60) + (r.usecase_description.length > 60 ? "…" : "");
   document.getElementById("uc-detail-body").innerHTML = `<div class="detail-grid">
     ${detailRow("Talep Eden",    r.requester)}
-    ${detailRow("Ortam",         r.environment)}
+    ${detailRow("Ortam", parseEnvStr(r.environment).join(", ") || r.environment)}
     ${detailRow("Durum",         r.status)}
     ${detailRow("Use-Case",      r.usecase_description)}
     ${detailRow("Analist",       r.rule_author)}
@@ -670,7 +677,7 @@ function renderUCRows() {
     <td class="td-truncate" title="${esc(r.usecase_description)}">
       <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
     </td>
-    <td class="td-truncate">${esc(r.environment)}</td>
+    <td class="td-truncate">${esc(parseEnvStr(r.environment).join(", ") || r.environment)}</td>
     <td class="td-truncate">${esc(r.requester)}</td>
     <td class="td-truncate">${esc(r.rule_name)||'<span class="text-muted">—</span>'}</td>
     <td class="td-truncate">${esc(r.rule_author)||'<span class="text-muted">—</span>'}</td>
@@ -707,10 +714,10 @@ function clearUCFilters() {
 // ---------------------------------------------------------------------------
 function openUCModal() {
   populateEnvDropdowns(); populateAnalystDropdowns();
-  document.getElementById("uc-id").value  = "";
-  document.getElementById("uc-env").value = "";
+  document.getElementById("uc-id").value   = "";
   document.getElementById("uc-desc").value = "";
-  // Talep Eden: analist sadece kendisi
+  _ucEnvCreate = [];
+  renderUCEnvCreate();
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
     lockToSelf("uc-requester");
   } else {
@@ -724,9 +731,12 @@ function closeUCModal() { document.getElementById("uc-modal").style.display = "n
 async function saveUC() {
   const errEl = document.getElementById("uc-modal-error");
   errEl.style.display = "none";
+  if (!_ucEnvCreate.length) {
+    errEl.textContent = "En az bir ortam seçin."; errEl.style.display = "block"; return;
+  }
   const payload = {
     requester:           document.getElementById("uc-requester").value,
-    environment:         document.getElementById("uc-env").value,
+    environment:         _ucEnvCreate.join(","),
     usecase_description: document.getElementById("uc-desc").value.trim(),
     status:              "Açık",
   };
@@ -742,19 +752,18 @@ async function saveUC() {
 function openUCEditModal(id) {
   const r = ucRows.find(x => x.id === id); if (!r) return;
   populateEnvDropdowns(); populateAnalystDropdowns();
-  document.getElementById("edit-uc-id").value     = r.id;
-  document.getElementById("edit-uc-env").value    = r.environment || "";
-  document.getElementById("edit-uc-desc").value   = r.usecase_description || "";
-  document.getElementById("edit-uc-status").value = r.status || "Açık";
+  document.getElementById("edit-uc-id").value        = r.id;
+  document.getElementById("edit-uc-desc").value      = r.usecase_description || "";
+  document.getElementById("edit-uc-status").value    = r.status || "Açık";
   document.getElementById("edit-uc-rule-name").value = r.rule_name || "";
-  document.getElementById("edit-uc-notes").value  = r.notes || "";
+  document.getElementById("edit-uc-notes").value     = r.notes || "";
+  // Env tags
+  _ucEnvEdit = parseEnvStr(r.environment);
   // Alan kilitleme: role ve sahipliğe göre
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
     const isAssigned  = r.rule_author === CURRENT_USER;
     const isRequester = r.requester   === CURRENT_USER;
-    // Talep eden her zaman kilitli
     lockToSelf("edit-uc-requester");
-    // Kural yazarı alanı: atanmışsa kendine kilitli, değilse salt okunur
     if (isAssigned) {
       lockToSelf("edit-uc-rule-author");
     } else {
@@ -762,22 +771,19 @@ function openUCEditModal(id) {
       sel.innerHTML = `<option value="${esc(r.rule_author||"")}">${esc(r.rule_author||"—")}</option>`;
       sel.disabled  = true;
     }
-    // Talep alanları (talep eden doldurur): yalnızca talep eden düzenleyebilir
-    ["edit-uc-env","edit-uc-desc"].forEach(id => {
-      document.getElementById(id).disabled = !isRequester;
-    });
-    // Çalışma alanları (analist doldurur): yalnızca atanmış analist düzenleyebilir
-    ["edit-uc-status","edit-uc-rule-name","edit-uc-notes"].forEach(id => {
-      document.getElementById(id).disabled = !isAssigned;
+    setUCEnvEditDisabled(!isRequester);
+    document.getElementById("edit-uc-desc").disabled = !isRequester;
+    ["edit-uc-status","edit-uc-rule-name","edit-uc-notes"].forEach(i => {
+      document.getElementById(i).disabled = !isAssigned;
     });
   } else {
-    // Admin: tüm alanlar serbest
-    ["edit-uc-env","edit-uc-desc","edit-uc-status","edit-uc-rule-name","edit-uc-notes"].forEach(id => {
-      document.getElementById(id).disabled = false;
-    });
     freeSelect("edit-uc-requester",   r.requester   || "");
     freeSelect("edit-uc-rule-author", r.rule_author || "");
     document.getElementById("edit-uc-rule-author").disabled = false;
+    setUCEnvEditDisabled(false);
+    ["edit-uc-desc","edit-uc-status","edit-uc-rule-name","edit-uc-notes"].forEach(i => {
+      document.getElementById(i).disabled = false;
+    });
   }
   document.getElementById("uc-edit-modal-error").style.display = "none";
   document.getElementById("uc-edit-modal").style.display = "flex";
@@ -790,7 +796,7 @@ async function saveUCEdit() {
   errEl.style.display = "none";
   const payload = {
     requester:           document.getElementById("edit-uc-requester").value,
-    environment:         document.getElementById("edit-uc-env").value,
+    environment:         _ucEnvEdit.join(","),
     usecase_description: document.getElementById("edit-uc-desc").value.trim(),
     status:              document.getElementById("edit-uc-status").value,
     rule_author:         document.getElementById("edit-uc-rule-author").value,
@@ -1440,6 +1446,92 @@ function renderHuntMitreEntries() {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-env helper (shared by UC create, UC edit, Hunt report)
+// ---------------------------------------------------------------------------
+function _makeEnvTagSystem(listId, stateRef) {
+  // stateRef is an object { arr: [] } so we can mutate by reference
+}
+
+// UC Create env tags
+let _ucEnvCreate = [];
+function addUCEnvCreate() {
+  const sel = document.getElementById("uc-env-select");
+  const val = sel.value; if (!val) return;
+  if (!_ucEnvCreate.includes(val)) { _ucEnvCreate.push(val); renderUCEnvCreate(); }
+  sel.value = "";
+}
+function removeUCEnvCreate(val) {
+  _ucEnvCreate = _ucEnvCreate.filter(v => v !== val);
+  renderUCEnvCreate();
+}
+function renderUCEnvCreate() {
+  const c = document.getElementById("uc-env-list"); if (!c) return;
+  c.innerHTML = _ucEnvCreate.map(v =>
+    `<span class="ioc-tag">${esc(v)}<button type="button" class="tag-remove"
+       onclick="removeUCEnvCreate('${esc(v).replace(/'/g,"\\'")}')">&#x2715;</button></span>`
+  ).join("");
+}
+
+// UC Edit env tags
+let _ucEnvEdit = [];
+function addUCEnvEdit() {
+  const sel = document.getElementById("edit-uc-env-select");
+  const val = sel.value; if (!val) return;
+  if (!_ucEnvEdit.includes(val)) { _ucEnvEdit.push(val); renderUCEnvEdit(); }
+  sel.value = "";
+}
+function removeUCEnvEdit(val) {
+  _ucEnvEdit = _ucEnvEdit.filter(v => v !== val);
+  renderUCEnvEdit();
+}
+function renderUCEnvEdit(disabled) {
+  const c = document.getElementById("edit-uc-env-list"); if (!c) return;
+  if (disabled) {
+    c.innerHTML = _ucEnvEdit.map(v =>
+      `<span class="ioc-tag" style="cursor:default">${esc(v)}</span>`
+    ).join("");
+  } else {
+    c.innerHTML = _ucEnvEdit.map(v =>
+      `<span class="ioc-tag">${esc(v)}<button type="button" class="tag-remove"
+         onclick="removeUCEnvEdit('${esc(v).replace(/'/g,"\\'")}')">&#x2715;</button></span>`
+    ).join("");
+  }
+}
+function setUCEnvEditDisabled(disabled) {
+  const sel = document.getElementById("edit-uc-env-select");
+  const btn = document.getElementById("edit-uc-env-btn");
+  if (sel) sel.disabled = disabled;
+  if (btn) btn.disabled = disabled;
+  renderUCEnvEdit(disabled);
+}
+
+// Hunt env tags
+let _huntEnvList = [];
+function addHuntEnv() {
+  const sel = document.getElementById("hunt-report-env-select");
+  const val = sel.value; if (!val) return;
+  if (!_huntEnvList.includes(val)) { _huntEnvList.push(val); renderHuntEnvTags(); }
+  sel.value = "";
+}
+function removeHuntEnv(val) {
+  _huntEnvList = _huntEnvList.filter(v => v !== val);
+  renderHuntEnvTags();
+}
+function renderHuntEnvTags() {
+  const c = document.getElementById("hunt-env-list"); if (!c) return;
+  c.innerHTML = _huntEnvList.map(v =>
+    `<span class="ioc-tag">${esc(v)}<button type="button" class="tag-remove"
+       onclick="removeHuntEnv('${esc(v).replace(/'/g,"\\'")}')">&#x2715;</button></span>`
+  ).join("");
+}
+
+// Parse comma-sep env string → array
+function parseEnvStr(str) {
+  if (!str) return [];
+  return str.split(",").map(s => s.trim()).filter(Boolean);
+}
+
+// ---------------------------------------------------------------------------
 // Hunt IOC list state
 // ---------------------------------------------------------------------------
 let _huntIOCList = [];
@@ -1477,36 +1569,6 @@ function toggleFindingsSection() {
 }
 
 // ---------------------------------------------------------------------------
-// Hunt related requests state
-// ---------------------------------------------------------------------------
-let _huntRelatedRequests = [];
-
-function addRelatedRequest() {
-  const type  = document.getElementById("related-req-type").value;
-  const idEl  = document.getElementById("related-req-id");
-  const reqId = parseInt(idEl.value); if (!reqId || reqId < 1) return;
-  if (_huntRelatedRequests.find(r => r.type === type && r.id === reqId)) return;
-  _huntRelatedRequests.push({ type, id: reqId });
-  renderRelatedRequests();
-  idEl.value = "";
-}
-
-function removeRelatedRequest(type, id) {
-  _huntRelatedRequests = _huntRelatedRequests.filter(r => !(r.type === type && r.id === id));
-  renderRelatedRequests();
-}
-
-function renderRelatedRequests() {
-  const container = document.getElementById("hunt-related-list"); if (!container) return;
-  document.getElementById("report-hunt-related-json").value = JSON.stringify(_huntRelatedRequests);
-  const label = { tune: "Tuning", uc: "Use-Case" };
-  container.innerHTML = _huntRelatedRequests.map(r =>
-    `<span class="related-tag">${label[r.type]||r.type} #${r.id}<button type="button" class="tag-remove"
-       onclick="removeRelatedRequest('${r.type}',${r.id})">&#x2715;</button></span>`
-  ).join("");
-}
-
-// ---------------------------------------------------------------------------
 // Hunt — Report modal
 // ---------------------------------------------------------------------------
 function toggleDetectionDetail() {
@@ -1520,13 +1582,9 @@ async function openHuntReportModal(id) {
   await loadMitreData();
   setupAllPaste();
 
-  // Env dropdown
-  const envSel = document.getElementById("report-hunt-environment");
-  if (envSel) {
-    envSel.innerHTML = `<option value="">— Seçin —</option>` +
-      _envs.map(e => `<option value="${esc(e.name)}">${esc(e.name)}</option>`).join("");
-    envSel.value = r.hunt_environment || "";
-  }
+  // Hunt env tags
+  _huntEnvList = parseEnvStr(r.hunt_environment);
+  renderHuntEnvTags();
 
   // MITRE tactic/technique dropdowns
   populateMitreTacticSelect("mitre-tactic-select");
@@ -1562,13 +1620,6 @@ async function openHuntReportModal(id) {
   toggleDetectionDetail();
   document.getElementById("report-hunt-recommendations").value  = r.recommendations || "";
 
-  // Related requests
-  try {
-    _huntRelatedRequests = JSON.parse(r.related_requests || "[]");
-    if (!Array.isArray(_huntRelatedRequests)) _huntRelatedRequests = [];
-  } catch { _huntRelatedRequests = []; }
-  renderRelatedRequests();
-
   document.getElementById("report-hunt-result").value        = r.hunt_result || "";
   document.getElementById("report-hunt-report-status").value = r.report_status || "Taslak";
   document.getElementById("report-hunt-status").value        = r.status || "İnceleniyor";
@@ -1602,8 +1653,7 @@ async function saveHuntReport() {
     detection_detail:      document.getElementById("report-hunt-detection-detail").value.trim(),
     recommendations:       document.getElementById("report-hunt-recommendations").value.trim(),
     recommendations_image: document.getElementById("report-hunt-recommendations-image").value || null,
-    related_requests:      _huntRelatedRequests,
-    hunt_environment:      document.getElementById("report-hunt-environment").value,
+    hunt_environment:      _huntEnvList.join(","),
     hunt_result:           document.getElementById("report-hunt-result").value,
     report_status:         document.getElementById("report-hunt-report-status").value,
     status:                document.getElementById("report-hunt-status").value,
@@ -1631,8 +1681,7 @@ async function openHuntDetail(id) {
     try { mitreEntries = JSON.parse(r.mitre_techniques || "[]"); if (!Array.isArray(mitreEntries)) mitreEntries = []; } catch {}
     let iocList = [];
     try { iocList = JSON.parse(r.ioc_list || "[]"); if (!Array.isArray(iocList)) iocList = []; } catch {}
-    let relatedReqs = [];
-    try { relatedReqs = JSON.parse(r.related_requests || "[]"); if (!Array.isArray(relatedReqs)) relatedReqs = []; } catch {}
+    const envList = parseEnvStr(r.hunt_environment);
 
     const mitreBadges = mitreEntries.length
       ? mitreEntries.map(e => `<span class="mitre-tag">${esc(e.id)} — ${esc(e.name)}</span>`).join(" ")
@@ -1640,8 +1689,8 @@ async function openHuntDetail(id) {
     const iocBadges = iocList.length
       ? iocList.map(v => `<span class="ioc-tag" style="cursor:default">${esc(v)}</span>`).join(" ")
       : "";
-    const relatedBadges = relatedReqs.length
-      ? relatedReqs.map(r2 => `<span class="related-tag" style="cursor:default">${r2.type==="tune"?"Tuning":"UC"} #${r2.id}</span>`).join(" ")
+    const envBadges = envList.length
+      ? envList.map(v => `<span class="ioc-tag" style="cursor:default">${esc(v)}</span>`).join(" ")
       : "";
 
     // MITRE detail section
@@ -1654,7 +1703,7 @@ async function openHuntDetail(id) {
         ${detailRow("Durum", r.status)}
         ${detailRow("Talep Eden", r.requester)}
         ${detailRow("Atanan Analist", r.assigned_analyst)}
-        ${r.hunt_environment ? detailRow("Ortam", r.hunt_environment) : ""}
+        ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${envBadges}</span></div>` : ""}
         ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
         ${detailRow("Başlama Tarihi", fmtDate(r.started_at))}
         ${detailRow("Tamamlanma Tarihi", fmtDate(r.completed_at))}
@@ -1675,7 +1724,6 @@ async function openHuntDetail(id) {
         ${r.findings ? `<div class="detail-section-title" style="margin-top:12px">Bulgular</div>${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : ""}
         ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title" style="margin-top:12px">Detection Önerisi</div>${detailRow("", r.detection_detail)}` : ""}
         ${r.recommendations ? `<div class="detail-section-title" style="margin-top:12px">Öneriler</div>${detailRow("", r.recommendations)}${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}
-        ${relatedBadges ? `<div class="detail-row" style="margin-top:8px"><span class="detail-label">İlişkili Talepler</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${relatedBadges}</span></div>` : ""}
       </div>`;
     document.getElementById("hunt-detail-body").innerHTML = body;
     document.getElementById("hunt-detail-modal").style.display = "flex";
