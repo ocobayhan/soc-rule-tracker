@@ -13,11 +13,12 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
-    if (btn.dataset.tab === "dashboard") loadDashboard();
-    if (btn.dataset.tab === "tuning")    loadTune();
-    if (btn.dataset.tab === "usecase")   loadUC();
-    if (btn.dataset.tab === "settings")  loadSettings();
-    if (btn.dataset.tab === "auditlog")  loadAuditLog();
+    if (btn.dataset.tab === "dashboard")      loadDashboard();
+    if (btn.dataset.tab === "tuning")         loadTune();
+    if (btn.dataset.tab === "usecase")        loadUC();
+    if (btn.dataset.tab === "threat-hunting") loadHunt();
+    if (btn.dataset.tab === "settings")       loadSettings();
+    if (btn.dataset.tab === "auditlog")       loadAuditLog();
   });
 });
 
@@ -171,11 +172,11 @@ function analystOpts(cur = "", allowEmpty = true) {
 }
 
 function populateEnvDropdowns() {
-  ["tune-env","edit-tune-env","uc-env","edit-uc-env"].forEach(id => {
+  ["tune-env","edit-tune-env","uc-env","edit-uc-env","hunt-env","edit-hunt-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value; el.innerHTML = envOpts(cur);
   });
-  ["tune-filter-env","uc-filter-env"].forEach(id => {
+  ["tune-filter-env","uc-filter-env","hunt-filter-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value;
     el.innerHTML = `<option value="">Tüm Ortamlar</option>` +
@@ -186,7 +187,8 @@ function populateEnvDropdowns() {
 function populateAnalystDropdowns() {
   ["tune-reporter","edit-tune-reporter","edit-tune-analyst",
    "claim-tune-analyst","uc-requester","edit-uc-requester",
-   "edit-uc-rule-author","claim-uc-analyst"].forEach(id => {
+   "edit-uc-rule-author","claim-uc-analyst",
+   "hunt-requester","edit-hunt-requester","claim-hunt-analyst"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value; el.innerHTML = analystOpts(cur);
   });
@@ -203,6 +205,8 @@ async function loadKPI() {
     document.getElementById("kpi-tune-done").textContent  = d.tune_done_this_period;
     document.getElementById("kpi-uc-written").textContent = d.uc_written;
     document.getElementById("kpi-conversion").textContent = d.conversion_rate + "%";
+    document.getElementById("kpi-hunt-open").textContent  = d.hunt_open ?? "—";
+    document.getElementById("kpi-hunt-done").textContent  = d.hunt_done ?? "—";
   } catch (_) {}
 }
 
@@ -343,9 +347,9 @@ function clientSort(rows, col, dir) {
 }
 
 function updateSortUI(prefix, activeCol, dir) {
-  const cols = prefix === "tune"
-    ? ["id", "rule_name", "status", "created_at"]
-    : ["id", "usecase_description", "status", "created_at"];
+  const cols = prefix === "tune"  ? ["id", "rule_name",          "status", "created_at"]
+             : prefix === "hunt"  ? ["id", "hunt_subject",        "status", "created_at"]
+             :                      ["id", "usecase_description", "status", "created_at"];
   cols.forEach(col => {
     const th    = document.getElementById(`th-${prefix}-${col}`);
     if (!th) return;
@@ -882,16 +886,22 @@ const ACTION_TR = {
   "CLOSE_UC":    "Use-Case kapatıldı",
   "EDIT_UC":     "Use-Case düzenlendi",
   "DELETE_UC":   "Use-Case silindi",
-  "CREATE_USER": "Kullanıcı oluşturuldu",
-  "DELETE_USER": "Kullanıcı silindi",
+  "CREATE_USER":  "Kullanıcı oluşturuldu",
+  "DELETE_USER":  "Kullanıcı silindi",
+  "CREATE_HUNT":  "Hunt oluşturuldu",
+  "CLAIM_HUNT":   "Hunt üstlenildi",
+  "REPORT_HUNT":  "Hunt raporu güncellendi",
+  "CLOSE_HUNT":   "Hunt kapatıldı",
+  "EDIT_HUNT":    "Hunt düzenlendi",
+  "DELETE_HUNT":  "Hunt silindi",
 };
 const ACTION_CLS = {
   "LOGIN": "audit-login",
-  "CREATE_TUNE": "audit-create", "CREATE_UC": "audit-create", "CREATE_USER": "audit-create",
-  "CLAIM_TUNE":  "audit-claim",  "CLAIM_UC":  "audit-claim",
-  "CLOSE_TUNE":  "audit-close",  "CLOSE_UC":  "audit-close",
-  "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",
-  "DELETE_TUNE": "audit-delete", "DELETE_UC": "audit-delete", "DELETE_USER": "audit-delete",
+  "CREATE_TUNE": "audit-create", "CREATE_UC": "audit-create", "CREATE_USER": "audit-create", "CREATE_HUNT": "audit-create",
+  "CLAIM_TUNE":  "audit-claim",  "CLAIM_UC":  "audit-claim",  "CLAIM_HUNT":  "audit-claim",
+  "CLOSE_TUNE":  "audit-close",  "CLOSE_UC":  "audit-close",  "CLOSE_HUNT":  "audit-close",
+  "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",   "EDIT_HUNT":   "audit-edit",   "REPORT_HUNT": "audit-edit",
+  "DELETE_TUNE": "audit-delete", "DELETE_UC": "audit-delete", "DELETE_USER": "audit-delete", "DELETE_HUNT": "audit-delete",
 };
 
 async function loadAuditLog() {
@@ -992,7 +1002,8 @@ document.getElementById("new-env-input")?.addEventListener("keydown", e => { if 
 // ---------------------------------------------------------------------------
 ["tune-modal","tune-edit-modal","tune-claim-modal","tune-close-modal",
  "tune-detail-modal","uc-detail-modal",
- "uc-modal","uc-edit-modal","uc-claim-modal","uc-close-modal"].forEach(id => {
+ "uc-modal","uc-edit-modal","uc-claim-modal","uc-close-modal",
+ "hunt-modal","hunt-edit-modal","hunt-claim-modal","hunt-report-modal","hunt-detail-modal"].forEach(id => {
   document.getElementById(id)?.addEventListener("click", e => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = "none";
   });
@@ -1007,6 +1018,11 @@ function setupAllPaste() {
   setupPaste("edit-tune-reason",  "edit-tune-evidence-preview", "edit-tune-evidence-image");
   setupPaste("edit-tune-how",     "edit-tune-resolution-preview","edit-tune-resolution-image");
   setupPaste("close-tune-how",    "close-tune-img-preview",     "close-tune-resolution-image");
+  // Hunt report paste targets
+  setupPaste("report-hunt-scope",           "report-hunt-scope-preview",           "report-hunt-scope-image");
+  setupPaste("report-hunt-method",          "report-hunt-method-preview",          "report-hunt-method-image");
+  setupPaste("report-hunt-findings",        "report-hunt-findings-preview",        "report-hunt-findings-image");
+  setupPaste("report-hunt-recommendations","report-hunt-recommendations-preview",  "report-hunt-recommendations-image");
 }
 
 function setupPaste(textareaId, previewAreaId, hiddenId) {
@@ -1074,6 +1090,318 @@ function makeColumnsResizable(table) {
 
     th.appendChild(handle);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Threat Hunt
+// ---------------------------------------------------------------------------
+const HUNT_CLS = {
+  "Açık":        "status-open",
+  "İnceleniyor": "status-reviewing",
+  "Tamamlandı":  "status-done",
+  "İptal":       "status-nottuned",
+};
+
+let huntRows    = [];
+let huntSearch  = "";
+let huntSortCol = "id";
+let huntSortDir = -1;
+
+function onHuntSearch(val) { huntSearch = val.toLowerCase(); renderHuntRows(); }
+
+function sortHunt(col) {
+  if (huntSortCol === col) huntSortDir *= -1; else { huntSortCol = col; huntSortDir = -1; }
+  renderHuntRows();
+}
+
+function huntActionBtns(r) {
+  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user";
+  const isMyTask   = r.assigned_analyst === CURRENT_USER;
+  const isMyReport = r.requester === CURRENT_USER;
+  const canEdit    = isAdmin || isMyTask || isMyReport;
+
+  const edit = canEdit
+    ? `<button class="btn-icon" title="Düzenle" onclick="openHuntEditModal(${r.id})">&#9998;</button>`
+    : "";
+  const report = (isAdmin || isMyTask) && r.status === "İnceleniyor"
+    ? `<button class="btn-icon" title="Rapor" onclick="openHuntReportModal(${r.id})" style="color:var(--accent-blue)">&#128196;</button>`
+    : "";
+  const del = isAdmin
+    ? `<button class="btn-icon danger" title="Sil" onclick="deleteHunt(${r.id})">&#x1F5D1;</button>`
+    : "";
+
+  if (r.status === "Açık")
+    return `<button class="btn-action-claim" onclick="openHuntClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
+  if (r.status === "İnceleniyor")
+    return `${report} ${edit}${del}`;
+  return `${edit}${del}`;
+}
+
+function renderHuntRows() {
+  const HUNT_FIELDS = ["hunt_subject","requester","assigned_analyst","environment","notes"];
+  const visible = huntSearch
+    ? huntRows.filter(r => HUNT_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(huntSearch)))
+    : huntRows;
+  const sorted = clientSort(visible, huntSortCol, huntSortDir);
+  updateSortUI("hunt", huntSortCol, huntSortDir);
+  const tbody = document.getElementById("hunt-tbody");
+  const empty = document.getElementById("hunt-empty");
+  if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  tbody.innerHTML = sorted.map(r => `<tr>
+    <td>${dot(r.status, HUNT_CLS)}</td>
+    <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
+    <td class="td-truncate" title="${esc(r.hunt_subject)}">
+      <span class="cell-link" onclick="openHuntDetail(${r.id})" style="cursor:pointer">${esc(r.hunt_subject)}</span>
+    </td>
+    <td class="td-truncate">${esc(r.environment)}</td>
+    <td class="td-truncate">${esc(r.requester)}</td>
+    <td class="td-truncate">${esc(r.assigned_analyst)||'<span class="text-muted">—</span>'}</td>
+    <td>${badge(r.status, HUNT_CLS)}</td>
+    <td class="text-muted">${fmtDate(r.created_at)}</td>
+    <td class="text-muted">${fmtDate(r.completed_at)}</td>
+    <td style="white-space:nowrap">${huntActionBtns(r)}</td>
+  </tr>`).join("");
+}
+
+async function loadHunt() {
+  const p = new URLSearchParams();
+  const month  = document.getElementById("hunt-filter-month")?.value;
+  const env    = document.getElementById("hunt-filter-env")?.value;
+  const status = document.getElementById("hunt-filter-status")?.value;
+  if (month)  p.set("month", month);
+  if (env)    p.set("environment", env);
+  if (status) p.set("status", status);
+  try {
+    huntRows = await apiFetch(`/api/hunt?${p}`);
+    renderHuntRows();
+  } catch (e) { console.error(e); }
+}
+
+function clearHuntFilters() {
+  ["hunt-filter-month","hunt-filter-env","hunt-filter-status"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+  const s = document.getElementById("hunt-search"); if (s) s.value = "";
+  huntSearch = "";
+  loadHunt();
+}
+
+// ---------------------------------------------------------------------------
+// Hunt — Create
+// ---------------------------------------------------------------------------
+function openHuntModal() {
+  populateEnvDropdowns(); populateAnalystDropdowns();
+  document.getElementById("hunt-subject").value = "";
+  document.getElementById("hunt-notes").value   = "";
+  if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    lockToSelf("hunt-requester");
+  } else {
+    freeSelect("hunt-requester", "");
+  }
+  document.getElementById("hunt-modal-error").style.display = "none";
+  document.getElementById("hunt-modal").style.display = "flex";
+}
+function closeHuntModal() { document.getElementById("hunt-modal").style.display = "none"; }
+
+async function saveHunt() {
+  const errEl = document.getElementById("hunt-modal-error");
+  errEl.style.display = "none";
+  const payload = {
+    hunt_subject: document.getElementById("hunt-subject").value.trim(),
+    environment:  document.getElementById("hunt-env").value,
+    requester:    document.getElementById("hunt-requester").value,
+    notes:        document.getElementById("hunt-notes").value.trim(),
+  };
+  try {
+    await apiFetch("/api/hunt", { method: "POST", body: JSON.stringify(payload) });
+    closeHuntModal(); loadHunt(); loadKPI();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+// ---------------------------------------------------------------------------
+// Hunt — Edit
+// ---------------------------------------------------------------------------
+function openHuntEditModal(id) {
+  const r = huntRows.find(x => x.id === id); if (!r) return;
+  populateEnvDropdowns(); populateAnalystDropdowns();
+  document.getElementById("edit-hunt-id").value      = r.id;
+  document.getElementById("edit-hunt-subject").value = r.hunt_subject || "";
+  document.getElementById("edit-hunt-notes").value   = r.notes || "";
+
+  if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    const isAssigned  = r.assigned_analyst === CURRENT_USER;
+    const isRequester = r.requester === CURRENT_USER;
+    lockToSelf("edit-hunt-requester");
+    document.getElementById("edit-hunt-subject").disabled = !isRequester;
+    document.getElementById("edit-hunt-notes").disabled   = !isRequester;
+    if (!isRequester && !isAssigned) {
+      // Shouldn't reach here (button wouldn't show), but guard anyway
+    }
+  } else {
+    document.getElementById("edit-hunt-subject").disabled = false;
+    document.getElementById("edit-hunt-notes").disabled   = false;
+    freeSelect("edit-hunt-requester", r.requester || "");
+  }
+  document.getElementById("hunt-edit-modal-error").style.display = "none";
+  document.getElementById("hunt-edit-modal").style.display = "flex";
+}
+function closeHuntEditModal() { document.getElementById("hunt-edit-modal").style.display = "none"; }
+
+async function saveHuntEdit() {
+  const id    = document.getElementById("edit-hunt-id").value;
+  const errEl = document.getElementById("hunt-edit-modal-error");
+  errEl.style.display = "none";
+  const payload = {
+    hunt_subject: document.getElementById("edit-hunt-subject").value.trim(),
+    environment:  document.getElementById("edit-hunt-env").value,
+    requester:    document.getElementById("edit-hunt-requester").value,
+    notes:        document.getElementById("edit-hunt-notes").value.trim(),
+  };
+  try {
+    await apiFetch(`/api/hunt/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    closeHuntEditModal(); loadHunt();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+// ---------------------------------------------------------------------------
+// Hunt — Claim
+// ---------------------------------------------------------------------------
+function openHuntClaimModal(id) {
+  populateAnalystDropdowns();
+  document.getElementById("claim-hunt-id").value = id;
+  const sel = document.getElementById("claim-hunt-analyst");
+  if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    sel.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(CURRENT_USER)}</option>`;
+    sel.disabled  = true;
+  } else {
+    sel.disabled = false;
+    sel.value    = "";
+  }
+  document.getElementById("claim-hunt-error").style.display = "none";
+  document.getElementById("hunt-claim-modal").style.display = "flex";
+}
+function closeHuntClaimModal() { document.getElementById("hunt-claim-modal").style.display = "none"; }
+
+async function saveHuntClaim() {
+  const id      = document.getElementById("claim-hunt-id").value;
+  const analyst = document.getElementById("claim-hunt-analyst").value;
+  const errEl   = document.getElementById("claim-hunt-error");
+  errEl.style.display = "none";
+  if (!analyst) { errEl.textContent = "Analist seçilmedi."; errEl.style.display = "block"; return; }
+  try {
+    await apiFetch(`/api/hunt/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ assigned_analyst: analyst, status: "İnceleniyor" }),
+    });
+    closeHuntClaimModal(); loadHunt(); loadKPI();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+// ---------------------------------------------------------------------------
+// Hunt — Report modal
+// ---------------------------------------------------------------------------
+function toggleDetectionDetail() {
+  const val = document.getElementById("report-hunt-detection-suggest")?.value;
+  const grp = document.getElementById("detection-detail-group");
+  if (grp) grp.style.display = val === "Evet" ? "contents" : "none";
+}
+
+function openHuntReportModal(id) {
+  const r = huntRows.find(x => x.id === id); if (!r) return;
+  setupAllPaste();
+  document.getElementById("report-hunt-id").value = r.id;
+  document.getElementById("hunt-report-title").textContent = `Hunt Raporu — #${r.id}`;
+  document.getElementById("report-hunt-scope").value       = r.scope || "";
+  document.getElementById("report-hunt-method").value      = r.method || "";
+  document.getElementById("report-hunt-findings").value    = r.findings || "";
+  document.getElementById("report-hunt-mitre").value       = r.mitre_techniques || "";
+  document.getElementById("report-hunt-detection-suggest").value  = r.detection_suggestion || "Hayır";
+  document.getElementById("report-hunt-detection-detail").value   = r.detection_detail || "";
+  document.getElementById("report-hunt-recommendations").value    = r.recommendations || "";
+  document.getElementById("report-hunt-result").value      = r.hunt_result || "";
+  document.getElementById("report-hunt-report-status").value = r.report_status || "Taslak";
+  document.getElementById("report-hunt-status").value      = r.status || "İnceleniyor";
+  toggleDetectionDetail();
+  // Images
+  ["scope","method","findings","recommendations"].forEach(f => {
+    clearPastePreview(`report-hunt-${f}-preview`, `report-hunt-${f}-image`);
+    if (r[`${f}_image`]) restorePreview(r[`${f}_image`], `report-hunt-${f}-preview`, `report-hunt-${f}-image`);
+  });
+  document.getElementById("hunt-report-modal-error").style.display = "none";
+  document.getElementById("hunt-report-modal").style.display = "flex";
+}
+function closeHuntReportModal() { document.getElementById("hunt-report-modal").style.display = "none"; }
+
+async function saveHuntReport() {
+  const id    = document.getElementById("report-hunt-id").value;
+  const errEl = document.getElementById("hunt-report-modal-error");
+  errEl.style.display = "none";
+  const payload = {
+    scope:                document.getElementById("report-hunt-scope").value.trim(),
+    scope_image:          document.getElementById("report-hunt-scope-image").value || null,
+    method:               document.getElementById("report-hunt-method").value.trim(),
+    method_image:         document.getElementById("report-hunt-method-image").value || null,
+    findings:             document.getElementById("report-hunt-findings").value.trim(),
+    findings_image:       document.getElementById("report-hunt-findings-image").value || null,
+    mitre_techniques:     document.getElementById("report-hunt-mitre").value.trim(),
+    detection_suggestion: document.getElementById("report-hunt-detection-suggest").value,
+    detection_detail:     document.getElementById("report-hunt-detection-detail").value.trim(),
+    recommendations:      document.getElementById("report-hunt-recommendations").value.trim(),
+    recommendations_image: document.getElementById("report-hunt-recommendations-image").value || null,
+    hunt_result:          document.getElementById("report-hunt-result").value,
+    report_status:        document.getElementById("report-hunt-report-status").value,
+    status:               document.getElementById("report-hunt-status").value,
+  };
+  try {
+    await apiFetch(`/api/hunt/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    closeHuntReportModal(); loadHunt(); loadKPI();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+// ---------------------------------------------------------------------------
+// Hunt — Detail (read-only)
+// ---------------------------------------------------------------------------
+async function openHuntDetail(id) {
+  try {
+    const r = await apiFetch(`/api/hunt/${id}`);
+    document.getElementById("hunt-detail-title").textContent = `Hunt #${r.id} — ${r.hunt_subject}`;
+    const HUNT_RESULT_CLS = { "Pozitif": "status-done", "Negatif": "status-reviewing", "Yetersiz Veri": "status-nottuned" };
+    const reportBadge = r.report_status === "Tamamlandı"
+      ? `<span class="status-dot status-done">${esc(r.report_status)}</span>`
+      : `<span class="status-dot status-open">${esc(r.report_status||"Taslak")}</span>`;
+    let body = `
+      <div class="detail-section">
+        ${detailRow("Durum", r.status)}
+        ${detailRow("Talep Eden", r.requester)}
+        ${detailRow("Atanan Analist", r.assigned_analyst)}
+        ${detailRow("Ortam", r.environment)}
+        ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
+        ${detailRow("Başlama Tarihi", fmtDate(r.started_at))}
+        ${detailRow("Tamamlanma Tarihi", fmtDate(r.completed_at))}
+        ${detailRow("Rapor Güncelleme", r.report_updated_at ? r.report_updated_at.slice(0,16) : "")}
+        ${detailRow("Notlar", r.notes)}
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Rapor</div>
+        <div class="detail-row"><span class="detail-label">Rapor Durumu</span><span class="detail-value">${reportBadge}</span></div>
+        ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="status-dot ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
+        ${detailRow("MITRE ATT&CK", r.mitre_techniques)}
+        ${r.scope    ? `<div class="detail-section-title" style="margin-top:12px">Hedef &amp; Kapsam</div>${detailRow("", r.scope)}${r.scope_image    ? detailImgRow("Görsel", [r.scope_image])    : ""}` : ""}
+        ${r.method   ? `<div class="detail-section-title" style="margin-top:12px">Analiz Yöntemi</div>${detailRow("", r.method)}${r.method_image   ? detailImgRow("Görsel", [r.method_image])   : ""}` : ""}
+        ${r.findings ? `<div class="detail-section-title" style="margin-top:12px">Bulgular</div>${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : ""}
+        ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title" style="margin-top:12px">Detection Önerisi</div>${detailRow("", r.detection_detail)}` : ""}
+        ${r.recommendations ? `<div class="detail-section-title" style="margin-top:12px">Öneriler</div>${detailRow("", r.recommendations)}${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}
+      </div>`;
+    document.getElementById("hunt-detail-body").innerHTML = body;
+    document.getElementById("hunt-detail-modal").style.display = "flex";
+  } catch (e) { console.error(e); }
+}
+
+async function deleteHunt(id) {
+  if (!confirm("Bu hunt talebini silmek istediğinize emin misiniz?")) return;
+  try { await apiFetch(`/api/hunt/${id}`, { method: "DELETE" }); loadHunt(); loadKPI(); }
+  catch (e) { alert(e.message); }
 }
 
 // ---------------------------------------------------------------------------

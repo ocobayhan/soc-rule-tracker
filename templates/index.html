@@ -19,6 +19,7 @@
     <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
     <button class="nav-btn" data-tab="tuning">Kural Tuning</button>
     <button class="nav-btn" data-tab="usecase">Use-Case / Kural Yazma</button>
+    <button class="nav-btn" data-tab="threat-hunting">Threat Hunting</button>
     {% if user_role == "admin" %}
     <button class="nav-btn" data-tab="auditlog">Audit Log</button>
     {% endif %}
@@ -55,6 +56,8 @@
       <div class="kpi-card"><div class="kpi-label">Tamamlanan Tuning</div><div class="kpi-value kpi-green" id="kpi-tune-done">—</div></div>
       <div class="kpi-card"><div class="kpi-label">Yazılan Kural</div><div class="kpi-value kpi-blue" id="kpi-uc-written">—</div></div>
       <div class="kpi-card"><div class="kpi-label">Use-Case Dönüşüm</div><div class="kpi-value kpi-purple" id="kpi-conversion">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Açık Hunt Talebi</div><div class="kpi-value kpi-orange" id="kpi-hunt-open">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">Tamamlanan Hunt</div><div class="kpi-value kpi-green" id="kpi-hunt-done">—</div></div>
     </div>
     <div class="dashboard-row">
       <div class="dash-section">
@@ -161,6 +164,52 @@
         <tbody id="uc-tbody"></tbody>
       </table>
       <div id="uc-empty" class="empty-state" style="display:none">Henüz use-case talebi yok.</div>
+    </div>
+  </section>
+
+  <!-- ===== THREAT HUNTING ===== -->
+  <section id="tab-threat-hunting" class="tab-panel">
+    <div class="page-header">
+      <h1 class="page-title">Threat Hunting</h1>
+      <button class="btn btn-primary" onclick="openHuntModal()">+ Yeni Hunt Talebi</button>
+    </div>
+    <div class="filter-bar">
+      <div class="search-wrap">
+        <span class="search-icon">&#9906;</span>
+        <input type="text" id="hunt-search" class="form-input input-sm search-input"
+               placeholder="Hunt konusu, analist…" oninput="onHuntSearch(this.value)"/>
+      </div>
+      <input type="month" id="hunt-filter-month" class="form-input input-sm"/>
+      <select id="hunt-filter-env" class="form-input input-sm"><option value="">Tüm Ortamlar</option></select>
+      <select id="hunt-filter-status" class="form-input input-sm">
+        <option value="">Tüm Durumlar</option>
+        <option>Açık</option><option>İnceleniyor</option><option>Tamamlandı</option><option>İptal</option>
+      </select>
+      <button class="btn btn-secondary" onclick="loadHunt()">Filtrele</button>
+      <button class="btn-ghost-sm" onclick="clearHuntFilters()">Temizle</button>
+    </div>
+    <div class="table-wrapper">
+      <table class="table table-fixed" id="hunt-table">
+        <colgroup>
+          <col class="col-dot"/><col class="col-id"/>
+          <col class="col-desc"/><col class="col-env"/>
+          <col class="col-person"/><col class="col-analyst"/>
+          <col class="col-status"/>
+          <col class="col-date"/><col class="col-date"/><col class="col-act"/>
+        </colgroup>
+        <thead><tr>
+          <th></th>
+          <th class="th-sortable" id="th-hunt-id" onclick="sortHunt('id')"># <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-hunt-hunt_subject" onclick="sortHunt('hunt_subject')">Hunt Konusu <span class="sort-arrow"></span></th>
+          <th>Ortam</th><th>Talep Eden</th><th>Analist</th>
+          <th class="th-sortable" id="th-hunt-status" onclick="sortHunt('status')">Durum <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-hunt-created_at" onclick="sortHunt('created_at')">Talep Tarihi <span class="sort-arrow"></span></th>
+          <th>Tamamlandı</th>
+          <th>İşlem</th>
+        </tr></thead>
+        <tbody id="hunt-tbody"></tbody>
+      </table>
+      <div id="hunt-empty" class="empty-state" style="display:none">Henüz hunt talebi yok.</div>
     </div>
   </section>
 
@@ -568,6 +617,225 @@
     <div class="modal-body" id="uc-detail-body"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="document.getElementById('uc-detail-modal').style.display='none'">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Yeni Hunt Talebi ===== -->
+<div id="hunt-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Yeni Hunt Talebi</h2>
+      <button class="modal-close" onclick="closeHuntModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Talep Eden *</label>
+          <select class="form-input" id="hunt-requester"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ortam *</label>
+          <select class="form-input" id="hunt-env"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Hunt Konusu *</label>
+          <textarea class="form-input form-textarea" id="hunt-subject" placeholder="Araştırılacak senaryo veya amaç…"></textarea>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Notlar</label>
+          <textarea class="form-input form-textarea" id="hunt-notes" placeholder="Ek bağlam veya notlar…"></textarea>
+        </div>
+      </div>
+      <div id="hunt-modal-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeHuntModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveHunt()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Hunt Düzenle ===== -->
+<div id="hunt-edit-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Hunt Talebi Düzenle</h2>
+      <button class="modal-close" onclick="closeHuntEditModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-hunt-id"/>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Talep Eden *</label>
+          <select class="form-input" id="edit-hunt-requester"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ortam *</label>
+          <select class="form-input" id="edit-hunt-env"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Hunt Konusu *</label>
+          <textarea class="form-input form-textarea" id="edit-hunt-subject" placeholder="Araştırılacak senaryo veya amaç…"></textarea>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Notlar</label>
+          <textarea class="form-input form-textarea" id="edit-hunt-notes" placeholder="Ek bağlam veya notlar…"></textarea>
+        </div>
+      </div>
+      <div id="hunt-edit-modal-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeHuntEditModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveHuntEdit()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Hunt Üstlen ===== -->
+<div id="hunt-claim-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Hunt Üstlen</h2>
+      <button class="modal-close" onclick="closeHuntClaimModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="claim-hunt-id"/>
+      <div class="form-group">
+        <label class="form-label">Analist</label>
+        <select class="form-input" id="claim-hunt-analyst"><option value="">— Seçin —</option></select>
+      </div>
+      <div id="claim-hunt-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeHuntClaimModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveHuntClaim()">Üstlen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Hunt Raporu ===== -->
+<div id="hunt-report-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2 class="modal-title" id="hunt-report-title">Hunt Raporu</h2>
+      <button class="modal-close" onclick="closeHuntReportModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="report-hunt-id"/>
+
+      <!-- Hedef & Kapsam -->
+      <div class="form-group form-col-2" style="margin-bottom:0">
+        <label class="form-label">Hedef &amp; Kapsam
+          <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+        </label>
+        <textarea class="form-input form-textarea" id="report-hunt-scope"
+                  placeholder="Ne arandı? Hangi sistemler, kullanıcılar veya davranışlar hedeflendi?"></textarea>
+        <div id="report-hunt-scope-preview" class="paste-preview-area"></div>
+        <input type="hidden" id="report-hunt-scope-image"/>
+      </div>
+
+      <!-- Analiz Yöntemi -->
+      <div class="form-group form-col-2" style="margin-top:16px;margin-bottom:0">
+        <label class="form-label">Analiz Yöntemi
+          <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+        </label>
+        <textarea class="form-input form-textarea" id="report-hunt-method"
+                  placeholder="Hangi araçlar ve sorgular kullanıldı?"></textarea>
+        <div id="report-hunt-method-preview" class="paste-preview-area"></div>
+        <input type="hidden" id="report-hunt-method-image"/>
+      </div>
+
+      <!-- Bulgular -->
+      <div class="form-group form-col-2" style="margin-top:16px;margin-bottom:0">
+        <label class="form-label">Bulgular
+          <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+        </label>
+        <textarea class="form-input form-textarea" id="report-hunt-findings"
+                  placeholder="Neler bulundu? IOC'ler, etkilenen sistemler, kullanıcılar…"></textarea>
+        <div id="report-hunt-findings-preview" class="paste-preview-area"></div>
+        <input type="hidden" id="report-hunt-findings-image"/>
+      </div>
+
+      <!-- MITRE + Detection grid -->
+      <div class="form-grid" style="margin-top:16px">
+        <div class="form-group">
+          <label class="form-label">MITRE ATT&amp;CK</label>
+          <input class="form-input" type="text" id="report-hunt-mitre"
+                 placeholder="T1059.001, T1078…"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Detection Önerisi</label>
+          <select class="form-input" id="report-hunt-detection-suggest" onchange="toggleDetectionDetail()">
+            <option value="Hayır">Hayır</option>
+            <option value="Evet">Evet</option>
+          </select>
+        </div>
+        <div class="form-group form-col-2" id="detection-detail-group" style="display:none">
+          <label class="form-label">Detection Detayı</label>
+          <textarea class="form-input form-textarea" id="report-hunt-detection-detail"
+                    placeholder="Önerilen kural veya detection mantığı…"></textarea>
+        </div>
+      </div>
+
+      <!-- Öneriler -->
+      <div class="form-group form-col-2" style="margin-bottom:0">
+        <label class="form-label">Öneriler
+          <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+        </label>
+        <textarea class="form-input form-textarea" id="report-hunt-recommendations"
+                  placeholder="Aksiyon önerileri, remediasyon adımları…"></textarea>
+        <div id="report-hunt-recommendations-preview" class="paste-preview-area"></div>
+        <input type="hidden" id="report-hunt-recommendations-image"/>
+      </div>
+
+      <!-- Sonuç + Rapor Durumu + Hunt Durumu -->
+      <div class="form-grid" style="margin-top:16px">
+        <div class="form-group">
+          <label class="form-label">Sonuç</label>
+          <select class="form-input" id="report-hunt-result">
+            <option value="">— Seçin —</option>
+            <option>Pozitif</option>
+            <option>Negatif</option>
+            <option>Yetersiz Veri</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rapor Durumu</label>
+          <select class="form-input" id="report-hunt-report-status">
+            <option value="Taslak">Taslak</option>
+            <option value="Tamamlandı">Tamamlandı</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hunt Durumu</label>
+          <select class="form-input" id="report-hunt-status">
+            <option value="İnceleniyor">İnceleniyor</option>
+            <option value="Tamamlandı">Tamamlandı</option>
+            <option value="İptal">İptal</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="hunt-report-modal-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeHuntReportModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveHuntReport()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Hunt Detay (read-only) ===== -->
+<div id="hunt-detail-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-detail">
+    <div class="modal-header">
+      <h2 class="modal-title" id="hunt-detail-title"></h2>
+      <button class="modal-close" onclick="document.getElementById('hunt-detail-modal').style.display='none'">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="hunt-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('hunt-detail-modal').style.display='none'">Kapat</button>
     </div>
   </div>
 </div>

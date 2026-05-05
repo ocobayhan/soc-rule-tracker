@@ -113,6 +113,36 @@ def init_db():
         )
     """)
 
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS threat_hunt_requests (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            hunt_subject         TEXT NOT NULL,
+            environment          TEXT NOT NULL DEFAULT '',
+            requester            TEXT NOT NULL DEFAULT '',
+            assigned_analyst     TEXT DEFAULT '',
+            notes                TEXT DEFAULT '',
+            status               TEXT NOT NULL DEFAULT 'Açık',
+            report_status        TEXT DEFAULT 'Taslak',
+            scope                TEXT DEFAULT '',
+            scope_image          TEXT,
+            method               TEXT DEFAULT '',
+            method_image         TEXT,
+            findings             TEXT DEFAULT '',
+            findings_image       TEXT,
+            mitre_techniques     TEXT DEFAULT '',
+            detection_suggestion TEXT DEFAULT 'Hayır',
+            detection_detail     TEXT DEFAULT '',
+            recommendations      TEXT DEFAULT '',
+            recommendations_image TEXT,
+            hunt_result          TEXT DEFAULT '',
+            started_at           TEXT,
+            completed_at         TEXT,
+            report_updated_at    TEXT,
+            created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
     db.commit()
 
     # Idempotent column migrations
@@ -290,11 +320,13 @@ def get_kpi():
     def mf(col):
         return f"AND strftime('%Y-%m', {col}) = '{month}'" if month else ""
 
-    tune_open  = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
-    tune_done  = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Tamamlandı' {mf('completed_at')}").fetchone()["c"]
-    tune_total = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
-    uc_total   = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
-    uc_written = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazıldı' {mf('completed_at')}").fetchone()["c"]
+    tune_open   = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
+    tune_done   = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Tamamlandı' {mf('completed_at')}").fetchone()["c"]
+    tune_total  = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
+    uc_total    = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
+    uc_written  = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazıldı' {mf('completed_at')}").fetchone()["c"]
+    hunt_open   = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
+    hunt_done   = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı' {mf('completed_at')}").fetchone()["c"]
 
     return jsonify({
         "tune_open": tune_open,
@@ -303,6 +335,8 @@ def get_kpi():
         "uc_total": uc_total,
         "uc_written": uc_written,
         "conversion_rate": round(uc_written / uc_total * 100, 1) if uc_total else 0,
+        "hunt_open": hunt_open,
+        "hunt_done": hunt_done,
     })
 
 # ---------------------------------------------------------------------------
@@ -610,6 +644,190 @@ def delete_usecase(item_id):
     return jsonify({"ok": True})
 
 # ---------------------------------------------------------------------------
+# Threat Hunt requests
+# ---------------------------------------------------------------------------
+@app.route("/api/hunt", methods=["GET"])
+@login_required
+def list_hunts():
+    db  = get_db()
+    p   = request.args
+    q   = "SELECT * FROM threat_hunt_requests WHERE 1=1"
+    args = []
+    if p.get("month"):
+        q += " AND strftime('%Y-%m', created_at)=?"; args.append(p["month"])
+    if p.get("environment"):
+        q += " AND environment=?"; args.append(p["environment"])
+    if p.get("status"):
+        q += " AND status=?"; args.append(p["status"])
+    q += " ORDER BY id DESC"
+    rows = db.execute(q, args).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/hunt", methods=["POST"])
+@login_required
+def create_hunt():
+    data = request.json or {}
+    now  = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db   = get_db()
+
+    hunt_subject = data.get("hunt_subject", "").strip()
+    environment  = data.get("environment",  "").strip()
+    requester    = data.get("requester",    "").strip()
+
+    if not hunt_subject or not environment or not requester:
+        return jsonify({"error": "Hunt Konusu, Ortam ve Talep Eden zorunludur."}), 400
+    if session.get("role") == "analyst":
+        requester = session.get("username", "")
+
+    cur = db.execute("""
+        INSERT INTO threat_hunt_requests
+          (hunt_subject, environment, requester, assigned_analyst, notes, status, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?)
+    """, (hunt_subject, environment, requester,
+          data.get("assigned_analyst", "").strip(),
+          data.get("notes", "").strip(), "Açık", now, now))
+    db.commit()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (cur.lastrowid,)).fetchone()
+    write_audit("CREATE_HUNT", "hunt", row["id"], f"Konu: {hunt_subject}")
+    return jsonify(dict(row)), 201
+
+@app.route("/api/hunt/<int:item_id>", methods=["GET"])
+@login_required
+def get_hunt(item_id):
+    db  = get_db()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    return jsonify(dict(row))
+
+@app.route("/api/hunt/<int:item_id>", methods=["PUT"])
+@login_required
+def update_hunt(item_id):
+    data = request.json or {}
+    db   = get_db()
+    row  = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+
+    role  = session.get("role", "analyst")
+    uname = session.get("username", "")
+
+    if role == "analyst":
+        cur_analyst  = row["assigned_analyst"] or ""
+        new_analyst  = data.get("assigned_analyst", cur_analyst).strip()
+        new_st       = data.get("status", row["status"])
+        is_requester = row["requester"] == uname
+        is_assigned  = cur_analyst == uname
+
+        if not is_requester and not is_assigned:
+            return jsonify({"error": "Sadece kendi talep ettiğiniz veya size atanan hunt'ları düzenleyebilirsiniz."}), 403
+
+        if new_analyst != cur_analyst:
+            is_claiming = (cur_analyst == "" and new_analyst == uname)
+            if not is_assigned and not is_claiming:
+                return jsonify({"error": "Atama alanını değiştirme yetkiniz yok."}), 403
+            if new_analyst != uname:
+                return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
+
+        if new_st in ("Tamamlandı", "İptal") and not is_assigned:
+            return jsonify({"error": "Sadece size atanan hunt'ları kapatabilirsiniz."}), 403
+
+        data["requester"] = row["requester"]
+        if not is_requester:
+            for f in ("hunt_subject", "environment"):
+                data[f] = row[f]
+        if not is_assigned:
+            for f in ("scope", "scope_image", "method", "method_image",
+                      "findings", "findings_image", "mitre_techniques",
+                      "detection_suggestion", "detection_detail",
+                      "recommendations", "recommendations_image",
+                      "hunt_result", "report_status"):
+                data[f] = row[f]
+
+    now        = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    new_status = data.get("status", row["status"])
+
+    started_at = row["started_at"]
+    if new_status == "İnceleniyor" and not started_at:
+        started_at = now
+
+    if new_status in ("Tamamlandı", "İptal") and not row["completed_at"]:
+        completed_at = now
+    elif new_status not in ("Tamamlandı", "İptal"):
+        completed_at = None
+    else:
+        completed_at = row["completed_at"]
+
+    report_fields = ("scope", "method", "findings", "mitre_techniques",
+                     "detection_suggestion", "detection_detail", "recommendations",
+                     "hunt_result", "report_status",
+                     "scope_image", "method_image", "findings_image", "recommendations_image")
+    report_changed = any(
+        str(data.get(f) if data.get(f) is not None else row[f] or "") != str(row[f] or "")
+        for f in report_fields
+    )
+    report_updated_at = now if report_changed else row["report_updated_at"]
+
+    def sv(key, fallback=""):
+        v = data.get(key)
+        return str(v).strip() if v is not None else (row[key] or fallback)
+
+    def nv(key):
+        return data[key] or None if key in data else row[key]
+
+    db.execute("""
+        UPDATE threat_hunt_requests SET
+          hunt_subject=?, environment=?, requester=?, assigned_analyst=?, notes=?, status=?,
+          scope=?, scope_image=?, method=?, method_image=?,
+          findings=?, findings_image=?, mitre_techniques=?,
+          detection_suggestion=?, detection_detail=?,
+          recommendations=?, recommendations_image=?,
+          hunt_result=?, report_status=?,
+          started_at=?, completed_at=?, report_updated_at=?, updated_at=?
+        WHERE id=?
+    """, (
+        sv("hunt_subject"), sv("environment"), sv("requester"),
+        sv("assigned_analyst"), sv("notes"), new_status,
+        sv("scope"), nv("scope_image"), sv("method"), nv("method_image"),
+        sv("findings"), nv("findings_image"), sv("mitre_techniques"),
+        sv("detection_suggestion", "Hayır"), sv("detection_detail"),
+        sv("recommendations"), nv("recommendations_image"),
+        sv("hunt_result"), sv("report_status", "Taslak"),
+        started_at, completed_at, report_updated_at, now, item_id
+    ))
+    db.commit()
+    updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+
+    if new_status == "İnceleniyor" and data.get("assigned_analyst") and not row["started_at"]:
+        a_action = "CLAIM_HUNT"
+        a_detail = f"Konu: {updated['hunt_subject']} | Analist: {updated['assigned_analyst']}"
+    elif new_status in ("Tamamlandı", "İptal"):
+        a_action = "CLOSE_HUNT"
+        a_detail = f"Konu: {updated['hunt_subject']} | Durum: {new_status}"
+    elif report_changed:
+        a_action = "REPORT_HUNT"
+        a_detail = f"Konu: {updated['hunt_subject']}"
+    else:
+        a_action = "EDIT_HUNT"
+        a_detail = f"Konu: {updated['hunt_subject']}"
+    write_audit(a_action, "hunt", item_id, a_detail)
+    return jsonify(dict(updated))
+
+@app.route("/api/hunt/<int:item_id>", methods=["DELETE"])
+@login_required
+def delete_hunt(item_id):
+    if session.get("role") == "analyst":
+        return jsonify({"error": "Kayıt silmek için admin yetkisi gereklidir."}), 403
+    db  = get_db()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    db.execute("DELETE FROM threat_hunt_requests WHERE id=?", (item_id,))
+    db.commit()
+    write_audit("DELETE_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    return jsonify({"ok": True})
+
+# ---------------------------------------------------------------------------
 # User management  (settings role only)
 # ---------------------------------------------------------------------------
 @app.route("/api/users", methods=["GET"])
@@ -757,13 +975,37 @@ def export_data():
 
     auto_width(ws2)
 
-    # ── Sheet 3 : KPI Özeti ────────────────────────────────────────────────
-    ws3 = wb.create_sheet("KPI Özeti")
-    write_headers(ws3, ["Metrik", "Değer"])
+    # ── Sheet 3 : Threat Hunt Talepleri ───────────────────────────────────
+    ws3 = wb.create_sheet("Threat Hunt Talepleri")
+    hunt_cols = ["ID", "Hunt Konusu", "Ortam", "Talep Eden", "Atanan Analist",
+                 "Durum", "Sonuç", "MITRE Teknikleri",
+                 "Hedef & Kapsam", "Analiz Yöntemi", "Bulgular",
+                 "Detection Önerisi", "Öneriler",
+                 "Talep Tarihi", "Başlama", "Tamamlanma"]
+    write_headers(ws3, hunt_cols)
+
+    for r in db.execute("SELECT * FROM threat_hunt_requests ORDER BY id").fetchall():
+        row = [r["id"], r["hunt_subject"], r["environment"], r["requester"],
+               r["assigned_analyst"] or "", r["status"], r["hunt_result"] or "",
+               r["mitre_techniques"] or "",
+               r["scope"] or "", r["method"] or "", r["findings"] or "",
+               (r["detection_suggestion"] or "") + ((" — " + r["detection_detail"]) if r["detection_detail"] else ""),
+               r["recommendations"] or "",
+               fmt_date(r["created_at"]), fmt_date(r["started_at"]), fmt_date(r["completed_at"])]
+        ws3.append(row)
+        for ci in range(1, len(hunt_cols) + 1):
+            ws3.cell(row=ws3.max_row, column=ci).alignment = CELL_ALIGN
+
+    auto_width(ws3)
+
+    # ── Sheet 4 : KPI Özeti ────────────────────────────────────────────────
+    ws4 = wb.create_sheet("KPI Özeti")
+    write_headers(ws4, ["Metrik", "Değer"])
 
     def q(sql): return db.execute(sql).fetchone()["c"]
 
     total_tune = q("SELECT COUNT(*) c FROM tune_requests")
+    total_hunt = q("SELECT COUNT(*) c FROM threat_hunt_requests")
     kpi_rows = [
         ("── TUNING ──────────────────────", ""),
         ("Toplam Tuning Talebi",      total_tune),
@@ -784,12 +1026,19 @@ def export_data():
         ("Yazılamaz",                 q("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazılamaz'")),
         ("Dönüşüm Oranı (%)",         round(written_uc / total_uc * 100, 1) if total_uc else 0),
         ("", ""),
+        ("── THREAT HUNT ─────────────────", ""),
+        ("Toplam Hunt Talebi",        total_hunt),
+        ("Açık",                      q("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık'")),
+        ("İnceleniyor",               q("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İnceleniyor'")),
+        ("Tamamlandı",                q("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı'")),
+        ("İptal",                     q("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İptal'")),
+        ("", ""),
         ("Dışa Aktarım Tarihi",       date.today().isoformat()),
     ]
     for label, val in kpi_rows:
-        ws3.append([label, val])
+        ws4.append([label, val])
 
-    auto_width(ws3)
+    auto_width(ws4)
 
     # ── Serve ──────────────────────────────────────────────────────────────
     buf = BytesIO()

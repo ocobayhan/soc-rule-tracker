@@ -304,6 +304,7 @@ body {
 .kpi-green  { color: #4ade80; }
 .kpi-blue   { color: #60a5fa; }
 .kpi-purple { color: #c084fc; }
+.kpi-orange { color: #fb923c; }
 
 /* ============================================================
    DASHBOARD ROW
@@ -642,6 +643,7 @@ select.form-input option { background: var(--color-panel-background); color: var
    MODAL SIZES
    ============================================================ */
 .modal-sm     { max-width: 380px; }
+.modal-wide   { max-width: 820px; }
 .modal-detail { max-width: 680px; }
 
 /* ============================================================
