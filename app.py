@@ -375,17 +375,31 @@ def update_tune(item_id):
         cur_analyst = row["tuning_analyst"] or ""
         new_analyst = data.get("tuning_analyst", cur_analyst).strip()
         new_st      = data.get("status", row["status"])
-        # Cannot edit a task assigned to someone else
-        if cur_analyst and cur_analyst != uname:
-            return jsonify({"error": "Bu talep size atanmamış. Düzenlemek için admin yetkisi gereklidir."}), 403
-        # Cannot claim for someone else
-        if new_analyst and new_analyst != uname:
-            return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
-        # Cannot close a task not assigned to self
-        if new_st in ("Tamamlandı", "Tune Edilmedi") and cur_analyst != uname:
+        is_reporter = row["reporter"] == uname
+        is_assigned = cur_analyst == uname
+
+        # Must be the reporter OR the assigned analyst to edit at all
+        if not is_reporter and not is_assigned:
+            return jsonify({"error": "Sadece kendi raporladığınız veya size atanan talepleri düzenleyebilirsiniz."}), 403
+        # Only the assigned analyst can change the analyst field
+        if new_analyst != cur_analyst:
+            if not is_assigned:
+                return jsonify({"error": "Atama alanını değiştirme yetkiniz yok."}), 403
+            if new_analyst != uname:
+                return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
+        # Only the assigned analyst can close
+        if new_st in ("Tamamlandı", "Tune Edilmedi") and not is_assigned:
             return jsonify({"error": "Sadece size atanan talepleri kapatabilirsiniz."}), 403
-        # Cannot change reporter
+        # Reporter field is always preserved
         data["reporter"] = row["reporter"]
+        # Rapor alanları yalnızca raporlayan tarafından değiştirilebilir
+        if not is_reporter:
+            for f in ("environment", "rule_name", "tune_reason", "trigger_frequency", "evidence_image"):
+                data[f] = row[f]
+        # Çalışma alanları yalnızca atanmış analist tarafından değiştirilebilir
+        if not is_assigned:
+            for f in ("how_tuned", "resolution_image"):
+                data[f] = row[f]
 
     now       = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])
@@ -513,14 +527,31 @@ def update_usecase(item_id):
         cur_author  = row["rule_author"] or ""
         new_author  = data.get("rule_author", cur_author).strip()
         new_st      = data.get("status", row["status"])
-        if cur_author and cur_author != uname:
-            return jsonify({"error": "Bu talep size atanmamış. Düzenlemek için admin yetkisi gereklidir."}), 403
-        if new_author and new_author != uname:
-            return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
-        if new_st in ("Yazıldı", "Yazılamaz") and cur_author != uname:
+        is_requester = row["requester"] == uname
+        is_assigned  = cur_author == uname
+
+        # Must be the requester OR the assigned analyst to edit at all
+        if not is_requester and not is_assigned:
+            return jsonify({"error": "Sadece kendi talep ettiğiniz veya size atanan use-case'leri düzenleyebilirsiniz."}), 403
+        # Only the assigned analyst can change the author field
+        if new_author != cur_author:
+            if not is_assigned:
+                return jsonify({"error": "Atama alanını değiştirme yetkiniz yok."}), 403
+            if new_author != uname:
+                return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
+        # Only the assigned analyst can close
+        if new_st in ("Yazıldı", "Yazılamaz") and not is_assigned:
             return jsonify({"error": "Sadece size atanan talepleri kapatabilirsiniz."}), 403
-        # Cannot change requester
+        # Requester field is always preserved
         data["requester"] = row["requester"]
+        # Talep alanları yalnızca talep eden tarafından değiştirilebilir
+        if not is_requester:
+            for f in ("usecase_description", "environment"):
+                data[f] = row[f]
+        # Çalışma alanları yalnızca atanmış analist tarafından değiştirilebilir
+        if not is_assigned:
+            for f in ("rule_name", "notes"):
+                data[f] = row[f]
 
     now        = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])

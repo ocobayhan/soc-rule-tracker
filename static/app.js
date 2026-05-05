@@ -372,15 +372,15 @@ function sortUC(col) {
 // Tune list
 // ---------------------------------------------------------------------------
 function tuneActionBtns(r) {
-  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user";
-  const isMyTask   = r.tuning_analyst === CURRENT_USER;
-  const isUnowned  = !r.tuning_analyst;
+  const isAdmin      = USER_ROLE === "admin" || USER_ROLE === "user";
+  const isMyTask     = r.tuning_analyst === CURRENT_USER;
+  const isMyReport   = r.reporter === CURRENT_USER;
 
-  const canEdit = isAdmin || isMyTask || (isUnowned && r.status === "Açık");
+  const canEdit = isAdmin || isMyTask || isMyReport;
   const edit = canEdit
     ? `<button class="btn-icon" title="Düzenle" onclick="openTuneEditModal(${r.id})">&#9998;</button>`
     : "";
-  const del  = isAdmin
+  const del = isAdmin
     ? `<button class="btn-icon danger" title="Sil" onclick="deleteTune(${r.id})">&#x1F5D1;</button>`
     : "";
 
@@ -495,13 +495,36 @@ function openTuneEditModal(id) {
   document.getElementById("edit-tune-freq").value      = r.trigger_frequency || "";
   document.getElementById("edit-tune-status").value    = r.status || "Açık";
   document.getElementById("edit-tune-how").value       = r.how_tuned || "";
-  // Raporlayan: analist değiştiremez
+  // Alan kilitleme: role ve sahipliğe göre
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    const isAssigned = r.tuning_analyst === CURRENT_USER;
+    const isReporter = r.reporter       === CURRENT_USER;
+    // Raporlayan her zaman kilitli
     lockToSelf("edit-tune-reporter");
-    lockToSelf("edit-tune-analyst");  // başkasına atayamaz
+    // Analist alanı: atanmışsa kendine kilitli, değilse salt okunur
+    if (isAssigned) {
+      lockToSelf("edit-tune-analyst");
+    } else {
+      const sel = document.getElementById("edit-tune-analyst");
+      sel.innerHTML = `<option value="${esc(r.tuning_analyst||"")}">${esc(r.tuning_analyst||"—")}</option>`;
+      sel.disabled  = true;
+    }
+    // Rapor alanları (raporlayan doldurur): yalnızca raporlayan düzenleyebilir
+    ["edit-tune-env","edit-tune-rule-name","edit-tune-reason","edit-tune-freq"].forEach(id => {
+      document.getElementById(id).disabled = !isReporter;
+    });
+    // Çalışma alanları (analist doldurur): yalnızca atanmış analist düzenleyebilir
+    document.getElementById("edit-tune-how").disabled    = !isAssigned;
+    document.getElementById("edit-tune-status").disabled = !isAssigned;
   } else {
+    // Admin: tüm alanlar serbest
+    ["edit-tune-env","edit-tune-rule-name","edit-tune-reason","edit-tune-freq",
+     "edit-tune-how","edit-tune-status"].forEach(id => {
+      document.getElementById(id).disabled = false;
+    });
     freeSelect("edit-tune-reporter", r.reporter || "");
     freeSelect("edit-tune-analyst",  r.tuning_analyst || "");
+    document.getElementById("edit-tune-analyst").disabled = false;
   }
   clearPastePreview("edit-tune-evidence-preview","edit-tune-evidence-image");
   clearPastePreview("edit-tune-resolution-preview","edit-tune-resolution-image");
@@ -606,11 +629,11 @@ async function deleteTune(id) {
 // UC list
 // ---------------------------------------------------------------------------
 function ucActionBtns(r) {
-  const isAdmin   = USER_ROLE === "admin";
-  const isMyTask  = r.rule_author === CURRENT_USER;
-  const isUnowned = !r.rule_author;
+  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user";
+  const isMyTask   = r.rule_author === CURRENT_USER;
+  const isMyReport = r.requester  === CURRENT_USER;
 
-  const canEdit = isAdmin || isMyTask || (isUnowned && r.status === "Açık");
+  const canEdit = isAdmin || isMyTask || isMyReport;
   const edit = canEdit
     ? `<button class="btn-icon" title="Düzenle" onclick="openUCEditModal(${r.id})">&#9998;</button>`
     : "";
@@ -720,13 +743,36 @@ function openUCEditModal(id) {
   document.getElementById("edit-uc-status").value = r.status || "Açık";
   document.getElementById("edit-uc-rule-name").value = r.rule_name || "";
   document.getElementById("edit-uc-notes").value  = r.notes || "";
-  // Talep Eden + Analist: analist değiştiremez
+  // Alan kilitleme: role ve sahipliğe göre
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    const isAssigned  = r.rule_author === CURRENT_USER;
+    const isRequester = r.requester   === CURRENT_USER;
+    // Talep eden her zaman kilitli
     lockToSelf("edit-uc-requester");
-    lockToSelf("edit-uc-rule-author");
+    // Kural yazarı alanı: atanmışsa kendine kilitli, değilse salt okunur
+    if (isAssigned) {
+      lockToSelf("edit-uc-rule-author");
+    } else {
+      const sel = document.getElementById("edit-uc-rule-author");
+      sel.innerHTML = `<option value="${esc(r.rule_author||"")}">${esc(r.rule_author||"—")}</option>`;
+      sel.disabled  = true;
+    }
+    // Talep alanları (talep eden doldurur): yalnızca talep eden düzenleyebilir
+    ["edit-uc-env","edit-uc-desc"].forEach(id => {
+      document.getElementById(id).disabled = !isRequester;
+    });
+    // Çalışma alanları (analist doldurur): yalnızca atanmış analist düzenleyebilir
+    ["edit-uc-status","edit-uc-rule-name","edit-uc-notes"].forEach(id => {
+      document.getElementById(id).disabled = !isAssigned;
+    });
   } else {
-    freeSelect("edit-uc-requester",  r.requester   || "");
+    // Admin: tüm alanlar serbest
+    ["edit-uc-env","edit-uc-desc","edit-uc-status","edit-uc-rule-name","edit-uc-notes"].forEach(id => {
+      document.getElementById(id).disabled = false;
+    });
+    freeSelect("edit-uc-requester",   r.requester   || "");
     freeSelect("edit-uc-rule-author", r.rule_author || "");
+    document.getElementById("edit-uc-rule-author").disabled = false;
   }
   document.getElementById("uc-edit-modal-error").style.display = "none";
   document.getElementById("uc-edit-modal").style.display = "flex";
