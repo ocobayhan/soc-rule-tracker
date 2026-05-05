@@ -382,8 +382,10 @@ def update_tune(item_id):
         if not is_reporter and not is_assigned:
             return jsonify({"error": "Sadece kendi raporladığınız veya size atanan talepleri düzenleyebilirsiniz."}), 403
         # Only the assigned analyst can change the analyst field
+        # Exception: claiming an unassigned request (self-assign on empty slot) is always allowed
         if new_analyst != cur_analyst:
-            if not is_assigned:
+            is_claiming = (cur_analyst == "" and new_analyst == uname)
+            if not is_assigned and not is_claiming:
                 return jsonify({"error": "Atama alanını değiştirme yetkiniz yok."}), 403
             if new_analyst != uname:
                 return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
@@ -534,8 +536,10 @@ def update_usecase(item_id):
         if not is_requester and not is_assigned:
             return jsonify({"error": "Sadece kendi talep ettiğiniz veya size atanan use-case'leri düzenleyebilirsiniz."}), 403
         # Only the assigned analyst can change the author field
+        # Exception: claiming an unassigned request (self-assign on empty slot) is always allowed
         if new_author != cur_author:
-            if not is_assigned:
+            is_claiming = (cur_author == "" and new_author == uname)
+            if not is_assigned and not is_claiming:
                 return jsonify({"error": "Atama alanını değiştirme yetkiniz yok."}), 403
             if new_author != uname:
                 return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
@@ -669,7 +673,7 @@ def delete_user(user_id):
 @app.route("/api/audit")
 @login_required
 def get_audit():
-    if session.get("role") == "settings":
+    if session.get("role") != "admin":
         return jsonify({"error": "Forbidden"}), 403
     db    = get_db()
     limit = min(int(request.args.get("limit", 300)), 1000)

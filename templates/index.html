@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SOC Rule Tracker</title>
+  <title>SOC Tracker</title>
   <link rel="stylesheet" href="/static/styles.css?v=9"/>
 </head>
 <body>
@@ -12,14 +12,16 @@
 <header class="header">
   <div class="header-left">
     <div class="header-logo-icon">&#9656;</div>
-    <span class="header-logo-text">SOC Rule Tracker</span>
+    <span class="header-logo-text">SOC Tracker</span>
   </div>
   <nav class="header-nav">
     {% if not is_settings %}
     <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
     <button class="nav-btn" data-tab="tuning">Kural Tuning</button>
     <button class="nav-btn" data-tab="usecase">Use-Case / Kural Yazma</button>
+    {% if user_role == "admin" %}
     <button class="nav-btn" data-tab="auditlog">Audit Log</button>
+    {% endif %}
     {% else %}
     <button class="nav-btn active" data-tab="settings">Ayarlar</button>
     {% endif %}

@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Rule Tracker — Frontend  v6
+   SOC Tracker — Frontend  v6
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
