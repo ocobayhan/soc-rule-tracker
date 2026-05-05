@@ -330,6 +330,10 @@ def create_tune():
     for f in ["reporter", "environment", "rule_name", "tune_reason"]:
         if not data.get(f, "").strip():
             return jsonify({"error": f"{f} zorunludur"}), 400
+    # Analyst can only report as themselves
+    if session.get("role") == "analyst":
+        data["reporter"] = session.get("username")
+
     db  = get_db()
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     cur = db.execute("""
@@ -380,6 +384,8 @@ def update_tune(item_id):
         # Cannot close a task not assigned to self
         if new_st in ("Tamamlandı", "Tune Edilmedi") and cur_analyst != uname:
             return jsonify({"error": "Sadece size atanan talepleri kapatabilirsiniz."}), 403
+        # Cannot change reporter
+        data["reporter"] = row["reporter"]
 
     now       = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])
@@ -466,6 +472,11 @@ def create_usecase():
     for f in ["requester","usecase_description","environment"]:
         if not data.get(f,"").strip():
             return jsonify({"error": f"{f} zorunludur"}), 400
+
+    # Analyst can only request as themselves
+    if session.get("role") == "analyst":
+        data["requester"] = session.get("username")
+
     db  = get_db()
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     cur = db.execute("""
@@ -508,6 +519,8 @@ def update_usecase(item_id):
             return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
         if new_st in ("Yazıldı", "Yazılamaz") and cur_author != uname:
             return jsonify({"error": "Sadece size atanan talepleri kapatabilirsiniz."}), 403
+        # Cannot change requester
+        data["requester"] = row["requester"]
 
     now        = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])

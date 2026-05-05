@@ -316,6 +316,24 @@ let ucSearch   = "";
 function onTuneSearch(val) { tuneSearch = val.toLowerCase(); renderTuneRows(); }
 function onUCSearch(val)   { ucSearch   = val.toLowerCase(); renderUCRows();  }
 
+// ---------------------------------------------------------------------------
+// Role-aware select helpers
+// lockToSelf  → analist için dropdown'u kendi adına kilitler
+// freeSelect  → admin için dropdown'u serbest bırakır (mevcut değer korunur)
+// ---------------------------------------------------------------------------
+function lockToSelf(selectId) {
+  const el = document.getElementById(selectId);
+  if (!el) return;
+  el.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(CURRENT_USER)}</option>`;
+  el.disabled  = true;
+}
+function freeSelect(selectId, currentVal) {
+  const el = document.getElementById(selectId);
+  if (!el) return;
+  el.disabled = false;
+  if (currentVal !== undefined) el.value = currentVal;
+}
+
 function clientSort(rows, col, dir) {
   return [...rows].sort((a, b) => {
     const av = a[col] ?? "", bv = b[col] ?? "";
@@ -428,12 +446,17 @@ function clearTuneFilters() {
 // ---------------------------------------------------------------------------
 function openTuneModal() {
   populateEnvDropdowns(); populateAnalystDropdowns();
-  document.getElementById("tune-id").value        = "";
-  document.getElementById("tune-reporter").value  = "";
-  document.getElementById("tune-env").value        = "";
-  document.getElementById("tune-rule-name").value  = "";
-  document.getElementById("tune-reason").value     = "";
-  document.getElementById("tune-freq").value       = "";
+  document.getElementById("tune-id").value       = "";
+  document.getElementById("tune-env").value      = "";
+  document.getElementById("tune-rule-name").value = "";
+  document.getElementById("tune-reason").value   = "";
+  document.getElementById("tune-freq").value     = "";
+  // Raporlayan: analist sadece kendisi, admin seçebilir
+  if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    lockToSelf("tune-reporter");
+  } else {
+    freeSelect("tune-reporter", "");
+  }
   clearPastePreview("tune-evidence-preview","tune-evidence-image");
   document.getElementById("tune-modal-error").style.display = "none";
   document.getElementById("tune-modal").style.display = "flex";
@@ -465,15 +488,21 @@ async function saveTune() {
 function openTuneEditModal(id) {
   const r = tuneRows.find(x => x.id === id); if (!r) return;
   populateEnvDropdowns(); populateAnalystDropdowns();
-  document.getElementById("edit-tune-id").value          = r.id;
-  document.getElementById("edit-tune-reporter").value    = r.reporter || "";
-  document.getElementById("edit-tune-env").value         = r.environment || "";
-  document.getElementById("edit-tune-rule-name").value   = r.rule_name || "";
-  document.getElementById("edit-tune-reason").value      = r.tune_reason || "";
-  document.getElementById("edit-tune-freq").value        = r.trigger_frequency || "";
-  document.getElementById("edit-tune-status").value      = r.status || "Açık";
-  document.getElementById("edit-tune-analyst").value     = r.tuning_analyst || "";
-  document.getElementById("edit-tune-how").value         = r.how_tuned || "";
+  document.getElementById("edit-tune-id").value        = r.id;
+  document.getElementById("edit-tune-env").value       = r.environment || "";
+  document.getElementById("edit-tune-rule-name").value = r.rule_name || "";
+  document.getElementById("edit-tune-reason").value    = r.tune_reason || "";
+  document.getElementById("edit-tune-freq").value      = r.trigger_frequency || "";
+  document.getElementById("edit-tune-status").value    = r.status || "Açık";
+  document.getElementById("edit-tune-how").value       = r.how_tuned || "";
+  // Raporlayan: analist değiştiremez
+  if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    lockToSelf("edit-tune-reporter");
+    lockToSelf("edit-tune-analyst");  // başkasına atayamaz
+  } else {
+    freeSelect("edit-tune-reporter", r.reporter || "");
+    freeSelect("edit-tune-analyst",  r.tuning_analyst || "");
+  }
   clearPastePreview("edit-tune-evidence-preview","edit-tune-evidence-image");
   clearPastePreview("edit-tune-resolution-preview","edit-tune-resolution-image");
   if (r.evidence_image)   restorePreview(r.evidence_image,   "edit-tune-evidence-preview",   "edit-tune-evidence-image");
@@ -650,10 +679,15 @@ function clearUCFilters() {
 // ---------------------------------------------------------------------------
 function openUCModal() {
   populateEnvDropdowns(); populateAnalystDropdowns();
-  document.getElementById("uc-id").value        = "";
-  document.getElementById("uc-requester").value = "";
-  document.getElementById("uc-env").value       = "";
-  document.getElementById("uc-desc").value      = "";
+  document.getElementById("uc-id").value  = "";
+  document.getElementById("uc-env").value = "";
+  document.getElementById("uc-desc").value = "";
+  // Talep Eden: analist sadece kendisi
+  if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    lockToSelf("uc-requester");
+  } else {
+    freeSelect("uc-requester", "");
+  }
   document.getElementById("uc-modal-error").style.display = "none";
   document.getElementById("uc-modal").style.display = "flex";
 }
@@ -680,14 +714,20 @@ async function saveUC() {
 function openUCEditModal(id) {
   const r = ucRows.find(x => x.id === id); if (!r) return;
   populateEnvDropdowns(); populateAnalystDropdowns();
-  document.getElementById("edit-uc-id").value          = r.id;
-  document.getElementById("edit-uc-requester").value   = r.requester || "";
-  document.getElementById("edit-uc-env").value         = r.environment || "";
-  document.getElementById("edit-uc-desc").value        = r.usecase_description || "";
-  document.getElementById("edit-uc-status").value      = r.status || "Açık";
-  document.getElementById("edit-uc-rule-author").value = r.rule_author || "";
-  document.getElementById("edit-uc-rule-name").value   = r.rule_name || "";
-  document.getElementById("edit-uc-notes").value       = r.notes || "";
+  document.getElementById("edit-uc-id").value     = r.id;
+  document.getElementById("edit-uc-env").value    = r.environment || "";
+  document.getElementById("edit-uc-desc").value   = r.usecase_description || "";
+  document.getElementById("edit-uc-status").value = r.status || "Açık";
+  document.getElementById("edit-uc-rule-name").value = r.rule_name || "";
+  document.getElementById("edit-uc-notes").value  = r.notes || "";
+  // Talep Eden + Analist: analist değiştiremez
+  if (USER_ROLE === "analyst" || USER_ROLE === "user") {
+    lockToSelf("edit-uc-requester");
+    lockToSelf("edit-uc-rule-author");
+  } else {
+    freeSelect("edit-uc-requester",  r.requester   || "");
+    freeSelect("edit-uc-rule-author", r.rule_author || "");
+  }
   document.getElementById("uc-edit-modal-error").style.display = "none";
   document.getElementById("uc-edit-modal").style.display = "flex";
 }
