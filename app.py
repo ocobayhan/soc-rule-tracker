@@ -568,21 +568,28 @@ def update_tune(item_id):
     else:
         completed_at = row["completed_at"]
 
-    # Settings role: allow manual date overrides
+    # Settings role: allow manual date + ID overrides
     if role == "settings":
         created_at_val = _parse_date(data.get("created_at")) or row["created_at"]
         completed_at   = _parse_date(data.get("completed_at")) if "completed_at" in data else completed_at
+        new_id_val     = int(data["new_id"]) if str(data.get("new_id","")).strip().isdigit() else item_id
+        if new_id_val != item_id:
+            conflict = db.execute("SELECT id FROM tune_requests WHERE id=?", (new_id_val,)).fetchone()
+            if conflict:
+                return jsonify({"error": f"ID {new_id_val} zaten kullanımda"}), 409
     else:
         created_at_val = row["created_at"]
+        new_id_val     = item_id
 
     db.execute("""
         UPDATE tune_requests SET
-          reporter=?,environment=?,rule_name=?,tune_reason=?,trigger_frequency=?,
+          id=?,reporter=?,environment=?,rule_name=?,tune_reason=?,trigger_frequency=?,
           tuning_analyst=?,how_tuned=?,status=?,
           evidence_image=?,resolution_image=?,
           created_at=?,completed_at=?,updated_at=?
         WHERE id=?
     """, (
+        new_id_val,
         data.get("reporter",        row["reporter"]).strip(),
         data.get("environment",     row["environment"]).strip(),
         data.get("rule_name",       row["rule_name"]).strip(),
@@ -596,7 +603,7 @@ def update_tune(item_id):
         created_at_val, completed_at, now, item_id
     ))
     db.commit()
-    updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (new_id_val,)).fetchone()
     # Determine audit action
     if new_status == "İnceleniyor" and data.get("tuning_analyst"):
         a_action = "CLAIM_TUNE"
@@ -744,13 +751,19 @@ def update_usecase(item_id):
     else:
         completed_at = row["completed_at"]
 
-    # Settings role: allow manual date overrides
+    # Settings role: allow manual date + ID overrides
     uc_role = session.get("role", "analyst")
     if uc_role == "settings":
         uc_created_at  = _parse_date(data.get("created_at")) or row["created_at"]
         completed_at   = _parse_date(data.get("completed_at")) if "completed_at" in data else completed_at
+        uc_new_id      = int(data["new_id"]) if str(data.get("new_id","")).strip().isdigit() else item_id
+        if uc_new_id != item_id:
+            conflict = db.execute("SELECT id FROM usecase_requests WHERE id=?", (uc_new_id,)).fetchone()
+            if conflict:
+                return jsonify({"error": f"ID {uc_new_id} zaten kullanımda"}), 409
     else:
         uc_created_at  = row["created_at"]
+        uc_new_id      = item_id
 
     import json as _j
     def _jv_uc(key, fallback="[]"):
@@ -761,11 +774,12 @@ def update_usecase(item_id):
 
     db.execute("""
         UPDATE usecase_requests SET
-          requester=?,usecase_description=?,environment=?,rule_name=?,
+          id=?,requester=?,usecase_description=?,environment=?,rule_name=?,
           rule_author=?,notes=?,status=?,mitre_classified=?,mitre_data=?,
           created_at=?,completed_at=?,updated_at=?
         WHERE id=?
     """, (
+        uc_new_id,
         data.get("requester",           row["requester"]).strip(),
         data.get("usecase_description", row["usecase_description"]).strip(),
         data.get("environment",         row["environment"] or ""),
@@ -778,7 +792,7 @@ def update_usecase(item_id):
         uc_created_at, completed_at, now, item_id
     ))
     db.commit()
-    updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (uc_new_id,)).fetchone()
     if new_status == "İnceleniyor" and data.get("rule_author"):
         a_action = "CLAIM_UC"
         a_detail = f"Tanım: {updated['usecase_description'][:60]} | Analist: {updated['rule_author']}"
@@ -922,15 +936,21 @@ def update_hunt(item_id):
     else:
         completed_at = row["completed_at"]
 
-    # Settings role: allow manual date overrides
+    # Settings role: allow manual date + ID overrides
     if hunt_role == "settings":
         hunt_created_at    = _parse_date(data.get("created_at"))    or row["created_at"]
         started_at         = _parse_date(data.get("started_at"))    if "started_at"    in data else started_at
         completed_at       = _parse_date(data.get("completed_at"))  if "completed_at"  in data else completed_at
         report_updated_at_override = _parse_date(data.get("report_updated_at")) if "report_updated_at" in data else None
+        hunt_new_id        = int(data["new_id"]) if str(data.get("new_id","")).strip().isdigit() else item_id
+        if hunt_new_id != item_id:
+            conflict = db.execute("SELECT id FROM threat_hunt_requests WHERE id=?", (hunt_new_id,)).fetchone()
+            if conflict:
+                return jsonify({"error": f"ID {hunt_new_id} zaten kullanımda"}), 409
     else:
         hunt_created_at            = row["created_at"]
         report_updated_at_override = None
+        hunt_new_id                = item_id
 
     report_fields = ("hunt_environment", "scope", "mitre_techniques", "has_findings",
                      "findings", "ioc_list", "affected_assets", "severity",
@@ -971,6 +991,7 @@ def update_hunt(item_id):
 
     db.execute("""
         UPDATE threat_hunt_requests SET
+          id=?,
           hunt_subject=?, requester=?, assigned_analyst=?, notes=?, status=?,
           hunt_environment=?, scope=?, scope_image=?,
           mitre_techniques=?, has_findings=?,
@@ -982,6 +1003,7 @@ def update_hunt(item_id):
           created_at=?, started_at=?, completed_at=?, report_updated_at=?, updated_at=?
         WHERE id=?
     """, (
+        hunt_new_id,
         sv("hunt_subject"), sv("requester"), sv("assigned_analyst"), sv("notes"), new_status,
         sv("hunt_environment"), sv("scope"), nv("scope_image"),
         jv("mitre_techniques"), sv("has_findings", "Hayır"),
@@ -994,7 +1016,7 @@ def update_hunt(item_id):
         started_at, completed_at, report_updated_at, now, item_id
     ))
     db.commit()
-    updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (hunt_new_id,)).fetchone()
 
     if new_status == "İnceleniyor" and data.get("assigned_analyst") and not row["assigned_analyst"]:
         a_action = "CLAIM_HUNT"

@@ -569,9 +569,10 @@ function openTuneEditModal(id) {
   clearPastePreview("edit-tune-resolution-preview","edit-tune-resolution-image");
   if (r.evidence_image)   restorePreview(r.evidence_image,   "edit-tune-evidence-preview",   "edit-tune-evidence-image");
   if (r.resolution_image) restorePreview(r.resolution_image, "edit-tune-resolution-preview", "edit-tune-resolution-image");
-  // Settings: show date fields
+  // Settings: show ID + date fields
   showSettingsDateFields("tune-edit-modal");
   if (USER_ROLE === "settings") {
+    document.getElementById("edit-tune-new-id").value = r.id;
     setDateTimeInput("edit-tune-created-at",   r.created_at);
     setDateTimeInput("edit-tune-completed-at", r.completed_at);
   }
@@ -596,7 +597,8 @@ async function saveTuneEdit() {
     evidence_image:    document.getElementById("edit-tune-evidence-image").value || null,
     resolution_image:  document.getElementById("edit-tune-resolution-image").value || null,
     ...(USER_ROLE === "settings" ? {
-      created_at:   document.getElementById("edit-tune-created-at").value  || undefined,
+      new_id:       document.getElementById("edit-tune-new-id").value       || undefined,
+      created_at:   document.getElementById("edit-tune-created-at").value   || undefined,
       completed_at: document.getElementById("edit-tune-completed-at").value || undefined,
     } : {}),
   };
@@ -822,9 +824,10 @@ function openUCEditModal(id) {
       document.getElementById(i).disabled = false;
     });
   }
-  // Settings: show date fields
+  // Settings: show ID + date fields
   showSettingsDateFields("uc-edit-modal");
   if (USER_ROLE === "settings") {
+    document.getElementById("edit-uc-new-id").value = r.id;
     setDateTimeInput("edit-uc-created-at",   r.created_at);
     setDateTimeInput("edit-uc-completed-at", r.completed_at);
   }
@@ -846,8 +849,9 @@ async function saveUCEdit() {
     rule_name:           document.getElementById("edit-uc-rule-name").value.trim(),
     notes:               document.getElementById("edit-uc-notes").value.trim(),
     ...(USER_ROLE === "settings" ? {
-      created_at:   document.getElementById("edit-uc-created-at").value  || undefined,
-      completed_at: document.getElementById("edit-uc-completed-at").value || undefined,
+      new_id:       document.getElementById("edit-uc-new-id").value        || undefined,
+      created_at:   document.getElementById("edit-uc-created-at").value    || undefined,
+      completed_at: document.getElementById("edit-uc-completed-at").value  || undefined,
     } : {}),
   };
   try {
@@ -1410,9 +1414,10 @@ function openHuntEditModal(id) {
     document.getElementById("edit-hunt-notes").disabled   = false;
     freeSelect("edit-hunt-requester", r.requester || "");
   }
-  // Settings: show date fields
+  // Settings: show ID + date fields
   showSettingsDateFields("hunt-edit-modal");
   if (USER_ROLE === "settings") {
+    document.getElementById("edit-hunt-new-id").value = r.id;
     setDateTimeInput("edit-hunt-created-at",        r.created_at);
     setDateTimeInput("edit-hunt-started-at",         r.started_at);
     setDateTimeInput("edit-hunt-completed-at",       r.completed_at);
@@ -1432,10 +1437,11 @@ async function saveHuntEdit() {
     requester:    document.getElementById("edit-hunt-requester").value,
     notes:        document.getElementById("edit-hunt-notes").value.trim(),
     ...(USER_ROLE === "settings" ? {
-      created_at:        document.getElementById("edit-hunt-created-at").value        || undefined,
-      started_at:        document.getElementById("edit-hunt-started-at").value         || undefined,
-      completed_at:      document.getElementById("edit-hunt-completed-at").value       || undefined,
-      report_updated_at: document.getElementById("edit-hunt-report-updated-at").value  || undefined,
+      new_id:            document.getElementById("edit-hunt-new-id").value              || undefined,
+      created_at:        document.getElementById("edit-hunt-created-at").value          || undefined,
+      started_at:        document.getElementById("edit-hunt-started-at").value          || undefined,
+      completed_at:      document.getElementById("edit-hunt-completed-at").value        || undefined,
+      report_updated_at: document.getElementById("edit-hunt-report-updated-at").value   || undefined,
     } : {}),
   };
   try {

@@ -427,9 +427,13 @@
           <input type="hidden" id="edit-tune-resolution-image"/>
         </div>
       </div>
-      <!-- Settings-only: tarih düzenleme -->
+      <!-- Settings-only: ID + tarih düzenleme -->
       <div class="settings-date-fields" style="display:none">
         <div class="form-grid" style="margin-top:8px">
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">🔢 ID</label>
+            <input type="number" class="form-input" id="edit-tune-new-id" min="1"/>
+          </div>
           <div class="form-group">
             <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma Tarihi</label>
             <input type="datetime-local" class="form-input" id="edit-tune-created-at"/>
@@ -592,9 +596,13 @@
           <textarea class="form-input form-textarea" id="edit-uc-notes"></textarea>
         </div>
       </div>
-      <!-- Settings-only: tarih düzenleme -->
+      <!-- Settings-only: ID + tarih düzenleme -->
       <div class="settings-date-fields" style="display:none">
         <div class="form-grid" style="margin-top:8px">
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">🔢 ID</label>
+            <input type="number" class="form-input" id="edit-uc-new-id" min="1"/>
+          </div>
           <div class="form-group">
             <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma Tarihi</label>
             <input type="datetime-local" class="form-input" id="edit-uc-created-at"/>
@@ -779,9 +787,13 @@
           <textarea class="form-input form-textarea" id="edit-hunt-notes" placeholder="Ek bağlam veya notlar…"></textarea>
         </div>
       </div>
-      <!-- Settings-only: tarih düzenleme -->
+      <!-- Settings-only: ID + tarih düzenleme -->
       <div class="settings-date-fields" style="display:none">
         <div class="form-grid" style="margin-top:8px">
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">🔢 ID</label>
+            <input type="number" class="form-input" id="edit-hunt-new-id" min="1"/>
+          </div>
           <div class="form-group">
             <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma</label>
             <input type="datetime-local" class="form-input" id="edit-hunt-created-at"/>
