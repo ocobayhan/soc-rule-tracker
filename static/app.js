@@ -411,7 +411,7 @@ function sortUC(col) {
 // Tune list
 // ---------------------------------------------------------------------------
 function tuneActionBtns(r) {
-  const isAdmin      = USER_ROLE === "admin" || USER_ROLE === "user";
+  const isAdmin      = USER_ROLE === "admin" || USER_ROLE === "user" || USER_ROLE === "settings";
   const isMyTask     = r.tuning_analyst === CURRENT_USER;
   const isMyReport   = r.reporter === CURRENT_USER;
 
@@ -680,7 +680,7 @@ async function deleteTune(id) {
 // UC list
 // ---------------------------------------------------------------------------
 function ucActionBtns(r) {
-  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user";
+  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user" || USER_ROLE === "settings";
   const isMyTask   = r.rule_author === CURRENT_USER;
   const isMyReport = r.requester  === CURRENT_USER;
 
@@ -1277,7 +1277,7 @@ function sortHunt(col) {
 }
 
 function huntActionBtns(r) {
-  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user";
+  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user" || USER_ROLE === "settings";
   const isMyTask   = r.assigned_analyst === CURRENT_USER;
   const isMyReport = r.requester === CURRENT_USER;
   const canEdit    = isAdmin || isMyTask || isMyReport;
