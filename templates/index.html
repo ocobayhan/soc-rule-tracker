@@ -842,6 +842,18 @@
       <input type="hidden" id="report-hunt-id"/>
       <input type="hidden" id="report-hunt-mitre-json" value="[]"/>
 
+      <!-- Hunt Ortamı (Hedef & Kapsam ile birlikte) -->
+      <div class="form-group form-col-2" style="margin-bottom:4px">
+        <label class="form-label">Arama Yapılan Ortamlar</label>
+        <div class="mitre-add-row" id="hunt-report-env-add-row">
+          <select class="form-input input-sm" id="hunt-report-env-select">
+            <option value="">— Ortam seçin —</option>
+          </select>
+          <button type="button" class="btn btn-secondary" onclick="addHuntEnv()">+ Ekle</button>
+        </div>
+        <div id="hunt-env-list" class="tag-list"></div>
+      </div>
+
       <!-- Hedef & Kapsam -->
       <div class="form-group form-col-2" style="margin-bottom:0">
         <label class="form-label">Hedef &amp; Kapsam
@@ -944,18 +956,8 @@
         <input type="hidden" id="report-hunt-recommendations-image"/>
       </div>
 
-      <!-- Hunt Ortamı + Sonuç + Rapor Durumu + Hunt Durumu -->
+      <!-- Sonuç + Süre + Rapor Durumu + Hunt Durumu -->
       <div class="form-grid" style="margin-top:8px">
-        <div class="form-group form-col-2">
-          <label class="form-label">Hunt Ortamı</label>
-          <div class="mitre-add-row" id="hunt-report-env-add-row">
-            <select class="form-input input-sm" id="hunt-report-env-select">
-              <option value="">— Ortam seçin —</option>
-            </select>
-            <button type="button" class="btn btn-secondary" onclick="addHuntEnv()">+ Ekle</button>
-          </div>
-          <div id="hunt-env-list" class="tag-list"></div>
-        </div>
         <div class="form-group">
           <label class="form-label">Sonuç</label>
           <select class="form-input" id="report-hunt-result">
