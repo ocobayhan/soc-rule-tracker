@@ -1874,7 +1874,11 @@ async function deleteHunt(id) {
 // Init
 // ---------------------------------------------------------------------------
 if (IS_SETTINGS) {
-  loadSettings();
+  loadDropdownData().then(() => {
+    loadSettings();
+    setupAllPaste();
+    document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
+  });
 } else {
   loadDropdownData().then(() => {
     loadDashboard();
