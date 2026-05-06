@@ -12,8 +12,9 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "soc-rule-tracker-dev-key-change-in-prod")
 
-DATABASE     = os.path.join(os.path.dirname(__file__), "tracker.db")
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "static", "uploads")
+_BASE = os.path.dirname(os.path.abspath(__file__))
+DATABASE      = os.environ.get("DATABASE",      os.path.join(_BASE, "tracker.db"))
+UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(_BASE, "static", "uploads"))
 ALLOWED_EXT  = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 # ---------------------------------------------------------------------------
@@ -1310,36 +1311,51 @@ def export_data():
     ws4 = wb.create_sheet("KPI Özeti")
     write_headers(ws4, ["Metrik", "Değer"])
 
-    def q(sql): return db.execute(sql).fetchone()["c"]
+    # Month-aware query helpers
+    # mfc = filter on created_at, mfd = filter on completed_at
+    _mf_args = (exp_month,) if exp_month else ()
+    def qc(sql, extra=""):
+        """Count with optional created_at month filter."""
+        mf = f" AND strftime('%Y-%m',created_at)=?" if exp_month else ""
+        return db.execute(sql + mf + extra, _mf_args).fetchone()["c"]
+    def qd(sql, extra=""):
+        """Count with optional completed_at month filter."""
+        mf = f" AND strftime('%Y-%m',completed_at)=?" if exp_month else ""
+        return db.execute(sql + mf + extra, _mf_args).fetchone()["c"]
 
-    total_tune = q("SELECT COUNT(*) c FROM tune_requests")
-    total_hunt = q("SELECT COUNT(*) c FROM threat_hunt_requests")
-    kpi_rows = [
+    total_tune = qc("SELECT COUNT(*) c FROM tune_requests WHERE 1=1")
+    total_hunt = qc("SELECT COUNT(*) c FROM threat_hunt_requests WHERE 1=1")
+
+    kpi_rows = []
+    if exp_month:
+        kpi_rows.append(("Dönem", exp_month))
+        kpi_rows.append(("", ""))
+    kpi_rows += [
         ("── TUNING ──────────────────────", ""),
         ("Toplam Tuning Talebi",      total_tune),
-        ("Açık",                      q("SELECT COUNT(*) c FROM tune_requests WHERE status='Açık'")),
-        ("İnceleniyor",               q("SELECT COUNT(*) c FROM tune_requests WHERE status='İnceleniyor'")),
-        ("Tamamlandı",                q("SELECT COUNT(*) c FROM tune_requests WHERE status='Tamamlandı'")),
-        ("Tune Edilmedi",             q("SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Edilmedi'")),
+        ("Açık",                      qc("SELECT COUNT(*) c FROM tune_requests WHERE status='Açık'")),
+        ("İnceleniyor",               qc("SELECT COUNT(*) c FROM tune_requests WHERE status='İnceleniyor'")),
+        ("Tamamlandı",                qd("SELECT COUNT(*) c FROM tune_requests WHERE status='Tamamlandı'")),
+        ("Tune Edilmedi",             qd("SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Edilmedi'")),
         ("", ""),
         ("── USE-CASE ────────────────────", ""),
     ]
-    total_uc   = q("SELECT COUNT(*) c FROM usecase_requests")
-    written_uc = q("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazıldı'")
+    total_uc   = qc("SELECT COUNT(*) c FROM usecase_requests WHERE 1=1")
+    written_uc = qd("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazıldı'")
     kpi_rows  += [
         ("Toplam Use-Case Talebi",    total_uc),
-        ("Açık",                      q("SELECT COUNT(*) c FROM usecase_requests WHERE status='Açık'")),
-        ("İnceleniyor",               q("SELECT COUNT(*) c FROM usecase_requests WHERE status='İnceleniyor'")),
+        ("Açık",                      qc("SELECT COUNT(*) c FROM usecase_requests WHERE status='Açık'")),
+        ("İnceleniyor",               qc("SELECT COUNT(*) c FROM usecase_requests WHERE status='İnceleniyor'")),
         ("Yazıldı",                   written_uc),
-        ("Yazılamaz",                 q("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazılamaz'")),
+        ("Yazılamaz",                 qd("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazılamaz'")),
         ("Dönüşüm Oranı (%)",         round(written_uc / total_uc * 100, 1) if total_uc else 0),
         ("", ""),
         ("── THREAT HUNT ─────────────────", ""),
         ("Toplam Hunt Talebi",        total_hunt),
-        ("Açık",                      q("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık'")),
-        ("İnceleniyor",               q("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İnceleniyor'")),
-        ("Tamamlandı",                q("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı'")),
-        ("İptal",                     q("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İptal'")),
+        ("Açık",                      qc("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık'")),
+        ("İnceleniyor",               qc("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İnceleniyor'")),
+        ("Tamamlandı",                qd("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı'")),
+        ("İptal",                     qd("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İptal'")),
         ("", ""),
         ("Dışa Aktarım Tarihi",       date.today().isoformat()),
     ]
@@ -1369,6 +1385,7 @@ with app.app_context():
     init_db()
 
 if __name__ == "__main__":
-    host = os.environ.get("HOST", "127.0.0.1")
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host=host, port=port, debug=True)
+    host  = os.environ.get("HOST", "127.0.0.1")
+    port  = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(host=host, port=port, debug=debug)

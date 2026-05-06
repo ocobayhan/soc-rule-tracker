@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  soc-tracker:
+    build: .
+    container_name: soc-tracker
+    restart: unless-stopped
+    ports:
+      - "9897:5000"
+    volumes:
+      - soc_data:/data
+      - soc_uploads:/app/static/uploads
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-soc-tracker-CHANGE-THIS-IN-PRODUCTION}
+      - DATABASE=/data/tracker.db
+      - UPLOAD_FOLDER=/app/static/uploads
+      - TZ=Europe/Istanbul
+
+volumes:
+  soc_data:
+  soc_uploads:
