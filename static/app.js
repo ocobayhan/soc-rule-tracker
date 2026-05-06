@@ -42,6 +42,24 @@ function fmtDate(iso) {
   return iso.slice(0, 10);
 }
 
+/** Show/hide settings-only date fields inside a modal by ID. */
+function showSettingsDateFields(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  modal.querySelectorAll(".settings-date-fields").forEach(el => {
+    el.style.display = USER_ROLE === "settings" ? "block" : "none";
+  });
+}
+
+/** Set a datetime-local input from a DB timestamp string "YYYY-MM-DD HH:MM:SS". */
+function setDateTimeInput(inputId, dbVal) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  if (!dbVal) { el.value = ""; return; }
+  // datetime-local format: "YYYY-MM-DDTHH:MM"
+  el.value = String(dbVal).slice(0, 16).replace(" ", "T");
+}
+
 function esc(str) {
   if (!str) return "";
   return String(str)
@@ -200,6 +218,15 @@ function populateAnalystDropdowns() {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value; el.innerHTML = analystOpts(cur);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Excel Export
+// ---------------------------------------------------------------------------
+function exportExcel() {
+  const month = document.getElementById("kpi-month")?.value || "";
+  const url = month ? `/api/export?month=${encodeURIComponent(month)}` : "/api/export";
+  window.location.href = url;
 }
 
 // ---------------------------------------------------------------------------
@@ -542,6 +569,12 @@ function openTuneEditModal(id) {
   clearPastePreview("edit-tune-resolution-preview","edit-tune-resolution-image");
   if (r.evidence_image)   restorePreview(r.evidence_image,   "edit-tune-evidence-preview",   "edit-tune-evidence-image");
   if (r.resolution_image) restorePreview(r.resolution_image, "edit-tune-resolution-preview", "edit-tune-resolution-image");
+  // Settings: show date fields
+  showSettingsDateFields("tune-edit-modal");
+  if (USER_ROLE === "settings") {
+    setDateTimeInput("edit-tune-created-at",   r.created_at);
+    setDateTimeInput("edit-tune-completed-at", r.completed_at);
+  }
   document.getElementById("tune-edit-modal-error").style.display = "none";
   document.getElementById("tune-edit-modal").style.display = "flex";
 }
@@ -562,6 +595,10 @@ async function saveTuneEdit() {
     how_tuned:         document.getElementById("edit-tune-how").value.trim(),
     evidence_image:    document.getElementById("edit-tune-evidence-image").value || null,
     resolution_image:  document.getElementById("edit-tune-resolution-image").value || null,
+    ...(USER_ROLE === "settings" ? {
+      created_at:   document.getElementById("edit-tune-created-at").value  || undefined,
+      completed_at: document.getElementById("edit-tune-completed-at").value || undefined,
+    } : {}),
   };
   try {
     await apiFetch(`/api/tune/${id}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -785,6 +822,12 @@ function openUCEditModal(id) {
       document.getElementById(i).disabled = false;
     });
   }
+  // Settings: show date fields
+  showSettingsDateFields("uc-edit-modal");
+  if (USER_ROLE === "settings") {
+    setDateTimeInput("edit-uc-created-at",   r.created_at);
+    setDateTimeInput("edit-uc-completed-at", r.completed_at);
+  }
   document.getElementById("uc-edit-modal-error").style.display = "none";
   document.getElementById("uc-edit-modal").style.display = "flex";
 }
@@ -802,6 +845,10 @@ async function saveUCEdit() {
     rule_author:         document.getElementById("edit-uc-rule-author").value,
     rule_name:           document.getElementById("edit-uc-rule-name").value.trim(),
     notes:               document.getElementById("edit-uc-notes").value.trim(),
+    ...(USER_ROLE === "settings" ? {
+      created_at:   document.getElementById("edit-uc-created-at").value  || undefined,
+      completed_at: document.getElementById("edit-uc-completed-at").value || undefined,
+    } : {}),
   };
   try {
     await apiFetch(`/api/usecase/${id}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -1243,8 +1290,13 @@ function huntActionBtns(r) {
 
   if (r.status === "Açık")
     return `<button class="btn-action-claim" onclick="openHuntClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
-  if (r.status === "İnceleniyor")
-    return `${report} ${edit}${del}`;
+  if (r.status === "İnceleniyor") {
+    const canStart = (isAdmin || isMyTask) && !r.started_at;
+    const startBtn = canStart
+      ? `<button class="btn-action-claim" onclick="startHunt(${r.id})" style="background:var(--accent-green,#22c55e);color:#fff">▶ Başla</button> `
+      : "";
+    return `${startBtn}${report} ${edit}${del}`;
+  }
   return `${edit}${del}`;
 }
 
@@ -1293,6 +1345,14 @@ function clearHuntFilters() {
   const s = document.getElementById("hunt-search"); if (s) s.value = "";
   huntSearch = "";
   loadHunt();
+}
+
+async function startHunt(id) {
+  if (!confirm("Hunt'ı şimdi başlatmak istiyor musunuz? Bu işlem başlangıç zamanını kaydeder.")) return;
+  try {
+    await apiFetch(`/api/hunt/${id}/start`, { method: "POST" });
+    loadHunt();
+  } catch (e) { alert(e.message); }
 }
 
 // ---------------------------------------------------------------------------
@@ -1350,6 +1410,14 @@ function openHuntEditModal(id) {
     document.getElementById("edit-hunt-notes").disabled   = false;
     freeSelect("edit-hunt-requester", r.requester || "");
   }
+  // Settings: show date fields
+  showSettingsDateFields("hunt-edit-modal");
+  if (USER_ROLE === "settings") {
+    setDateTimeInput("edit-hunt-created-at",        r.created_at);
+    setDateTimeInput("edit-hunt-started-at",         r.started_at);
+    setDateTimeInput("edit-hunt-completed-at",       r.completed_at);
+    setDateTimeInput("edit-hunt-report-updated-at",  r.report_updated_at);
+  }
   document.getElementById("hunt-edit-modal-error").style.display = "none";
   document.getElementById("hunt-edit-modal").style.display = "flex";
 }
@@ -1363,6 +1431,12 @@ async function saveHuntEdit() {
     hunt_subject: document.getElementById("edit-hunt-subject").value.trim(),
     requester:    document.getElementById("edit-hunt-requester").value,
     notes:        document.getElementById("edit-hunt-notes").value.trim(),
+    ...(USER_ROLE === "settings" ? {
+      created_at:        document.getElementById("edit-hunt-created-at").value        || undefined,
+      started_at:        document.getElementById("edit-hunt-started-at").value         || undefined,
+      completed_at:      document.getElementById("edit-hunt-completed-at").value       || undefined,
+      report_updated_at: document.getElementById("edit-hunt-report-updated-at").value  || undefined,
+    } : {}),
   };
   try {
     await apiFetch(`/api/hunt/${id}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -1625,7 +1699,7 @@ function toggleFindingsSection() {
 function toggleDetectionDetail() {
   const val = document.getElementById("report-hunt-detection-suggest")?.value;
   const grp = document.getElementById("detection-detail-group");
-  if (grp) grp.style.display = val === "Evet" ? "contents" : "none";
+  if (grp) grp.style.display = val === "Evet" ? "block" : "none";
 }
 
 async function openHuntReportModal(id) {
@@ -1672,6 +1746,7 @@ async function openHuntReportModal(id) {
   document.getElementById("report-hunt-recommendations").value  = r.recommendations || "";
 
   document.getElementById("report-hunt-result").value        = r.hunt_result || "";
+  document.getElementById("report-hunt-duration").value      = r.hunt_duration_hours != null ? r.hunt_duration_hours : "";
   document.getElementById("report-hunt-report-status").value = r.report_status || "Taslak";
   document.getElementById("report-hunt-status").value        = r.status || "İnceleniyor";
 
@@ -1706,6 +1781,7 @@ async function saveHuntReport() {
     recommendations_image: document.getElementById("report-hunt-recommendations-image").value || null,
     hunt_environment:      _huntEnvList.join(","),
     hunt_result:           document.getElementById("report-hunt-result").value,
+    hunt_duration_hours:   document.getElementById("report-hunt-duration").value !== "" ? parseInt(document.getElementById("report-hunt-duration").value) : null,
     report_status:         document.getElementById("report-hunt-report-status").value,
     status:                document.getElementById("report-hunt-status").value,
   };
@@ -1756,8 +1832,9 @@ async function openHuntDetail(id) {
         ${detailRow("Atanan Analist", r.assigned_analyst)}
         ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${envBadges}</span></div>` : ""}
         ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
-        ${detailRow("Başlama Tarihi", fmtDate(r.started_at))}
+        ${r.started_at ? detailRow("Hunt Başlangıcı", fmtDate(r.started_at)) : ""}
         ${detailRow("Tamamlanma Tarihi", fmtDate(r.completed_at))}
+        ${r.hunt_duration_hours != null ? detailRow("Hunt Süresi", r.hunt_duration_hours + " saat") : ""}
         ${detailRow("Rapor Güncelleme", r.report_updated_at ? r.report_updated_at.slice(0,16) : "")}
         ${r.notes ? detailRow("Notlar", r.notes) : ""}
       </div>

@@ -47,9 +47,9 @@
         <button class="btn btn-secondary" onclick="loadKPI()">Uygula</button>
         <button class="btn-ghost-sm" onclick="document.getElementById('kpi-month').value='';loadKPI()">Tümü</button>
       </div>
-      <a href="/api/export" class="btn btn-export" title="Tüm veriyi Excel olarak indir">
+      <button class="btn btn-export" onclick="exportExcel()" title="Aktif ay filtresine göre Excel indir">
         &#8675; Excel
-      </a>
+      </button>
     </div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-label">Açık Tuning Talebi</div><div class="kpi-value" id="kpi-tune-open">—</div></div>
@@ -427,6 +427,19 @@
           <input type="hidden" id="edit-tune-resolution-image"/>
         </div>
       </div>
+      <!-- Settings-only: tarih düzenleme -->
+      <div class="settings-date-fields" style="display:none">
+        <div class="form-grid" style="margin-top:8px">
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma Tarihi</label>
+            <input type="datetime-local" class="form-input" id="edit-tune-created-at"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">📅 Tamamlanma Tarihi</label>
+            <input type="datetime-local" class="form-input" id="edit-tune-completed-at"/>
+          </div>
+        </div>
+      </div>
       <div id="tune-edit-modal-error" class="form-error" style="display:none"></div>
     </div>
     <div class="modal-footer">
@@ -577,6 +590,19 @@
         <div class="form-group form-col-2">
           <label class="form-label">Notlar</label>
           <textarea class="form-input form-textarea" id="edit-uc-notes"></textarea>
+        </div>
+      </div>
+      <!-- Settings-only: tarih düzenleme -->
+      <div class="settings-date-fields" style="display:none">
+        <div class="form-grid" style="margin-top:8px">
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma Tarihi</label>
+            <input type="datetime-local" class="form-input" id="edit-uc-created-at"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">📅 Tamamlanma Tarihi</label>
+            <input type="datetime-local" class="form-input" id="edit-uc-completed-at"/>
+          </div>
         </div>
       </div>
       <div id="uc-edit-modal-error" class="form-error" style="display:none"></div>
@@ -753,6 +779,27 @@
           <textarea class="form-input form-textarea" id="edit-hunt-notes" placeholder="Ek bağlam veya notlar…"></textarea>
         </div>
       </div>
+      <!-- Settings-only: tarih düzenleme -->
+      <div class="settings-date-fields" style="display:none">
+        <div class="form-grid" style="margin-top:8px">
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma</label>
+            <input type="datetime-local" class="form-input" id="edit-hunt-created-at"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">📅 Hunt Başlangıç</label>
+            <input type="datetime-local" class="form-input" id="edit-hunt-started-at"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">📅 Tamamlanma</label>
+            <input type="datetime-local" class="form-input" id="edit-hunt-completed-at"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="color:var(--accent-orange)">📅 Rapor Güncellenme</label>
+            <input type="datetime-local" class="form-input" id="edit-hunt-report-updated-at"/>
+          </div>
+        </div>
+      </div>
       <div id="hunt-edit-modal-error" class="form-error" style="display:none"></div>
     </div>
     <div class="modal-footer">
@@ -873,16 +920,14 @@
       </div>
 
       <!-- Detection Önerisi -->
-      <div class="form-grid" style="margin-top:16px">
-        <div class="form-group">
-          <label class="form-label">Detection Önerisi</label>
-          <select class="form-input" id="report-hunt-detection-suggest" onchange="toggleDetectionDetail()">
-            <option value="Hayır">Hayır</option>
-            <option value="Evet">Evet</option>
-          </select>
-        </div>
-        <div class="form-group form-col-2" id="detection-detail-group" style="display:none">
-          <label class="form-label">Detection Detayı</label>
+      <div class="form-group form-col-2" style="margin-top:16px">
+        <label class="form-label">Detection Önerisi</label>
+        <select class="form-input" id="report-hunt-detection-suggest" onchange="toggleDetectionDetail()" style="max-width:160px">
+          <option value="Hayır">Hayır</option>
+          <option value="Evet">Evet</option>
+        </select>
+        <div id="detection-detail-group" style="display:none;margin-top:8px">
+          <label class="form-label" style="margin-bottom:4px">Detection Detayı</label>
           <textarea class="form-input form-textarea" id="report-hunt-detection-detail"
                     placeholder="Önerilen kural veya detection mantığı…"></textarea>
         </div>
@@ -919,6 +964,10 @@
             <option>Negatif</option>
             <option>Yetersiz Veri</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hunt Süresi <span class="text-muted" style="font-weight:400">(saat)</span></label>
+          <input type="number" class="form-input" id="report-hunt-duration" min="0" max="9999" placeholder="örn. 4"/>
         </div>
         <div class="form-group">
           <label class="form-label">Rapor Durumu</label>

@@ -138,6 +138,7 @@ def init_db():
             recommendations_image TEXT,
             related_requests     TEXT DEFAULT '[]',
             hunt_result          TEXT DEFAULT '',
+            hunt_duration_hours  INTEGER DEFAULT NULL,
             started_at           TEXT,
             completed_at         TEXT,
             report_updated_at    TEXT,
@@ -174,6 +175,7 @@ def init_db():
         ("hunt_environment",     "''"),  ("has_findings",         "'Hayır'"),
         ("ioc_list",             "'[]'"), ("affected_assets",      "''"),
         ("severity",             "''"),  ("related_requests",     "'[]'"),
+        ("hunt_duration_hours",  "NULL"),
     ]
     for col, default in hunt_new_cols:
         if not _col_exists(db, "threat_hunt_requests", col):
@@ -197,6 +199,37 @@ def init_db():
     db.commit()
 
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def next_available_id(db, table):
+    """Return the smallest positive integer not currently used as an ID."""
+    existing = {r[0] for r in db.execute(f"SELECT id FROM {table}").fetchall()}
+    n = 1
+    while n in existing:
+        n += 1
+    return n
+
+def reset_seq_if_empty(db, table):
+    """If table has no rows, reset its sqlite_sequence so next AUTOINCREMENT starts at 1."""
+    c = db.execute(f"SELECT COUNT(*) c FROM {table}").fetchone()["c"]
+    if c == 0:
+        db.execute("DELETE FROM sqlite_sequence WHERE name=?", (table,))
+
+def _parse_date(val):
+    """Accept 'YYYY-MM-DDTHH:MM' (datetime-local) or 'YYYY-MM-DD HH:MM:SS'. Returns DB string or None."""
+    if not val:
+        return None
+    val = str(val).strip().replace("T", " ")
+    # Pad seconds if missing
+    if len(val) == 16:
+        val += ":00"
+    try:
+        datetime.strptime(val, "%Y-%m-%d %H:%M:%S")
+        return val
+    except ValueError:
+        return None
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -455,13 +488,15 @@ def create_tune():
 
     db  = get_db()
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    new_id = next_available_id(db, "tune_requests")
     cur = db.execute("""
         INSERT INTO tune_requests
-          (reporter,environment,rule_name,tune_reason,trigger_frequency,
+          (id,reporter,environment,rule_name,tune_reason,trigger_frequency,
            tuning_analyst,how_tuned,status,evidence_image,resolution_image,
            created_at,completed_at,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
+        new_id,
         data["reporter"].strip(), data["environment"].strip(),
         data["rule_name"].strip(), data["tune_reason"].strip(),
         data.get("trigger_frequency","").strip(),
@@ -533,12 +568,19 @@ def update_tune(item_id):
     else:
         completed_at = row["completed_at"]
 
+    # Settings role: allow manual date overrides
+    if role == "settings":
+        created_at_val = _parse_date(data.get("created_at")) or row["created_at"]
+        completed_at   = _parse_date(data.get("completed_at")) if "completed_at" in data else completed_at
+    else:
+        created_at_val = row["created_at"]
+
     db.execute("""
         UPDATE tune_requests SET
           reporter=?,environment=?,rule_name=?,tune_reason=?,trigger_frequency=?,
           tuning_analyst=?,how_tuned=?,status=?,
           evidence_image=?,resolution_image=?,
-          completed_at=?,updated_at=?
+          created_at=?,completed_at=?,updated_at=?
         WHERE id=?
     """, (
         data.get("reporter",        row["reporter"]).strip(),
@@ -551,7 +593,7 @@ def update_tune(item_id):
         new_status,
         data.get("evidence_image",    row["evidence_image"]) or None,
         data.get("resolution_image",  row["resolution_image"]) or None,
-        completed_at, now, item_id
+        created_at_val, completed_at, now, item_id
     ))
     db.commit()
     updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
@@ -578,6 +620,7 @@ def delete_tune(item_id):
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
     db.execute("DELETE FROM tune_requests WHERE id=?", (item_id,))
+    reset_seq_if_empty(db, "tune_requests")
     db.commit()
     write_audit("DELETE_TUNE", "tune", item_id, f"Kural: {row['rule_name']}")
     return jsonify({"ok": True})
@@ -620,12 +663,14 @@ def create_usecase():
 
     db  = get_db()
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    new_id = next_available_id(db, "usecase_requests")
     cur = db.execute("""
         INSERT INTO usecase_requests
-          (requester,usecase_description,environment,rule_name,rule_author,notes,
+          (id,requester,usecase_description,environment,rule_name,rule_author,notes,
            status,created_at,completed_at,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
     """, (
+        new_id,
         data["requester"].strip(), data["usecase_description"].strip(),
         data["environment"],
         data.get("rule_name","").strip(), data.get("rule_author","").strip(),
@@ -699,6 +744,14 @@ def update_usecase(item_id):
     else:
         completed_at = row["completed_at"]
 
+    # Settings role: allow manual date overrides
+    uc_role = session.get("role", "analyst")
+    if uc_role == "settings":
+        uc_created_at  = _parse_date(data.get("created_at")) or row["created_at"]
+        completed_at   = _parse_date(data.get("completed_at")) if "completed_at" in data else completed_at
+    else:
+        uc_created_at  = row["created_at"]
+
     import json as _j
     def _jv_uc(key, fallback="[]"):
         v = data.get(key)
@@ -710,7 +763,7 @@ def update_usecase(item_id):
         UPDATE usecase_requests SET
           requester=?,usecase_description=?,environment=?,rule_name=?,
           rule_author=?,notes=?,status=?,mitre_classified=?,mitre_data=?,
-          completed_at=?,updated_at=?
+          created_at=?,completed_at=?,updated_at=?
         WHERE id=?
     """, (
         data.get("requester",           row["requester"]).strip(),
@@ -722,7 +775,7 @@ def update_usecase(item_id):
         new_status,
         data.get("mitre_classified",    row["mitre_classified"] if "mitre_classified" in row.keys() else "Hayır"),
         _jv_uc("mitre_data"),
-        completed_at, now, item_id
+        uc_created_at, completed_at, now, item_id
     ))
     db.commit()
     updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
@@ -748,6 +801,7 @@ def delete_usecase(item_id):
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
     db.execute("DELETE FROM usecase_requests WHERE id=?", (item_id,))
+    reset_seq_if_empty(db, "usecase_requests")
     db.commit()
     write_audit("DELETE_UC", "usecase", item_id, f"Tanım: {row['usecase_description'][:60]}")
     return jsonify({"ok": True})
@@ -787,11 +841,12 @@ def create_hunt():
     if session.get("role") == "analyst":
         requester = session.get("username", "")
 
+    new_id = next_available_id(db, "threat_hunt_requests")
     cur = db.execute("""
         INSERT INTO threat_hunt_requests
-          (hunt_subject, requester, assigned_analyst, notes, status, created_at, updated_at)
-        VALUES (?,?,?,?,?,?,?)
-    """, (hunt_subject, requester,
+          (id, hunt_subject, requester, assigned_analyst, notes, status, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?)
+    """, (new_id, hunt_subject, requester,
           data.get("assigned_analyst", "").strip(),
           data.get("notes", "").strip(), "Açık", now, now))
     db.commit()
@@ -855,10 +910,10 @@ def update_hunt(item_id):
 
     now        = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])
+    hunt_role  = session.get("role", "analyst")
 
+    # started_at is NO LONGER set automatically on claim — use /start endpoint instead
     started_at = row["started_at"]
-    if new_status == "İnceleniyor" and not started_at:
-        started_at = now
 
     if new_status in ("Tamamlandı", "İptal") and not row["completed_at"]:
         completed_at = now
@@ -867,16 +922,27 @@ def update_hunt(item_id):
     else:
         completed_at = row["completed_at"]
 
+    # Settings role: allow manual date overrides
+    if hunt_role == "settings":
+        hunt_created_at    = _parse_date(data.get("created_at"))    or row["created_at"]
+        started_at         = _parse_date(data.get("started_at"))    if "started_at"    in data else started_at
+        completed_at       = _parse_date(data.get("completed_at"))  if "completed_at"  in data else completed_at
+        report_updated_at_override = _parse_date(data.get("report_updated_at")) if "report_updated_at" in data else None
+    else:
+        hunt_created_at            = row["created_at"]
+        report_updated_at_override = None
+
     report_fields = ("hunt_environment", "scope", "mitre_techniques", "has_findings",
                      "findings", "ioc_list", "affected_assets", "severity",
                      "detection_suggestion", "detection_detail", "recommendations",
                      "hunt_result", "report_status", "related_requests",
-                     "scope_image", "findings_image", "recommendations_image")
+                     "scope_image", "findings_image", "recommendations_image",
+                     "hunt_duration_hours")
     report_changed = any(
         str(data.get(f) if data.get(f) is not None else row[f] or "") != str(row[f] or "")
         for f in report_fields
     )
-    report_updated_at = now if report_changed else row["report_updated_at"]
+    report_updated_at = (report_updated_at_override or now) if report_changed else (report_updated_at_override or row["report_updated_at"])
 
     def sv(key, fallback=""):
         v = data.get(key)
@@ -893,6 +959,16 @@ def update_hunt(item_id):
             return _j.dumps(v) if isinstance(v, (list, dict)) else str(v)
         return row[key] or fallback
 
+    # hunt_duration_hours: integer or None
+    dur_raw = data.get("hunt_duration_hours")
+    if dur_raw is not None and str(dur_raw).strip() != "":
+        try:
+            hunt_duration_hours = int(dur_raw)
+        except (ValueError, TypeError):
+            hunt_duration_hours = row["hunt_duration_hours"]
+    else:
+        hunt_duration_hours = row["hunt_duration_hours"]
+
     db.execute("""
         UPDATE threat_hunt_requests SET
           hunt_subject=?, requester=?, assigned_analyst=?, notes=?, status=?,
@@ -902,7 +978,8 @@ def update_hunt(item_id):
           detection_suggestion=?, detection_detail=?,
           recommendations=?, recommendations_image=?,
           related_requests=?, hunt_result=?, report_status=?,
-          started_at=?, completed_at=?, report_updated_at=?, updated_at=?
+          hunt_duration_hours=?,
+          created_at=?, started_at=?, completed_at=?, report_updated_at=?, updated_at=?
         WHERE id=?
     """, (
         sv("hunt_subject"), sv("requester"), sv("assigned_analyst"), sv("notes"), new_status,
@@ -912,12 +989,14 @@ def update_hunt(item_id):
         sv("detection_suggestion", "Hayır"), sv("detection_detail"),
         sv("recommendations"), nv("recommendations_image"),
         jv("related_requests"), sv("hunt_result"), sv("report_status", "Taslak"),
+        hunt_duration_hours,
+        hunt_created_at,
         started_at, completed_at, report_updated_at, now, item_id
     ))
     db.commit()
     updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
 
-    if new_status == "İnceleniyor" and data.get("assigned_analyst") and not row["started_at"]:
+    if new_status == "İnceleniyor" and data.get("assigned_analyst") and not row["assigned_analyst"]:
         a_action = "CLAIM_HUNT"
         a_detail = f"Konu: {updated['hunt_subject']} | Analist: {updated['assigned_analyst']}"
     elif new_status in ("Tamamlandı", "İptal"):
@@ -942,9 +1021,32 @@ def delete_hunt(item_id):
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
     db.execute("DELETE FROM threat_hunt_requests WHERE id=?", (item_id,))
+    reset_seq_if_empty(db, "threat_hunt_requests")
     db.commit()
     write_audit("DELETE_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
     return jsonify({"ok": True})
+
+@app.route("/api/hunt/<int:item_id>/start", methods=["POST"])
+@login_required
+def start_hunt(item_id):
+    """Mark hunt as officially started (sets started_at). Called via 'Başla' button."""
+    db  = get_db()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    role  = session.get("role", "analyst")
+    uname = session.get("username", "")
+    if role == "analyst" and row["assigned_analyst"] != uname:
+        return jsonify({"error": "Sadece size atanan hunt'ı başlatabilirsiniz."}), 403
+    if row["started_at"]:
+        return jsonify({"error": "Hunt zaten başlatılmış."}), 400
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("UPDATE threat_hunt_requests SET started_at=?, updated_at=? WHERE id=?",
+               (now, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("START_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    return jsonify(dict(updated))
 
 # ---------------------------------------------------------------------------
 # User management  (settings role only)
@@ -1071,6 +1173,7 @@ def export_data():
         return jsonify({"error": "openpyxl kütüphanesi eksik. pip install openpyxl"}), 500
 
     db = get_db()
+    exp_month = request.args.get("month", "").strip()  # e.g. "2024-01"
     wb = Workbook()
 
     HDR_FONT  = Font(bold=True, color="F7F7F7", size=10)
@@ -1104,7 +1207,10 @@ def export_data():
                  "Durum", "Raporlandı", "Tamamlandı"]
     write_headers(ws1, tune_cols)
 
-    for r in db.execute("SELECT * FROM tune_requests ORDER BY id").fetchall():
+    tune_q = "SELECT * FROM tune_requests"
+    tune_q += " WHERE strftime('%Y-%m',created_at)=?" if exp_month else " WHERE 1=1"
+    tune_q += " ORDER BY id"
+    for r in db.execute(tune_q, (exp_month,) if exp_month else ()).fetchall():
         row = [r["id"], r["rule_name"], r["environment"], r["reporter"],
                r["tune_reason"], r["trigger_frequency"] or "",
                r["tuning_analyst"] or "", r["how_tuned"] or "",
@@ -1122,7 +1228,10 @@ def export_data():
                "Durum", "Talep Tarihi", "Yazılma Tarihi"]
     write_headers(ws2, uc_cols)
 
-    for r in db.execute("SELECT * FROM usecase_requests ORDER BY id").fetchall():
+    uc_q = "SELECT * FROM usecase_requests"
+    uc_q += " WHERE strftime('%Y-%m',created_at)=?" if exp_month else " WHERE 1=1"
+    uc_q += " ORDER BY id"
+    for r in db.execute(uc_q, (exp_month,) if exp_month else ()).fetchall():
         row = [r["id"], r["usecase_description"], r["environment"], r["requester"],
                r["rule_author"] or "", r["rule_name"] or "", r["notes"] or "",
                r["status"], fmt_date(r["created_at"]), fmt_date(r["completed_at"])]
@@ -1142,8 +1251,11 @@ def export_data():
                  "Talep Tarihi", "Başlama", "Tamamlanma"]
     write_headers(ws3, hunt_cols)
 
+    hunt_q = "SELECT * FROM threat_hunt_requests"
+    hunt_q += " WHERE strftime('%Y-%m',created_at)=?" if exp_month else " WHERE 1=1"
+    hunt_q += " ORDER BY id"
     import json as _json
-    for r in db.execute("SELECT * FROM threat_hunt_requests ORDER BY id").fetchall():
+    for r in db.execute(hunt_q, (exp_month,) if exp_month else ()).fetchall():
         # Summarize MITRE entries to text
         try:
             mitre_list = _json.loads(r["mitre_techniques"] or "[]")
@@ -1219,7 +1331,8 @@ def export_data():
     wb.save(buf)
     buf.seek(0)
 
-    filename = f"SOC_RuleTracker_{date.today().isoformat()}.xlsx"
+    period_suffix = f"_{exp_month}" if exp_month else ""
+    filename = f"SOC_RuleTracker{period_suffix}_{date.today().isoformat()}.xlsx"
     return send_file(
         buf,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
