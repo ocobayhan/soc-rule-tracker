@@ -2030,13 +2030,17 @@ async function openHuntReportModal(id) {
   // UC creation form — reset; disable if a linked UC already exists
   const createUcCb = document.getElementById("report-create-uc");
   if (createUcCb) { createUcCb.checked = false; createUcCb.disabled = !!r.linked_uc_id; }
-  document.getElementById("uc-create-requester").value    = r.requester || "";
-  document.getElementById("uc-create-environment").value  = "";
-  document.getElementById("uc-create-description").value  = "";
+  const _ucReq  = document.getElementById("uc-create-requester");
+  const _ucEnv  = document.getElementById("uc-create-environment");
+  const _ucDesc = document.getElementById("uc-create-description");
+  if (_ucReq)  _ucReq.value  = r.requester || "";
+  if (_ucEnv)  _ucEnv.value  = "";
+  if (_ucDesc) _ucDesc.value = "";
   toggleUcCreateFields();
   const ucForm = document.getElementById("uc-create-form");
   if (ucForm) {
-    ucForm.querySelector("label[for='report-create-uc']").textContent = r.linked_uc_id
+    const lbl = ucForm.querySelector("label[for='report-create-uc']");
+    if (lbl) lbl.textContent = r.linked_uc_id
       ? `Bu Hunt için Use-Case zaten oluşturuldu (UC #${r.linked_uc_id})`
       : "Bu Hunt için Use-Case oluştur";
   }
