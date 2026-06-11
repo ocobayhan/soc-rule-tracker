@@ -327,6 +327,61 @@ async function loadDashboardTables() {
 function loadDashboard() { loadKPI(); loadDashboardTables(); }
 
 // ---------------------------------------------------------------------------
+// Backup (admin only)
+// ---------------------------------------------------------------------------
+async function loadBackupList() {
+  const tb = document.getElementById("backup-tbody");
+  if (!tb) return;
+  try {
+    const list = await apiFetch("/api/admin/backups");
+    if (!list.length) {
+      tb.innerHTML = `<tr><td colspan="4" class="text-muted" style="padding:16px;text-align:center">Henüz yedek yok.</td></tr>`;
+      return;
+    }
+    tb.innerHTML = list.map(b => {
+      const kb = (b.size / 1024).toFixed(0);
+      return `<tr>
+        <td style="font-family:monospace;font-size:11px">${esc(b.filename)}</td>
+        <td class="text-muted">${kb} KB</td>
+        <td class="text-muted">${esc(b.created_at)}</td>
+        <td>
+          <a href="/api/admin/backup/${encodeURIComponent(b.filename)}"
+             class="btn-icon" title="İndir" download>&#8675;</a>
+          <button class="btn-icon" title="Sil" style="color:var(--red)"
+                  onclick="deleteBackup('${esc(b.filename)}')">&#10005;</button>
+        </td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    tb.innerHTML = `<tr><td colspan="4" class="text-muted" style="padding:16px;text-align:center">Yüklenemedi.</td></tr>`;
+  }
+}
+
+async function createBackup() {
+  const msg = document.getElementById("backup-msg");
+  msg.style.display = "block";
+  msg.style.color = "var(--text-2)";
+  msg.textContent = "Yedekleniyor…";
+  try {
+    const r = await apiFetch("/api/admin/backup", { method: "POST" });
+    msg.style.color = "var(--green)";
+    msg.textContent = `✓ Yedek oluşturuldu: ${r.filename}`;
+    loadBackupList();
+  } catch (e) {
+    msg.style.color = "var(--red)";
+    msg.textContent = `Hata: ${e.message}`;
+  }
+}
+
+async function deleteBackup(filename) {
+  if (!confirm(`"${filename}" yedeğini silmek istiyor musunuz?`)) return;
+  try {
+    await apiFetch(`/api/admin/backup/${encodeURIComponent(filename)}`, { method: "DELETE" });
+    loadBackupList();
+  } catch (e) { alert(e.message); }
+}
+
+// ---------------------------------------------------------------------------
 // Detail modals (read-only)
 // ---------------------------------------------------------------------------
 function detailRow(label, value, muted = false) {
@@ -1187,6 +1242,7 @@ async function loadSettings() {
       : `<li class="text-muted" style="justify-content:center">Henüz ortam eklenmedi.</li>`;
   }
   await loadUsersList();
+  loadBackupList();
 }
 
 const ROLE_LABEL = { admin: "Admin", analyst: "Analist" };

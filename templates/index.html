@@ -388,6 +388,28 @@
       <div id="user-form-error" class="form-error" style="display:none;margin:0 20px 12px"></div>
       <ul class="settings-list" id="user-settings-list"></ul>
     </div>
+  {% if user_role == 'admin' %}
+    <!-- Backup panel — admin only -->
+    <div class="settings-panel" style="margin-top:20px;max-width:800px">
+      <div class="settings-panel-header">
+        <span class="settings-panel-title">Veri Yedekleme</span>
+        <button class="btn btn-primary" onclick="createBackup()">&#128190; Şimdi Yedekle</button>
+      </div>
+      <div id="backup-msg" style="display:none;padding:8px 20px;font-size:12px"></div>
+      <div id="backup-list-wrap" style="padding:0 20px 16px">
+        <p style="font-size:12px;color:var(--text-3);margin:12px 0 8px">
+          Yedekler sunucuda <code>backups/</code> klasöründe saklanır. Son 30 yedek tutulur.
+        </p>
+        <table class="table" id="backup-table">
+          <thead><tr><th>Dosya</th><th>Boyut</th><th>Tarih</th><th style="width:100px"></th></tr></thead>
+          <tbody id="backup-tbody">
+            <tr><td colspan="4" class="text-muted" style="padding:16px;text-align:center">Yükleniyor…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
   </section>
 
 {% endif %}{# closes {% if is_settings %} settings tab block #}

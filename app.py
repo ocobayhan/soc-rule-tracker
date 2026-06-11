@@ -15,6 +15,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "soc-rule-tracker-dev-key-change-i
 _BASE = os.path.dirname(os.path.abspath(__file__))
 DATABASE      = os.environ.get("DATABASE",      os.path.join(_BASE, "tracker.db"))
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(_BASE, "static", "uploads"))
+BACKUP_DIR    = os.environ.get("BACKUP_DIR",    os.path.join(_BASE, "backups"))
 ALLOWED_EXT  = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 # ---------------------------------------------------------------------------
@@ -1618,10 +1619,96 @@ def monthly_report():
     )
 
 # ---------------------------------------------------------------------------
+# Backup
+# ---------------------------------------------------------------------------
+def _do_backup(keep: int = 30):
+    """Anlık SQLite yedeği oluşturur; eski yedekleri temizler. backup.py'den bağımsız."""
+    import shutil, glob as _glob
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    if not os.path.exists(DATABASE):
+        return None
+    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    name = f"tracker_{ts}.db"
+    dest = os.path.join(BACKUP_DIR, name)
+    shutil.copy2(DATABASE, dest)
+    # Kota kontrolü
+    files = sorted(_glob.glob(os.path.join(BACKUP_DIR, "tracker_*.db")))
+    for old in (files[:-keep] if len(files) > keep else []):
+        os.remove(old)
+    return name
+
+
+@app.route("/api/admin/backup", methods=["POST"])
+@login_required
+def api_create_backup():
+    if session.get("role") != "admin":
+        return jsonify({"error": "Yetkisiz"}), 403
+    name = _do_backup(keep=30)
+    if not name:
+        return jsonify({"error": "Veritabanı bulunamadı"}), 500
+    size = os.path.getsize(os.path.join(BACKUP_DIR, name))
+    return jsonify({"filename": name, "size": size,
+                    "created_at": datetime.now().strftime("%d.%m.%Y %H:%M")})
+
+
+@app.route("/api/admin/backups", methods=["GET"])
+@login_required
+def api_list_backups():
+    if session.get("role") != "admin":
+        return jsonify({"error": "Yetkisiz"}), 403
+    import glob as _glob
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    files = sorted(_glob.glob(os.path.join(BACKUP_DIR, "tracker_*.db")), reverse=True)
+    return jsonify([{
+        "filename":   os.path.basename(f),
+        "size":       os.path.getsize(f),
+        "created_at": datetime.fromtimestamp(os.path.getmtime(f)).strftime("%d.%m.%Y %H:%M"),
+    } for f in files])
+
+
+@app.route("/api/admin/backup/<filename>", methods=["GET"])
+@login_required
+def api_download_backup(filename):
+    if session.get("role") != "admin":
+        return jsonify({"error": "Yetkisiz"}), 403
+    if any(c in filename for c in ("/", "\\", "..")):
+        return jsonify({"error": "Geçersiz dosya adı"}), 400
+    path = os.path.join(BACKUP_DIR, filename)
+    if not os.path.exists(path):
+        return jsonify({"error": "Bulunamadı"}), 404
+    return send_file(path, as_attachment=True, download_name=filename)
+
+
+@app.route("/api/admin/backup/<filename>", methods=["DELETE"])
+@login_required
+def api_delete_backup(filename):
+    if session.get("role") != "admin":
+        return jsonify({"error": "Yetkisiz"}), 403
+    if any(c in filename for c in ("/", "\\", "..")):
+        return jsonify({"error": "Geçersiz dosya adı"}), 400
+    path = os.path.join(BACKUP_DIR, filename)
+    if not os.path.exists(path):
+        return jsonify({"error": "Bulunamadı"}), 404
+    os.remove(path)
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+def _auto_backup_on_start():
+    """Bugün için yedek yoksa otomatik oluşturur."""
+    import glob as _glob
+    today = datetime.now().strftime("%Y%m%d")
+    if not _glob.glob(os.path.join(BACKUP_DIR, f"tracker_{today}_*.db")):
+        name = _do_backup(keep=30)
+        if name:
+            app.logger.info(f"[backup] Otomatik başlangıç yedeği: {name}")
+
+
 with app.app_context():
     init_db()
+    _auto_backup_on_start()
 
 if __name__ == "__main__":
     host  = os.environ.get("HOST", "127.0.0.1")
