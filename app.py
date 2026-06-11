@@ -1348,7 +1348,7 @@ def export_data():
     ws1.title = "Tuning Talepleri"
     tune_cols = ["ID", "Kural İsmi", "Ortam", "Raporlayan", "Tune Nedeni",
                  "Tetiklenme Sıklığı", "Tune Eden Analist", "Nasıl Tune Edildi",
-                 "Durum", "Raporlandı", "Tamamlandı"]
+                 "Durum", "Raporlandı", "Tune Tarihi", "Onaylayan", "Onay Tarihi", "Tamamlandı"]
     write_headers(ws1, tune_cols)
 
     tune_q = "SELECT * FROM tune_requests"
@@ -1358,7 +1358,11 @@ def export_data():
         row = [r["id"], r["rule_name"], r["environment"], r["reporter"],
                r["tune_reason"], r["trigger_frequency"] or "",
                r["tuning_analyst"] or "", r["how_tuned"] or "",
-               r["status"], fmt_date(r["created_at"]), fmt_date(r["completed_at"])]
+               r["status"], fmt_date(r["created_at"]),
+               fmt_date(r["tuned_at"]) if "tuned_at" in r.keys() else "",
+               r["approved_by"] if "approved_by" in r.keys() else "",
+               fmt_date(r["approved_at"]) if "approved_at" in r.keys() else "",
+               fmt_date(r["completed_at"])]
         ws1.append(row)
         for ci in range(1, len(tune_cols) + 1):
             ws1.cell(row=ws1.max_row, column=ci).alignment = CELL_ALIGN
@@ -1369,7 +1373,7 @@ def export_data():
     ws2 = wb.create_sheet("Use-Case Talepleri")
     uc_cols = ["ID", "Use-Case Tanımı", "Ortam", "Talep Eden",
                "Analist", "Yazılan Kural Adı", "Notlar",
-               "Durum", "Talep Tarihi", "Yazılma Tarihi"]
+               "Durum", "Talep Tarihi", "Test Başlama", "Prod Onay Tarihi", "Prod Onaylayan", "Test Notları", "Tamamlandı"]
     write_headers(ws2, uc_cols)
 
     uc_q = "SELECT * FROM usecase_requests"
@@ -1378,7 +1382,12 @@ def export_data():
     for r in db.execute(uc_q, (exp_month,) if exp_month else ()).fetchall():
         row = [r["id"], r["usecase_description"], r["environment"], r["requester"],
                r["rule_author"] or "", r["rule_name"] or "", r["notes"] or "",
-               r["status"], fmt_date(r["created_at"]), fmt_date(r["completed_at"])]
+               r["status"], fmt_date(r["created_at"]),
+               fmt_date(r["test_started_at"]) if "test_started_at" in r.keys() else "",
+               fmt_date(r["test_approved_at"]) if "test_approved_at" in r.keys() else "",
+               r["test_approved_by"] if "test_approved_by" in r.keys() else "",
+               r["test_notes"] if "test_notes" in r.keys() else "",
+               fmt_date(r["completed_at"])]
         ws2.append(row)
         for ci in range(1, len(uc_cols) + 1):
             ws2.cell(row=ws2.max_row, column=ci).alignment = CELL_ALIGN
@@ -1447,6 +1456,36 @@ def export_data():
     total_tune = qc("SELECT COUNT(*) c FROM tune_requests WHERE 1=1")
     total_hunt = qc("SELECT COUNT(*) c FROM threat_hunt_requests WHERE 1=1")
 
+    tune_success = db.execute(
+        "SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Başarılı'"
+        + (" AND strftime('%Y-%m',approved_at)=?" if exp_month else ""),
+        (exp_month,) if exp_month else ()
+    ).fetchone()["c"]
+    tune_edildi  = qc("SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Edildi'")
+    tune_retry   = qc("SELECT COUNT(*) c FROM tune_requests WHERE status='Yeniden Tune'")
+    tune_edilmedi = db.execute(
+        "SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Edilmedi'"
+        + (" AND strftime('%Y-%m',completed_at)=?" if exp_month else ""),
+        (exp_month,) if exp_month else ()
+    ).fetchone()["c"]
+    tune_resolved = tune_success + tune_retry + tune_edilmedi
+    tune_rate = round(tune_success / tune_resolved * 100, 1) if tune_resolved else 0
+
+    total_uc   = qc("SELECT COUNT(*) c FROM usecase_requests WHERE 1=1")
+    uc_prod    = db.execute(
+        "SELECT COUNT(*) c FROM usecase_requests WHERE status='Prod''da Aktif'"
+        + (" AND strftime('%Y-%m',test_approved_at)=?" if exp_month else ""),
+        (exp_month,) if exp_month else ()
+    ).fetchone()["c"]
+    uc_testing = qc("SELECT COUNT(*) c FROM usecase_requests WHERE status='Test Ediliyor'")
+    uc_cantwrite = db.execute(
+        "SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazılamaz'"
+        + (" AND strftime('%Y-%m',completed_at)=?" if exp_month else ""),
+        (exp_month,) if exp_month else ()
+    ).fetchone()["c"]
+    uc_eligible = uc_prod + uc_cantwrite
+    uc_rate = round(uc_prod / uc_eligible * 100, 1) if uc_eligible else 0
+
     kpi_rows = []
     if exp_month:
         kpi_rows.append(("Dönem", exp_month))
@@ -1456,20 +1495,20 @@ def export_data():
         ("Toplam Tuning Talebi",      total_tune),
         ("Açık",                      qc("SELECT COUNT(*) c FROM tune_requests WHERE status='Açık'")),
         ("İnceleniyor",               qc("SELECT COUNT(*) c FROM tune_requests WHERE status='İnceleniyor'")),
-        ("Tamamlandı",                qd("SELECT COUNT(*) c FROM tune_requests WHERE status='Tamamlandı'")),
-        ("Tune Edilmedi",             qd("SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Edilmedi'")),
+        ("Tune Edildi (Onay Bekleyen)", tune_edildi),
+        ("Tune Başarılı",             tune_success),
+        ("Yeniden Tune",              tune_retry),
+        ("Tune Edilmedi",             tune_edilmedi),
+        ("Tune Başarı Oranı (%)",     tune_rate),
         ("", ""),
         ("── USE-CASE ────────────────────", ""),
-    ]
-    total_uc   = qc("SELECT COUNT(*) c FROM usecase_requests WHERE 1=1")
-    written_uc = qd("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazıldı'")
-    kpi_rows  += [
         ("Toplam Use-Case Talebi",    total_uc),
         ("Açık",                      qc("SELECT COUNT(*) c FROM usecase_requests WHERE status='Açık'")),
         ("İnceleniyor",               qc("SELECT COUNT(*) c FROM usecase_requests WHERE status='İnceleniyor'")),
-        ("Yazıldı",                   written_uc),
-        ("Yazılamaz",                 qd("SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazılamaz'")),
-        ("Dönüşüm Oranı (%)",         round(written_uc / total_uc * 100, 1) if total_uc else 0),
+        ("Test Ediliyor",             uc_testing),
+        ("Prod'da Aktif",             uc_prod),
+        ("Yazılamaz",                 uc_cantwrite),
+        ("UC Prod Dönüşüm Oranı (%)", uc_rate),
         ("", ""),
         ("── THREAT HUNT ─────────────────", ""),
         ("Toplam Hunt Talebi",        total_hunt),
@@ -1497,6 +1536,79 @@ def export_data():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
         download_name=filename,
+    )
+
+# ---------------------------------------------------------------------------
+# Monthly HTML Report
+# ---------------------------------------------------------------------------
+@app.route("/report")
+@login_required
+def monthly_report():
+    month = request.args.get("month", "").strip()
+    db    = get_db()
+
+    def mf(col):
+        return (f" AND strftime('%Y-%m', {col}) = ?", (month,)) if month else ("", ())
+
+    def count(sql, col="created_at"):
+        cond, args = mf(col)
+        return db.execute(f"SELECT COUNT(*) c FROM {sql}{cond}", args).fetchone()["c"]
+
+    # ── KPI numbers ────────────────────────────────────────────────────────
+    kpi = {
+        "tune_open":        count("tune_requests WHERE status='Açık'"),
+        "tune_reviewing":   count("tune_requests WHERE status='İnceleniyor'"),
+        "tune_edildi":      count("tune_requests WHERE status='Tune Edildi'", "tuned_at"),
+        "tune_success":     count("tune_requests WHERE status='Tune Başarılı'", "approved_at"),
+        "tune_retry":       count("tune_requests WHERE status='Yeniden Tune'"),
+        "tune_edilmedi":    count("tune_requests WHERE status='Tune Edilmedi'", "completed_at"),
+        "tune_total":       count("tune_requests WHERE 1=1"),
+        "uc_open":          count("usecase_requests WHERE status='Açık'"),
+        "uc_reviewing":     count("usecase_requests WHERE status='İnceleniyor'"),
+        "uc_testing":       count("usecase_requests WHERE status='Test Ediliyor'", "test_started_at"),
+        "uc_prod":          count("usecase_requests WHERE status='Prod''da Aktif'", "test_approved_at"),
+        "uc_cantwrite":     count("usecase_requests WHERE status='Yazılamaz'", "completed_at"),
+        "uc_total":         count("usecase_requests WHERE 1=1"),
+        "hunt_open":        count("threat_hunt_requests WHERE status='Açık'"),
+        "hunt_reviewing":   count("threat_hunt_requests WHERE status='İnceleniyor'"),
+        "hunt_done":        count("threat_hunt_requests WHERE status='Tamamlandı'", "completed_at"),
+        "hunt_cancelled":   count("threat_hunt_requests WHERE status='İptal'", "completed_at"),
+        "hunt_total":       count("threat_hunt_requests WHERE 1=1"),
+    }
+    resolved = kpi["tune_success"] + kpi["tune_retry"] + kpi["tune_edilmedi"]
+    kpi["tune_success_rate"] = round(kpi["tune_success"] / resolved * 100) if resolved else 0
+    prod_eligible = kpi["uc_prod"] + kpi["uc_cantwrite"]
+    kpi["uc_prod_rate"] = round(kpi["uc_prod"] / prod_eligible * 100) if prod_eligible else 0
+
+    # ── Records for tables ─────────────────────────────────────────────────
+    def rows(sql, col="created_at"):
+        cond, args = mf(col)
+        return [dict(r) for r in db.execute(
+            f"SELECT * FROM {sql}{cond} ORDER BY id DESC LIMIT 50", args
+        ).fetchall()]
+
+    tune_rows = rows("tune_requests WHERE 1=1")
+    uc_rows   = rows("usecase_requests WHERE 1=1")
+    hunt_rows = rows("threat_hunt_requests WHERE 1=1")
+
+    # ── Month display label ────────────────────────────────────────────────
+    month_label = ""
+    if month:
+        try:
+            from datetime import datetime as _dt
+            month_label = _dt.strptime(month, "%Y-%m").strftime("%B %Y")
+        except Exception:
+            month_label = month
+
+    return render_template(
+        "report.html",
+        month=month,
+        month_label=month_label,
+        kpi=kpi,
+        tune_rows=tune_rows,
+        uc_rows=uc_rows,
+        hunt_rows=hunt_rows,
+        generated=date.today().strftime("%d.%m.%Y"),
     )
 
 # ---------------------------------------------------------------------------

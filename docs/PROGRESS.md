@@ -107,11 +107,22 @@
 
 ---
 
+### Görsel Aylık Rapor (2026-06-11)
+- [x] `/report` route — aylık filtre, tüm KPI hesapları, Jinja2 template
+- [x] `templates/report.html` — Chart.js donut grafikler, KPI kartları, progress bar özeti, tablolar
+- [x] Rapor: Tune / UC / Hunt durum dağılımı donut chart + legend
+- [x] Rapor: Başarı oranı + UC prod dönüşüm oranı kartları
+- [x] Yazdır/PDF butonu, ay picker, "Tüm Zamanlar" seçeneği
+- [x] Print CSS: toolbar gizle, sayfa kırılma kontrolleri
+- [x] Dashboard'a "Rapor" butonu eklendi (aktif ay filtresini taşır)
+- [x] Excel export: Tuning'e tuned_at, approved_by, approved_at kolonları eklendi
+- [x] Excel export: UC'ye test_started_at, test_approved_at, test_approved_by, test_notes eklendi
+- [x] Excel KPI sayfası: Tune Edildi, Tune Başarılı, Yeniden Tune, UC Test/Prod satırları güncellendi
+- [x] Excel KPI: tune_success_rate ve uc_prod_rate hesapları
+
 ## 🔧 Bilinen Sorunlar / Bekleyen İşler
 
 - [ ] Detay görünümlerinde (tune/UC/hunt) `approved_by`, `tuned_at`, `test_notes` alanları gösterilmeli
-- [ ] KPI ay filtresi: Hunt tablosu için `completed_at` bazlı doğru filtreleme kontrol edilmeli
-- [ ] Excel export: yeni kolonlar (tuned_at, approved_by, test_notes vb.) eklenmeli
 
 ---
 

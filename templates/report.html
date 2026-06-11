@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>SOC Tracker — Aylık Rapor{% if month_label %} | {{ month_label }}{% endif %}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ─── Base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #F7F8FA;
+  --surface: #FFFFFF;
+  --border: #E5E7EB;
+  --text-1: #111827;
+  --text-2: #6B7280;
+  --text-3: #9CA3AF;
+  --accent: #5E6AD2;
+  --green:  #2DB27D;
+  --amber:  #F59E0B;
+  --red:    #EF4444;
+  --purple: #8B5CF6;
+  --blue:   #3B82F6;
+  --teal:   #14B8A6;
+}
+html { font-size: 13px; }
+body {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text-1);
+  line-height: 1.5;
+  padding: 0;
+}
+
+/* ─── Layout ────────────────────────────────────────────────────────── */
+.page-wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 60px;
+}
+
+/* ─── Header ────────────────────────────────────────────────────────── */
+.report-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid var(--accent);
+}
+.report-header-left { display: flex; align-items: center; gap: 12px; }
+.report-logo {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 14px;
+}
+.report-title { font-size: 20px; font-weight: 600; color: var(--text-1); }
+.report-period { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.report-meta { text-align: right; font-size: 11px; color: var(--text-3); }
+.report-meta strong { color: var(--text-2); }
+
+/* ─── Toolbar (hidden on print) ──────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.toolbar select, .toolbar input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-1);
+  outline: none;
+}
+.btn-print {
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 6px;
+  padding: 7px 16px; font-size: 12px; font-weight: 500; cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+}
+.btn-print:hover { opacity: 0.9; }
+.btn-back {
+  background: var(--surface); color: var(--text-2);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 7px 14px; font-size: 12px; cursor: pointer;
+  text-decoration: none;
+}
+
+/* ─── Section ───────────────────────────────────────────────────────── */
+.section { margin-bottom: 36px; }
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.section-icon {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; flex-shrink: 0;
+}
+.section-title { font-size: 14px; font-weight: 600; color: var(--text-1); }
+
+/* ─── KPI Grid ───────────────────────────────────────────────────────── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--card-accent, #E5E7EB);
+  border-radius: 10px 10px 0 0;
+}
+.kpi-label { font-size: 11px; color: var(--text-2); font-weight: 500; margin-bottom: 6px; }
+.kpi-value { font-size: 28px; font-weight: 600; color: var(--text-1); line-height: 1; margin-bottom: 4px; }
+.kpi-sub   { font-size: 11px; color: var(--text-3); }
+.kpi-card.green  { --card-accent: var(--green);  }
+.kpi-card.amber  { --card-accent: var(--amber);  }
+.kpi-card.blue   { --card-accent: var(--blue);   }
+.kpi-card.purple { --card-accent: var(--purple); }
+.kpi-card.red    { --card-accent: var(--red);    }
+.kpi-card.teal   { --card-accent: var(--teal);   }
+.kpi-card.accent { --card-accent: var(--accent); }
+
+/* ─── Chart + Table row ───────────────────────────────────────────────── */
+.two-col { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+.chart-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.chart-box canvas { max-width: 180px; max-height: 180px; }
+.chart-legend { margin-top: 12px; width: 100%; }
+.legend-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; font-size: 11px; padding: 3px 0;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--bg);
+}
+.legend-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.legend-label { flex: 1; }
+.legend-count { font-weight: 600; color: var(--text-1); }
+
+/* ─── Table ──────────────────────────────────────────────────────────── */
+.table-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.rpt-table { width: 100%; border-collapse: collapse; }
+.rpt-table th {
+  text-align: left;
+  font-size: 10px; font-weight: 600; color: var(--text-2);
+  padding: 8px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase; letter-spacing: .05em;
+  white-space: nowrap;
+}
+.rpt-table td {
+  padding: 8px 12px;
+  font-size: 12px; color: var(--text-1);
+  border-bottom: 1px solid #F3F4F6;
+  vertical-align: top;
+}
+.rpt-table tr:last-child td { border-bottom: none; }
+.rpt-table tr:hover td { background: #FAFAFA; }
+.td-trunc { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-muted { color: var(--text-3); }
+
+/* ─── Status pills ───────────────────────────────────────────────────── */
+.pill {
+  display: inline-block;
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 20px;
+  white-space: nowrap;
+}
+.pill-open      { background: #FEF3C7; color: #92400E; }
+.pill-reviewing { background: #EDE9FE; color: #5B21B6; }
+.pill-edildi    { background: #EDE9FE; color: #5B21B6; }
+.pill-success   { background: #D1FAE5; color: #065F46; }
+.pill-retry     { background: #FEE2E2; color: #991B1B; }
+.pill-edilmedi  { background: #F3F4F6; color: #374151; }
+.pill-testing   { background: #CCFBF1; color: #134E4A; }
+.pill-prod      { background: #D1FAE5; color: #065F46; }
+.pill-cantwrite { background: #F3F4F6; color: #374151; }
+.pill-done      { background: #D1FAE5; color: #065F46; }
+.pill-cancelled { background: #F3F4F6; color: #374151; }
+
+/* ─── Summary bar ────────────────────────────────────────────────────── */
+.summary-bars { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 28px; }
+.module-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.module-bar-title { font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px; }
+.bar-label { width: 90px; color: var(--text-2); flex-shrink: 0; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.bar-track { flex: 1; height: 6px; background: #F3F4F6; border-radius: 10px; overflow: hidden; }
+.bar-fill  { height: 100%; border-radius: 10px; transition: width .5s; }
+.bar-count { width: 24px; text-align: right; font-weight: 600; color: var(--text-1); }
+
+/* ─── Rate circle ────────────────────────────────────────────────────── */
+.rate-row { display: flex; gap: 16px; margin-bottom: 28px; }
+.rate-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  flex: 1;
+  display: flex; align-items: center; gap: 16px;
+}
+.rate-circle {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; flex-shrink: 0;
+}
+.rate-info-title { font-size: 11px; color: var(--text-2); font-weight: 500; margin-bottom: 2px; }
+.rate-info-val { font-size: 22px; font-weight: 700; }
+.rate-info-sub { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+/* ─── Footer ─────────────────────────────────────────────────────────── */
+.report-footer {
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-3);
+  margin-top: 40px;
+}
+
+/* ─── Empty ──────────────────────────────────────────────────────────── */
+.empty-row td { text-align: center; color: var(--text-3); padding: 20px; font-style: italic; }
+
+/* ─── Print ──────────────────────────────────────────────────────────── */
+@media print {
+  @page { margin: 16mm 12mm; }
+  .toolbar, .btn-print, .btn-back { display: none !important; }
+  body { background: white; }
+  .page-wrap { padding: 0; }
+  .kpi-card, .chart-box, .table-box, .module-bar, .rate-card {
+    break-inside: avoid;
+    border: 1px solid #E5E7EB !important;
+  }
+  .section { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- Toolbar -->
+  <div class="toolbar" id="toolbar">
+    <a class="btn-back" href="/">← Ana Sayfa</a>
+    <input type="month" id="month-picker" value="{{ month }}"
+           onchange="if(this.value) window.location='/report?month='+this.value; else window.location='/report';"
+           placeholder="Ay seçin…"/>
+    {% if month %}
+    <a class="btn-back" href="/report">Tüm Zamanlar</a>
+    {% endif %}
+    <div style="flex:1"></div>
+    <button class="btn-print" onclick="window.print()">&#128438; Yazdır / PDF</button>
+  </div>
+
+  <!-- Header -->
+  <div class="report-header">
+    <div class="report-header-left">
+      <div class="report-logo">S</div>
+      <div>
+        <div class="report-title">SOC Tracker — Aylık Rapor</div>
+        <div class="report-period">
+          {% if month_label %}{{ month_label }}
+          {% else %}Tüm Zamanlar{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="report-meta">
+      Oluşturulma: <strong>{{ generated }}</strong><br>
+      Gizlilik: <strong>Dahili</strong>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════ KPI ÖZET ═══════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:#EDE9FE;color:#5B21B6">&#9671;</div>
+      <div class="section-title">Özet KPI'lar</div>
+    </div>
+
+    <!-- Rate cards -->
+    <div class="rate-row">
+      <div class="rate-card">
+        <div class="rate-circle" style="background:#D1FAE5;color:#065F46">{{ kpi.tune_success_rate }}%</div>
+        <div>
+          <div class="rate-info-title">Tune Başarı Oranı</div>
+          <div class="rate-info-val" style="color:var(--green)">{{ kpi.tune_success_rate }}%</div>
+          <div class="rate-info-sub">{{ kpi.tune_success }} başarılı / {{ kpi.tune_success + kpi.tune_retry + kpi.tune_edilmedi }} sonuçlanan</div>
+        </div>
+      </div>
+      <div class="rate-card">
+        <div class="rate-circle" style="background:#CCFBF1;color:#134E4A">{{ kpi.uc_prod_rate }}%</div>
+        <div>
+          <div class="rate-info-title">UC Prod Dönüşüm Oranı</div>
+          <div class="rate-info-val" style="color:var(--teal)">{{ kpi.uc_prod_rate }}%</div>
+          <div class="rate-info-sub">{{ kpi.uc_prod }} prod aktif / {{ kpi.uc_prod + kpi.uc_cantwrite }} sonuçlanan</div>
+        </div>
+      </div>
+      <div class="rate-card">
+        <div class="rate-circle" style="background:#D1FAE5;color:#065F46">{{ kpi.hunt_done }}</div>
+        <div>
+          <div class="rate-info-title">Tamamlanan Hunt</div>
+          <div class="rate-info-val" style="color:var(--green)">{{ kpi.hunt_done }}</div>
+          <div class="rate-info-sub">{{ kpi.hunt_open }} açık, {{ kpi.hunt_reviewing }} devam ediyor</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI cards grid -->
+    <div class="kpi-grid">
+      <div class="kpi-card amber">
+        <div class="kpi-label">Açık Tuning</div>
+        <div class="kpi-value">{{ kpi.tune_open }}</div>
+        <div class="kpi-sub">{{ kpi.tune_reviewing }} inceleniyor</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">Tune Edildi (Onay Bekleyen)</div>
+        <div class="kpi-value">{{ kpi.tune_edildi }}</div>
+        <div class="kpi-sub">Admin onayı bekleniyor</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-label">Tune Başarılı</div>
+        <div class="kpi-value">{{ kpi.tune_success }}</div>
+        <div class="kpi-sub">{{ kpi.tune_edilmedi }} edilmedi</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-label">Yeniden Tune</div>
+        <div class="kpi-value">{{ kpi.tune_retry }}</div>
+        <div class="kpi-sub">Geri döndürüldü</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">Test Ediliyor</div>
+        <div class="kpi-value">{{ kpi.uc_testing }}</div>
+        <div class="kpi-sub">{{ kpi.uc_reviewing }} inceleniyor</div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-label">Prod'da Aktif</div>
+        <div class="kpi-value">{{ kpi.uc_prod }}</div>
+        <div class="kpi-sub">Canlıya alınan kurallar</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-label">Açık Hunt</div>
+        <div class="kpi-value">{{ kpi.hunt_open }}</div>
+        <div class="kpi-sub">{{ kpi.hunt_reviewing }} devam ediyor</div>
+      </div>
+      <div class="kpi-card accent">
+        <div class="kpi-label">Toplam Kayıt</div>
+        <div class="kpi-value">{{ kpi.tune_total + kpi.uc_total + kpi.hunt_total }}</div>
+        <div class="kpi-sub">{{ kpi.tune_total }}T + {{ kpi.uc_total }}UC + {{ kpi.hunt_total }}H</div>
+      </div>
+    </div>
+
+    <!-- Summary progress bars -->
+    <div class="summary-bars">
+      {% set tune_total = [kpi.tune_total, 1] | max %}
+      <div class="module-bar">
+        <div class="module-bar-title">Kural Tuning</div>
+        {% for label, val, color in [
+            ('Tune Başarılı', kpi.tune_success, '#2DB27D'),
+            ('Tune Edildi', kpi.tune_edildi, '#8B5CF6'),
+            ('İnceleniyor', kpi.tune_reviewing, '#5E6AD2'),
+            ('Açık', kpi.tune_open, '#F59E0B'),
+            ('Yeniden Tune', kpi.tune_retry, '#EF4444'),
+            ('Edilmedi', kpi.tune_edilmedi, '#9CA3AF'),
+        ] %}
+        <div class="bar-row">
+          <span class="bar-label">{{ label }}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:{{ (val / tune_total * 100) | round | int }}%;background:{{ color }}"></div></div>
+          <span class="bar-count">{{ val }}</span>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% set uc_total = [kpi.uc_total, 1] | max %}
+      <div class="module-bar">
+        <div class="module-bar-title">Use-Case</div>
+        {% for label, val, color in [
+            ("Prod'da Aktif", kpi.uc_prod, '#2DB27D'),
+            ('Test Ediliyor', kpi.uc_testing, '#14B8A6'),
+            ('İnceleniyor', kpi.uc_reviewing, '#5E6AD2'),
+            ('Açık', kpi.uc_open, '#F59E0B'),
+            ('Yazılamaz', kpi.uc_cantwrite, '#9CA3AF'),
+        ] %}
+        <div class="bar-row">
+          <span class="bar-label">{{ label }}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:{{ (val / uc_total * 100) | round | int }}%;background:{{ color }}"></div></div>
+          <span class="bar-count">{{ val }}</span>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% set hunt_total = [kpi.hunt_total, 1] | max %}
+      <div class="module-bar">
+        <div class="module-bar-title">Threat Hunting</div>
+        {% for label, val, color in [
+            ('Tamamlandı', kpi.hunt_done, '#2DB27D'),
+            ('İnceleniyor', kpi.hunt_reviewing, '#5E6AD2'),
+            ('Açık', kpi.hunt_open, '#F59E0B'),
+            ('İptal', kpi.hunt_cancelled, '#9CA3AF'),
+        ] %}
+        <div class="bar-row">
+          <span class="bar-label">{{ label }}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:{{ (val / hunt_total * 100) | round | int }}%;background:{{ color }}"></div></div>
+          <span class="bar-count">{{ val }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════ TUNING ═══════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:#FEF3C7;color:#92400E">&#8801;</div>
+      <div class="section-title">Kural Tuning Talepleri</div>
+    </div>
+    <div class="two-col">
+      <div class="chart-box">
+        <canvas id="tuneChart"></canvas>
+        <div class="chart-legend">
+          {% for label, val, color in [
+              ('Tune Başarılı', kpi.tune_success, '#2DB27D'),
+              ('Tune Edildi', kpi.tune_edildi, '#8B5CF6'),
+              ('İnceleniyor', kpi.tune_reviewing, '#5E6AD2'),
+              ('Açık', kpi.tune_open, '#F59E0B'),
+              ('Yeniden Tune', kpi.tune_retry, '#EF4444'),
+              ('Edilmedi', kpi.tune_edilmedi, '#9CA3AF'),
+          ] %}
+          <div class="legend-item">
+            <span class="legend-dot" style="background:{{ color }}"></span>
+            <span class="legend-label">{{ label }}</span>
+            <span class="legend-count">{{ val }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="table-box">
+        <table class="rpt-table">
+          <thead><tr>
+            <th style="width:32px">#</th>
+            <th>Kural İsmi</th>
+            <th>Ortam</th>
+            <th>Analist</th>
+            <th>Durum</th>
+            <th>Tarih</th>
+          </tr></thead>
+          <tbody>
+          {% set tune_status_cls = {
+              'Açık':'pill-open','İnceleniyor':'pill-reviewing',
+              'Tune Edildi':'pill-edildi','Tune Başarılı':'pill-success',
+              'Yeniden Tune':'pill-retry','Tune Edilmedi':'pill-edilmedi'
+          } %}
+          {% for r in tune_rows %}
+          <tr>
+            <td class="text-muted">{{ r.id }}</td>
+            <td class="td-trunc" style="max-width:180px" title="{{ r.rule_name | e }}">{{ r.rule_name | e }}</td>
+            <td class="text-muted">{{ r.environment | e }}</td>
+            <td class="text-muted">{{ r.tuning_analyst or '—' }}</td>
+            <td><span class="pill {{ tune_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
+            <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="6">Bu dönemde kayıt yok.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════ USE-CASE ═════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:#CCFBF1;color:#134E4A">&#9670;</div>
+      <div class="section-title">Use-Case / Kural Yazma</div>
+    </div>
+    <div class="two-col">
+      <div class="chart-box">
+        <canvas id="ucChart"></canvas>
+        <div class="chart-legend">
+          {% for label, val, color in [
+              ("Prod'da Aktif", kpi.uc_prod, '#2DB27D'),
+              ('Test Ediliyor', kpi.uc_testing, '#14B8A6'),
+              ('İnceleniyor', kpi.uc_reviewing, '#5E6AD2'),
+              ('Açık', kpi.uc_open, '#F59E0B'),
+              ('Yazılamaz', kpi.uc_cantwrite, '#9CA3AF'),
+          ] %}
+          <div class="legend-item">
+            <span class="legend-dot" style="background:{{ color }}"></span>
+            <span class="legend-label">{{ label }}</span>
+            <span class="legend-count">{{ val }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="table-box">
+        <table class="rpt-table">
+          <thead><tr>
+            <th style="width:32px">#</th>
+            <th>Use-Case</th>
+            <th>Ortam</th>
+            <th>Analist</th>
+            <th>Durum</th>
+            <th>Tarih</th>
+          </tr></thead>
+          <tbody>
+          {% set uc_status_cls = {
+              'Açık':'pill-open','İnceleniyor':'pill-reviewing',
+              'Test Ediliyor':'pill-testing',"Prod'da Aktif":'pill-prod',
+              'Yazılamaz':'pill-cantwrite'
+          } %}
+          {% for r in uc_rows %}
+          <tr>
+            <td class="text-muted">{{ r.id }}</td>
+            <td class="td-trunc" style="max-width:180px" title="{{ r.usecase_description | e }}">{{ r.usecase_description | e }}</td>
+            <td class="text-muted">{{ r.environment | e }}</td>
+            <td class="text-muted">{{ r.rule_author or '—' }}</td>
+            <td><span class="pill {{ uc_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
+            <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="6">Bu dönemde kayıt yok.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════ THREAT HUNTING ════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon" style="background:#EDE9FE;color:#5B21B6">&#9650;</div>
+      <div class="section-title">Threat Hunting</div>
+    </div>
+    <div class="two-col">
+      <div class="chart-box">
+        <canvas id="huntChart"></canvas>
+        <div class="chart-legend">
+          {% for label, val, color in [
+              ('Tamamlandı', kpi.hunt_done, '#2DB27D'),
+              ('İnceleniyor', kpi.hunt_reviewing, '#5E6AD2'),
+              ('Açık', kpi.hunt_open, '#F59E0B'),
+              ('İptal', kpi.hunt_cancelled, '#9CA3AF'),
+          ] %}
+          <div class="legend-item">
+            <span class="legend-dot" style="background:{{ color }}"></span>
+            <span class="legend-label">{{ label }}</span>
+            <span class="legend-count">{{ val }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="table-box">
+        <table class="rpt-table">
+          <thead><tr>
+            <th style="width:32px">#</th>
+            <th>Hunt Konusu</th>
+            <th>Analist</th>
+            <th>Sonuç</th>
+            <th>Durum</th>
+            <th>Tarih</th>
+          </tr></thead>
+          <tbody>
+          {% set hunt_status_cls = {
+              'Açık':'pill-open','İnceleniyor':'pill-reviewing',
+              'Tamamlandı':'pill-done','İptal':'pill-cancelled'
+          } %}
+          {% for r in hunt_rows %}
+          <tr>
+            <td class="text-muted">{{ r.id }}</td>
+            <td class="td-trunc" style="max-width:200px" title="{{ r.hunt_subject | e }}">{{ r.hunt_subject | e }}</td>
+            <td class="text-muted">{{ r.assigned_analyst or '—' }}</td>
+            <td class="text-muted">{{ r.hunt_result or '—' }}</td>
+            <td><span class="pill {{ hunt_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
+            <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
+          </tr>
+          {% else %}
+          <tr class="empty-row"><td colspan="6">Bu dönemde kayıt yok.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="report-footer">
+    SOC Tracker &nbsp;·&nbsp; Oluşturulma: {{ generated }}
+    {% if month_label %} &nbsp;·&nbsp; Dönem: {{ month_label }}{% endif %}
+    &nbsp;·&nbsp; Gizlilik: Dahili
+  </div>
+
+</div><!-- /page-wrap -->
+
+<script>
+const CHART_DEFAULTS = {
+  plugins: { legend: { display: false }, tooltip: { enabled: false } },
+  cutout: '68%',
+};
+
+function donut(id, labels, data, colors) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  const total = data.reduce((a,b)=>a+b,0);
+  if (!total) {
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels: ['Veri yok'], datasets: [{ data: [1], backgroundColor: ['#E5E7EB'], borderWidth: 0 }] },
+      options: { ...CHART_DEFAULTS }
+    });
+    return;
+  }
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff', hoverBorderColor: '#fff' }] },
+    options: {
+      ...CHART_DEFAULTS,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`
+          }
+        }
+      }
+    }
+  });
+}
+
+donut('tuneChart',
+  ['Tune Başarılı', 'Tune Edildi', 'İnceleniyor', 'Açık', 'Yeniden Tune', 'Edilmedi'],
+  [{{ kpi.tune_success }}, {{ kpi.tune_edildi }}, {{ kpi.tune_reviewing }}, {{ kpi.tune_open }}, {{ kpi.tune_retry }}, {{ kpi.tune_edilmedi }}],
+  ['#2DB27D', '#8B5CF6', '#5E6AD2', '#F59E0B', '#EF4444', '#9CA3AF']
+);
+
+donut('ucChart',
+  ["Prod'da Aktif", 'Test Ediliyor', 'İnceleniyor', 'Açık', 'Yazılamaz'],
+  [{{ kpi.uc_prod }}, {{ kpi.uc_testing }}, {{ kpi.uc_reviewing }}, {{ kpi.uc_open }}, {{ kpi.uc_cantwrite }}],
+  ['#2DB27D', '#14B8A6', '#5E6AD2', '#F59E0B', '#9CA3AF']
+);
+
+donut('huntChart',
+  ['Tamamlandı', 'İnceleniyor', 'Açık', 'İptal'],
+  [{{ kpi.hunt_done }}, {{ kpi.hunt_reviewing }}, {{ kpi.hunt_open }}, {{ kpi.hunt_cancelled }}],
+  ['#2DB27D', '#5E6AD2', '#F59E0B', '#9CA3AF']
+);
+</script>
+</body>
+</html>

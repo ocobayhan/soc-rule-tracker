@@ -247,6 +247,12 @@ function exportExcel() {
   window.location.href = url;
 }
 
+function openReport() {
+  const month = document.getElementById("kpi-month")?.value || "";
+  const url = month ? `/report?month=${encodeURIComponent(month)}` : "/report";
+  window.open(url, "_blank");
+}
+
 // ---------------------------------------------------------------------------
 // KPI
 // ---------------------------------------------------------------------------
