@@ -13,6 +13,7 @@ services:
     environment:
       - SECRET_KEY=${SECRET_KEY:-soc-tracker-CHANGE-THIS-IN-PRODUCTION}
       - DATABASE=/data/tracker.db
+      - BACKUP_DIR=/data/backups
       - UPLOAD_FOLDER=/app/static/uploads
       - TZ=Europe/Istanbul
 
