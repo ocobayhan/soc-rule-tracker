@@ -1643,7 +1643,7 @@ def _do_backup(keep: int = 30):
 def api_create_backup():
     if session.get("role") != "admin":
         return jsonify({"error": "Yetkisiz"}), 403
-    name = _do_backup(keep=30)
+    name = _do_backup(keep=12)
     if not name:
         return jsonify({"error": "Veritabanı bulunamadı"}), 500
     size = os.path.getsize(os.path.join(BACKUP_DIR, name))
@@ -1697,11 +1697,14 @@ def api_delete_backup(filename):
 # Entry point
 # ---------------------------------------------------------------------------
 def _auto_backup_on_start():
-    """Bugün için yedek yoksa otomatik oluşturur."""
+    """Son 5 gün içinde yedek yoksa otomatik oluşturur."""
     import glob as _glob
-    today = datetime.now().strftime("%Y%m%d")
-    if not _glob.glob(os.path.join(BACKUP_DIR, f"tracker_{today}_*.db")):
-        name = _do_backup(keep=30)
+    from datetime import timedelta
+    cutoff = (datetime.now() - timedelta(days=5)).timestamp()
+    recent = [f for f in _glob.glob(os.path.join(BACKUP_DIR, "tracker_*.db"))
+              if os.path.getmtime(f) >= cutoff]
+    if not recent:
+        name = _do_backup(keep=12)
         if name:
             app.logger.info(f"[backup] Otomatik başlangıç yedeği: {name}")
 

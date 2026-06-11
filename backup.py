@@ -18,7 +18,7 @@ DB_PATH    = os.environ.get("DATABASE",   os.path.join(BASE, "tracker.db"))
 BACKUP_DIR = os.environ.get("BACKUP_DIR", os.path.join(BASE, "backups"))
 
 
-def create_backup(keep: int = 30) -> str | None:
+def create_backup(keep: int = 12) -> str | None:
     """tracker.db'yi backups/ altına timestamp'li kopyalar. Eski yedekleri temizler."""
     os.makedirs(BACKUP_DIR, exist_ok=True)
     if not os.path.exists(DB_PATH):
@@ -66,7 +66,7 @@ if __name__ == "__main__":
         for b in backups:
             print(f"  {b['filename']}  {b['size_kb']} KB  {b['created_at']}")
     else:
-        keep = 30
+        keep = 12
         if "--keep" in args:
             try:
                 keep = int(args[args.index("--keep") + 1])
