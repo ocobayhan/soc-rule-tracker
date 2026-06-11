@@ -407,36 +407,45 @@ function detailImgRow(label, filenames) {
 
 function openTuneDetail(id) {
   const r = tuneRows.find(x => x.id === id); if (!r) return;
+  const fmt = v => v ? v.slice(0,10) : "";
   document.getElementById("tune-detail-title").textContent = r.rule_name;
   document.getElementById("tune-detail-body").innerHTML = `<div class="detail-grid">
-    ${detailRow("Raporlayan",    r.reporter)}
-    ${detailRow("Ortam",         r.environment)}
-    ${detailRow("Durum",         r.status)}
-    ${detailRow("Tetiklenme",    r.trigger_frequency)}
-    ${detailRow("Tune Nedeni",   r.tune_reason)}
-    ${detailImgRow("Kanıt Görseli", [r.evidence_image])}
-    ${detailRow("Tune Eden",     r.tuning_analyst)}
+    ${detailRow("Raporlayan",        r.reporter)}
+    ${detailRow("Ortam",             r.environment)}
+    ${detailRow("Durum",             r.status)}
+    ${detailRow("Tetiklenme",        r.trigger_frequency)}
+    ${detailRow("Tune Nedeni",       r.tune_reason)}
+    ${detailImgRow("Kanıt Görseli",  [r.evidence_image])}
+    ${detailRow("Tune Eden",         r.tuning_analyst)}
     ${detailRow("Nasıl Tune Edildi", r.how_tuned)}
-    ${detailImgRow("Çözüm Görseli", [r.resolution_image])}
-    ${detailRow("Raporlandı",    r.created_at ? r.created_at.slice(0,10) : "")}
-    ${detailRow("Tamamlandı",    r.completed_at ? r.completed_at.slice(0,10) : "")}
+    ${detailImgRow("Çözüm Görseli",  [r.resolution_image])}
+    ${r.tuned_at     ? detailRow("Tune Tarihi",  fmt(r.tuned_at))     : ""}
+    ${r.approved_by  ? detailRow("Onaylayan",    r.approved_by)       : ""}
+    ${r.approved_at  ? detailRow("Onay Tarihi",  fmt(r.approved_at))  : ""}
+    ${detailRow("Raporlandı",        fmt(r.created_at))}
+    ${detailRow("Tamamlandı",        fmt(r.completed_at))}
   </div>`;
   document.getElementById("tune-detail-modal").style.display = "flex";
 }
 
 function openUCDetail(id) {
   const r = ucRows.find(x => x.id === id); if (!r) return;
+  const fmt = v => v ? v.slice(0,10) : "";
   document.getElementById("uc-detail-title").textContent = r.usecase_description.slice(0, 60) + (r.usecase_description.length > 60 ? "…" : "");
   document.getElementById("uc-detail-body").innerHTML = `<div class="detail-grid">
-    ${detailRow("Talep Eden",    r.requester)}
-    ${detailRow("Ortam", parseEnvStr(r.environment).join(", ") || r.environment)}
-    ${detailRow("Durum",         r.status)}
-    ${detailRow("Use-Case",      r.usecase_description)}
-    ${detailRow("Analist",       r.rule_author)}
-    ${detailRow("Yazılan Kural", r.rule_name)}
-    ${detailRow("Notlar",        r.notes)}
-    ${detailRow("Talep Tarihi",  r.created_at ? r.created_at.slice(0,10) : "")}
-    ${detailRow("Yazılma Tarihi",r.completed_at ? r.completed_at.slice(0,10) : "")}
+    ${detailRow("Talep Eden",       r.requester)}
+    ${detailRow("Ortam",            parseEnvStr(r.environment).join(", ") || r.environment)}
+    ${detailRow("Durum",            r.status)}
+    ${detailRow("Use-Case",         r.usecase_description)}
+    ${detailRow("Analist",          r.rule_author)}
+    ${detailRow("Yazılan Kural",    r.rule_name)}
+    ${detailRow("Notlar",           r.notes)}
+    ${r.test_started_at  ? detailRow("Test Başlama",     fmt(r.test_started_at))  : ""}
+    ${r.test_approved_by ? detailRow("Prod Onaylayan",   r.test_approved_by)      : ""}
+    ${r.test_approved_at ? detailRow("Prod Onay Tarihi", fmt(r.test_approved_at)) : ""}
+    ${r.test_notes       ? detailRow("Test Notları",     r.test_notes)            : ""}
+    ${detailRow("Talep Tarihi",     fmt(r.created_at))}
+    ${detailRow("Tamamlandı",       fmt(r.completed_at))}
   </div>`;
   document.getElementById("uc-detail-modal").style.display = "flex";
 }
