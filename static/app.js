@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v6
+   SOC Tracker — Frontend  v15
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -73,21 +73,39 @@ function esc(str) {
 const TUNE_CLS = {
   "Açık":          "status-open",
   "İnceleniyor":   "status-reviewing",
-  "Tamamlandı":    "status-done",
-  "Tune Edilmedi": "status-nottuned",
+  "Tune Edildi":   "status-tuned",
+  "Tune Başarılı": "status-success",
+  "Yeniden Tune":  "status-retry",
+  "Tune Edilmedi": "status-skipped",
+};
+const TUNE_DOT = {
+  "Açık":          "dot-open",
+  "İnceleniyor":   "dot-reviewing",
+  "Tune Edildi":   "dot-tuned",
+  "Tune Başarılı": "dot-success",
+  "Yeniden Tune":  "dot-retry",
+  "Tune Edilmedi": "dot-skipped",
 };
 const UC_CLS = {
-  "Açık":        "status-open",
-  "İnceleniyor": "status-reviewing",
-  "Yazıldı":     "status-written",
-  "Yazılamaz":   "status-cantwrite",
+  "Açık":          "status-open",
+  "İnceleniyor":   "status-reviewing",
+  "Test Ediliyor": "status-testing",
+  "Prod'da Aktif": "status-prod",
+  "Yazılamaz":     "status-cant",
+};
+const UC_DOT = {
+  "Açık":          "dot-open",
+  "İnceleniyor":   "dot-reviewing",
+  "Test Ediliyor": "dot-testing",
+  "Prod'da Aktif": "dot-prod",
+  "Yazılamaz":     "dot-skipped",
 };
 
 function badge(label, map) {
-  return `<span class="status-dot ${map[label] || "status-nottuned"}">${esc(label)}</span>`;
+  return `<span class="badge ${map[label] || "status-skipped"}">${esc(label)}</span>`;
 }
-function dot(label, map) {
-  return `<span class="status-dot ${map[label] || "status-nottuned"}" style="gap:0"></span>`;
+function dot(label, dotMap) {
+  return `<span class="status-dot ${dotMap[label] || "dot-skipped"}"></span>`;
 }
 
 const FREQ_CLS = { "Düşük": "freq-low", "Orta": "freq-medium", "Yüksek": "freq-high" };
@@ -236,12 +254,14 @@ async function loadKPI() {
   const month = document.getElementById("kpi-month").value;
   try {
     const d = await apiFetch(`/api/kpi${month ? "?month="+month : ""}`);
-    document.getElementById("kpi-tune-open").textContent  = d.tune_open;
-    document.getElementById("kpi-tune-done").textContent  = d.tune_done_this_period;
-    document.getElementById("kpi-uc-written").textContent = d.uc_written;
-    document.getElementById("kpi-conversion").textContent = d.conversion_rate + "%";
-    document.getElementById("kpi-hunt-open").textContent  = d.hunt_open ?? "—";
-    document.getElementById("kpi-hunt-done").textContent  = d.hunt_done ?? "—";
+    document.getElementById("kpi-tune-open").textContent    = d.tune_open    ?? "—";
+    document.getElementById("kpi-tune-pending").textContent = d.tune_pending  ?? "—";
+    document.getElementById("kpi-tune-success").textContent = d.tune_success  ?? "—";
+    document.getElementById("kpi-tune-rate").textContent    = (d.tune_success_rate ?? "—") + (d.tune_success_rate != null ? "%" : "");
+    document.getElementById("kpi-uc-testing").textContent   = d.uc_testing    ?? "—";
+    document.getElementById("kpi-uc-prod").textContent      = d.uc_prod       ?? "—";
+    document.getElementById("kpi-hunt-open").textContent    = d.hunt_open     ?? "—";
+    document.getElementById("kpi-hunt-done").textContent    = d.hunt_done     ?? "—";
   } catch (_) {}
 }
 
@@ -427,6 +447,11 @@ function tuneActionBtns(r) {
     return `<button class="btn-action-claim" onclick="openTuneClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
   if (r.status === "İnceleniyor" && (isAdmin || isMyTask))
     return `<button class="btn-action-close" onclick="openTuneCloseModal(${r.id})">Kapat</button> ${edit}${del}`;
+  if (r.status === "Tune Edildi" && (isAdmin || isMyReport)) {
+    const dl = r.approval_deadline ? r.approval_deadline.slice(0, 10) : "";
+    const dlTip = dl ? ` title="Son: ${dl}"` : "";
+    return `<button class="btn-action-close" onclick="openTuneApproveModal(${r.id})"${dlTip}>Onayla</button> ${edit}${del}`;
+  }
   return `${edit}${del}`;
 }
 
@@ -442,7 +467,7 @@ function renderTuneRows() {
   if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   tbody.innerHTML = sorted.map(r => `<tr>
-    <td>${dot(r.status, TUNE_CLS)}</td>
+    <td>${dot(r.status, TUNE_DOT)}</td>
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.rule_name)}">
       <span class="cell-link" onclick="openTuneDetail(${r.id})" style="cursor:pointer">${esc(r.rule_name)}</span>
@@ -646,7 +671,7 @@ async function saveTuneClaim() {
 function openTuneCloseModal(id) {
   document.getElementById("close-tune-id").value  = id;
   document.getElementById("close-tune-how").value = "";
-  document.getElementById("close-tune-status").value = "Tamamlandı";
+  document.getElementById("close-tune-status").value = "Tune Edildi";
   clearPastePreview("close-tune-img-preview","close-tune-resolution-image");
   document.getElementById("close-tune-error").style.display = "none";
   document.getElementById("tune-close-modal").style.display = "flex";
@@ -677,6 +702,43 @@ async function deleteTune(id) {
 }
 
 // ---------------------------------------------------------------------------
+// Tune — Approve / Retry
+// ---------------------------------------------------------------------------
+function openTuneApproveModal(id) {
+  const r = tuneRows.find(x => x.id === id); if (!r) return;
+  document.getElementById("approve-tune-id").value = id;
+  const dl = r.approval_deadline ? ` Son onay: ${r.approval_deadline.slice(0,10)}.` : "";
+  document.getElementById("approve-tune-desc").textContent =
+    `"${r.rule_name}" kuralı için tune onayı.${dl} Onaylamak için "Tune Başarılı", yeniden tune için "Yeniden Tune"yi seçin.`;
+  document.getElementById("approve-tune-error").style.display = "none";
+  const retryBtn = document.getElementById("btn-retry-tune");
+  if (retryBtn) retryBtn.style.display = USER_ROLE === "admin" ? "" : "none";
+  document.getElementById("tune-approve-modal").style.display = "flex";
+}
+
+async function execApproveTune() {
+  const id    = document.getElementById("approve-tune-id").value;
+  const errEl = document.getElementById("approve-tune-error");
+  errEl.style.display = "none";
+  try {
+    await apiFetch(`/api/tune/${id}/approve`, { method: "POST" });
+    document.getElementById("tune-approve-modal").style.display = "none";
+    loadTune(); loadKPI(); loadDashboardTables();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+async function execRetryTune() {
+  const id    = document.getElementById("approve-tune-id").value;
+  const errEl = document.getElementById("approve-tune-error");
+  errEl.style.display = "none";
+  try {
+    await apiFetch(`/api/tune/${id}/retry`, { method: "POST" });
+    document.getElementById("tune-approve-modal").style.display = "none";
+    loadTune(); loadKPI(); loadDashboardTables();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+// ---------------------------------------------------------------------------
 // UC list
 // ---------------------------------------------------------------------------
 function ucActionBtns(r) {
@@ -696,6 +758,8 @@ function ucActionBtns(r) {
     return `<button class="btn-action-claim" onclick="openUCClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
   if (r.status === "İnceleniyor" && (isAdmin || isMyTask))
     return `<button class="btn-action-close" onclick="openUCCloseModal(${r.id})">Kapat</button> ${edit}${del}`;
+  if (r.status === "Test Ediliyor" && isAdmin)
+    return `<button class="btn-action-close" onclick="openUCTestApproveModal(${r.id})">Test Onayla</button> ${edit}${del}`;
   return `${edit}${del}`;
 }
 
@@ -711,7 +775,7 @@ function renderUCRows() {
   if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   tbody.innerHTML = sorted.map(r => `<tr>
-    <td>${dot(r.status, UC_CLS)}</td>
+    <td>${dot(r.status, UC_DOT)}</td>
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.usecase_description)}">
       <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
@@ -942,7 +1006,7 @@ async function openUCCloseModal(id) {
   document.getElementById("close-uc-id").value        = id;
   document.getElementById("close-uc-rule-name").value = "";
   document.getElementById("close-uc-notes").value     = "";
-  document.getElementById("close-uc-status").value    = "Yazıldı";
+  document.getElementById("close-uc-status").value    = "Test Ediliyor";
   // Reset MITRE
   _ucMitreList = [];
   const mitreCk = document.getElementById("close-uc-mitre-check");
@@ -981,6 +1045,43 @@ async function deleteUC(id) {
 }
 
 // ---------------------------------------------------------------------------
+// UC — Test Approve / Reject
+// ---------------------------------------------------------------------------
+function openUCTestApproveModal(id) {
+  const r = ucRows.find(x => x.id === id); if (!r) return;
+  document.getElementById("test-approve-uc-id").value = id;
+  document.getElementById("test-approve-uc-desc").textContent =
+    `"${r.usecase_description?.slice(0,80) || ""}" — Test sonucunu seçin.`;
+  document.getElementById("test-approve-notes").value = "";
+  document.getElementById("test-approve-uc-error").style.display = "none";
+  document.getElementById("uc-test-approve-modal").style.display = "flex";
+}
+
+async function execTestApproveUC() {
+  const id    = document.getElementById("test-approve-uc-id").value;
+  const notes = document.getElementById("test-approve-notes").value.trim();
+  const errEl = document.getElementById("test-approve-uc-error");
+  errEl.style.display = "none";
+  try {
+    await apiFetch(`/api/usecase/${id}/test-approve`, { method: "POST", body: JSON.stringify({ notes }) });
+    document.getElementById("uc-test-approve-modal").style.display = "none";
+    loadUC(); loadKPI(); loadDashboardTables();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+async function execTestRejectUC() {
+  const id    = document.getElementById("test-approve-uc-id").value;
+  const notes = document.getElementById("test-approve-notes").value.trim();
+  const errEl = document.getElementById("test-approve-uc-error");
+  errEl.style.display = "none";
+  try {
+    await apiFetch(`/api/usecase/${id}/test-reject`, { method: "POST", body: JSON.stringify({ notes }) });
+    document.getElementById("uc-test-approve-modal").style.display = "none";
+    loadUC(); loadKPI(); loadDashboardTables();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+// ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -1006,7 +1107,11 @@ const ACTION_TR = {
   "REPORT_HUNT":  "Hunt raporu güncellendi",
   "CLOSE_HUNT":   "Hunt kapatıldı",
   "EDIT_HUNT":    "Hunt düzenlendi",
-  "DELETE_HUNT":  "Hunt silindi",
+  "DELETE_HUNT":    "Hunt silindi",
+  "APPROVE_TUNE":   "Tune onaylandı",
+  "RETRY_TUNE":     "Yeniden tune istendi",
+  "TEST_APPROVE_UC":"UC test onaylandı",
+  "TEST_REJECT_UC": "UC test reddedildi",
 };
 const ACTION_CLS = {
   "LOGIN": "audit-login",
@@ -1163,9 +1268,9 @@ document.getElementById("new-env-input")?.addEventListener("keydown", e => { if 
 // ---------------------------------------------------------------------------
 // Modal overlay close
 // ---------------------------------------------------------------------------
-["tune-modal","tune-edit-modal","tune-claim-modal","tune-close-modal",
+["tune-modal","tune-edit-modal","tune-claim-modal","tune-close-modal","tune-approve-modal",
  "tune-detail-modal","uc-detail-modal",
- "uc-modal","uc-edit-modal","uc-claim-modal","uc-close-modal",
+ "uc-modal","uc-edit-modal","uc-claim-modal","uc-close-modal","uc-test-approve-modal",
  "hunt-modal","hunt-edit-modal","hunt-claim-modal","hunt-report-modal","hunt-detail-modal"].forEach(id => {
   document.getElementById(id)?.addEventListener("click", e => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = "none";
@@ -1261,7 +1366,13 @@ const HUNT_CLS = {
   "Açık":        "status-open",
   "İnceleniyor": "status-reviewing",
   "Tamamlandı":  "status-done",
-  "İptal":       "status-nottuned",
+  "İptal":       "status-skipped",
+};
+const HUNT_DOT = {
+  "Açık":        "dot-open",
+  "İnceleniyor": "dot-reviewing",
+  "Tamamlandı":  "dot-done",
+  "İptal":       "dot-skipped",
 };
 
 let huntRows    = [];
@@ -1316,7 +1427,7 @@ function renderHuntRows() {
   if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   tbody.innerHTML = sorted.map(r => `<tr>
-    <td>${dot(r.status, HUNT_CLS)}</td>
+    <td>${dot(r.status, HUNT_DOT)}</td>
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.hunt_subject)}">
       <span class="cell-link" onclick="openHuntDetail(${r.id})" style="cursor:pointer">${esc(r.hunt_subject)}</span>

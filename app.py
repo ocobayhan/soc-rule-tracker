@@ -163,8 +163,16 @@ def init_db():
     for col in ["evidence_image", "resolution_image", "completed_at"]:
         if not _col_exists(db, "tune_requests", col):
             db.execute(f"ALTER TABLE tune_requests ADD COLUMN {col} TEXT")
+    # Tune onaylama süreci kolonları
+    for col in ["tuned_at", "approval_deadline", "approved_by", "approved_at"]:
+        if not _col_exists(db, "tune_requests", col):
+            db.execute(f"ALTER TABLE tune_requests ADD COLUMN {col} TEXT")
     if not _col_exists(db, "usecase_requests", "completed_at"):
         db.execute("ALTER TABLE usecase_requests ADD COLUMN completed_at TEXT")
+    # UC test süreci kolonları
+    for col in ["test_started_at", "test_approved_at", "test_approved_by", "test_notes"]:
+        if not _col_exists(db, "usecase_requests", col):
+            db.execute(f"ALTER TABLE usecase_requests ADD COLUMN {col} TEXT")
     if not _col_exists(db, "users", "role"):
         db.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'analyst'")
     # Use-case MITRE columns
@@ -439,23 +447,32 @@ def get_kpi():
     def mf(col):
         return f"AND strftime('%Y-%m', {col}) = '{month}'" if month else ""
 
-    tune_open   = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
-    tune_done   = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Tamamlandı' {mf('completed_at')}").fetchone()["c"]
-    tune_total  = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
-    uc_total    = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
-    uc_written  = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Yazıldı' {mf('completed_at')}").fetchone()["c"]
-    hunt_open   = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
-    hunt_done   = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı' {mf('completed_at')}").fetchone()["c"]
+    tune_open        = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
+    tune_pending     = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Edildi' {mf('tuned_at')}").fetchone()["c"]
+    tune_success     = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Başarılı' {mf('approved_at')}").fetchone()["c"]
+    tune_retry       = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Yeniden Tune' {mf('updated_at')}").fetchone()["c"]
+    tune_total       = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
+    uc_total         = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
+    uc_testing       = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Test Ediliyor' {mf('test_started_at')}").fetchone()["c"]
+    uc_prod          = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Prod''da Aktif' {mf('test_approved_at')}").fetchone()["c"]
+    hunt_open        = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
+    hunt_done        = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı' {mf('completed_at')}").fetchone()["c"]
+
+    tune_resolved    = tune_success + tune_retry
+    tune_success_rate = round(tune_success / tune_resolved * 100) if tune_resolved else 0
 
     return jsonify({
-        "tune_open": tune_open,
-        "tune_done_this_period": tune_done,
-        "tune_total": tune_total,
-        "uc_total": uc_total,
-        "uc_written": uc_written,
-        "conversion_rate": round(uc_written / uc_total * 100, 1) if uc_total else 0,
-        "hunt_open": hunt_open,
-        "hunt_done": hunt_done,
+        "tune_open":          tune_open,
+        "tune_pending":       tune_pending,
+        "tune_success":       tune_success,
+        "tune_retry":         tune_retry,
+        "tune_total":         tune_total,
+        "tune_success_rate":  tune_success_rate,
+        "uc_total":           uc_total,
+        "uc_testing":         uc_testing,
+        "uc_prod":            uc_prod,
+        "hunt_open":          hunt_open,
+        "hunt_done":          hunt_done,
     })
 
 # ---------------------------------------------------------------------------
@@ -545,7 +562,7 @@ def update_tune(item_id):
             if new_analyst != uname:
                 return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
         # Only the assigned analyst can close
-        if new_st in ("Tamamlandı", "Tune Edilmedi") and not is_assigned:
+        if new_st in ("Tune Edildi", "Tune Edilmedi") and not is_assigned:
             return jsonify({"error": "Sadece size atanan talepleri kapatabilirsiniz."}), 403
         # Reporter field is always preserved
         data["reporter"] = row["reporter"]
@@ -561,13 +578,22 @@ def update_tune(item_id):
     now       = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])
 
-    # completed_at: set when first reaching Tamamlandı, clear if reverted
-    if new_status == "Tamamlandı" and not row["completed_at"]:
-        completed_at = now
-    elif new_status != "Tamamlandı":
+    # tuned_at + approval_deadline: set when reaching "Tune Edildi"
+    from datetime import timedelta
+    tuned_at = row["tuned_at"] if "tuned_at" in row.keys() else None
+    approval_deadline = row["approval_deadline"] if "approval_deadline" in row.keys() else None
+    if new_status == "Tune Edildi" and not tuned_at:
+        tuned_at = now
+        deadline_dt = datetime.strptime(now, "%Y-%m-%d %H:%M:%S") + timedelta(days=5)
+        approval_deadline = deadline_dt.strftime("%Y-%m-%d %H:%M:%S")
+    elif new_status not in ("Tune Edildi", "Tune Başarılı"):
+        tuned_at = None
+        approval_deadline = None
+
+    # completed_at: set when reaching "Tune Başarılı" (via approve endpoint, not here)
+    completed_at = row["completed_at"]
+    if new_status not in ("Tune Edildi", "Tune Başarılı", "Tune Edilmedi"):
         completed_at = None
-    else:
-        completed_at = row["completed_at"]
 
     # Settings role: allow manual date + ID overrides
     if role == "settings":
@@ -587,7 +613,7 @@ def update_tune(item_id):
           id=?,reporter=?,environment=?,rule_name=?,tune_reason=?,trigger_frequency=?,
           tuning_analyst=?,how_tuned=?,status=?,
           evidence_image=?,resolution_image=?,
-          created_at=?,completed_at=?,updated_at=?
+          created_at=?,completed_at=?,tuned_at=?,approval_deadline=?,updated_at=?
         WHERE id=?
     """, (
         new_id_val,
@@ -601,21 +627,64 @@ def update_tune(item_id):
         new_status,
         data.get("evidence_image",    row["evidence_image"]) or None,
         data.get("resolution_image",  row["resolution_image"]) or None,
-        created_at_val, completed_at, now, item_id
+        created_at_val, completed_at, tuned_at, approval_deadline, now, item_id
     ))
     db.commit()
     updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (new_id_val,)).fetchone()
-    # Determine audit action
     if new_status == "İnceleniyor" and data.get("tuning_analyst"):
         a_action = "CLAIM_TUNE"
         a_detail = f"Kural: {updated['rule_name']} | Analist: {updated['tuning_analyst']}"
-    elif new_status in ("Tamamlandı", "Tune Edilmedi"):
+    elif new_status in ("Tune Edildi", "Tune Edilmedi"):
         a_action = "CLOSE_TUNE"
         a_detail = f"Kural: {updated['rule_name']} | Durum: {new_status}"
     else:
         a_action = "EDIT_TUNE"
         a_detail = f"Kural: {updated['rule_name']}"
     write_audit(a_action, "tune", item_id, a_detail)
+    return jsonify(dict(updated))
+
+@app.route("/api/tune/<int:item_id>/approve", methods=["POST"])
+@login_required
+def approve_tune(item_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != "Tune Edildi":
+        return jsonify({"error": "Sadece 'Tune Edildi' statüsündeki kayıtlar onaylanabilir."}), 400
+    role  = session.get("role", "analyst")
+    uname = session.get("username", "")
+    if role == "analyst" and row["reporter"] != uname:
+        return jsonify({"error": "Sadece talep eden veya admin onaylayabilir."}), 403
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""UPDATE tune_requests SET status='Tune Başarılı',
+                  approved_by=?, approved_at=?, completed_at=?, updated_at=? WHERE id=?""",
+               (uname, now, now, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("APPROVE_TUNE", "tune", item_id, f"Kural: {row['rule_name']}")
+    return jsonify(dict(updated))
+
+@app.route("/api/tune/<int:item_id>/retry", methods=["POST"])
+@login_required
+def retry_tune(item_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] not in ("Tune Edildi", "Tune Başarılı"):
+        return jsonify({"error": "Sadece 'Tune Edildi' veya 'Tune Başarılı' kayıtlar yeniden tune edilebilir."}), 400
+    role  = session.get("role", "analyst")
+    uname = session.get("username", "")
+    if role == "analyst":
+        return jsonify({"error": "Yeniden tune için admin yetkisi gereklidir."}), 403
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""UPDATE tune_requests SET status='Açık',
+                  tuning_analyst='', how_tuned='', tuned_at=NULL,
+                  approval_deadline=NULL, approved_by=NULL, approved_at=NULL,
+                  completed_at=NULL, updated_at=? WHERE id=?""",
+               (now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("RETRY_TUNE", "tune", item_id, f"Kural: {row['rule_name']}")
     return jsonify(dict(updated))
 
 @app.route("/api/tune/<int:item_id>", methods=["DELETE"])
@@ -729,7 +798,7 @@ def update_usecase(item_id):
             if new_author != uname:
                 return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
         # Only the assigned analyst can close
-        if new_st in ("Yazıldı", "Yazılamaz") and not is_assigned:
+        if new_st in ("Test Ediliyor", "Yazılamaz") and not is_assigned:
             return jsonify({"error": "Sadece size atanan talepleri kapatabilirsiniz."}), 403
         # Requester field is always preserved
         data["requester"] = row["requester"]
@@ -745,12 +814,17 @@ def update_usecase(item_id):
     now        = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_status = data.get("status", row["status"])
 
-    if new_status == "Yazıldı" and not row["completed_at"]:
-        completed_at = now
-    elif new_status != "Yazıldı":
+    # test_started_at: set when reaching "Test Ediliyor"
+    test_started_at = row["test_started_at"] if "test_started_at" in row.keys() else None
+    if new_status == "Test Ediliyor" and not test_started_at:
+        test_started_at = now
+    elif new_status not in ("Test Ediliyor", "Prod'da Aktif"):
+        test_started_at = None
+
+    # completed_at: set when "Prod'da Aktif" (via test-approve endpoint)
+    completed_at = row["completed_at"]
+    if new_status not in ("Test Ediliyor", "Prod'da Aktif", "Yazılamaz"):
         completed_at = None
-    else:
-        completed_at = row["completed_at"]
 
     # Settings role: allow manual date + ID overrides
     uc_role = session.get("role", "analyst")
@@ -777,7 +851,7 @@ def update_usecase(item_id):
         UPDATE usecase_requests SET
           id=?,requester=?,usecase_description=?,environment=?,rule_name=?,
           rule_author=?,notes=?,status=?,mitre_classified=?,mitre_data=?,
-          created_at=?,completed_at=?,updated_at=?
+          created_at=?,completed_at=?,test_started_at=?,updated_at=?
         WHERE id=?
     """, (
         uc_new_id,
@@ -790,20 +864,67 @@ def update_usecase(item_id):
         new_status,
         data.get("mitre_classified",    row["mitre_classified"] if "mitre_classified" in row.keys() else "Hayır"),
         _jv_uc("mitre_data"),
-        uc_created_at, completed_at, now, item_id
+        uc_created_at, completed_at, test_started_at, now, item_id
     ))
     db.commit()
     updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (uc_new_id,)).fetchone()
     if new_status == "İnceleniyor" and data.get("rule_author"):
         a_action = "CLAIM_UC"
         a_detail = f"Tanım: {updated['usecase_description'][:60]} | Analist: {updated['rule_author']}"
-    elif new_status in ("Yazıldı", "Yazılamaz"):
+    elif new_status in ("Test Ediliyor", "Yazılamaz"):
         a_action = "CLOSE_UC"
         a_detail = f"Tanım: {updated['usecase_description'][:60]} | Durum: {new_status}"
     else:
         a_action = "EDIT_UC"
         a_detail = f"Tanım: {updated['usecase_description'][:60]}"
     write_audit(a_action, "usecase", item_id, a_detail)
+    return jsonify(dict(updated))
+
+@app.route("/api/usecase/<int:item_id>/test-approve", methods=["POST"])
+@login_required
+def test_approve_uc(item_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != "Test Ediliyor":
+        return jsonify({"error": "Sadece 'Test Ediliyor' statüsündeki kayıtlar onaylanabilir."}), 400
+    role  = session.get("role", "analyst")
+    if role == "analyst":
+        return jsonify({"error": "Test onayı için admin yetkisi gereklidir."}), 403
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    test_notes = (request.json or {}).get("test_notes", "")
+    db.execute("""UPDATE usecase_requests SET status='Prod''da Aktif',
+                  test_approved_by=?, test_approved_at=?, test_notes=?,
+                  completed_at=?, updated_at=? WHERE id=?""",
+               (uname, now, test_notes, now, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("TEST_APPROVE_UC", "usecase", item_id,
+                f"Tanım: {row['usecase_description'][:60]}")
+    return jsonify(dict(updated))
+
+@app.route("/api/usecase/<int:item_id>/test-reject", methods=["POST"])
+@login_required
+def test_reject_uc(item_id):
+    db = get_db()
+    row = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != "Test Ediliyor":
+        return jsonify({"error": "Sadece 'Test Ediliyor' statüsündeki kayıtlar reddedilebilir."}), 400
+    role = session.get("role", "analyst")
+    if role == "analyst":
+        return jsonify({"error": "Test reddi için admin yetkisi gereklidir."}), 403
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    test_notes = (request.json or {}).get("test_notes", "")
+    db.execute("""UPDATE usecase_requests SET status='İnceleniyor',
+                  test_started_at=NULL, test_notes=?, completed_at=NULL, updated_at=? WHERE id=?""",
+               (test_notes, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("TEST_REJECT_UC", "usecase", item_id,
+                f"Tanım: {row['usecase_description'][:60]}")
     return jsonify(dict(updated))
 
 @app.route("/api/usecase/<int:item_id>", methods=["DELETE"])
