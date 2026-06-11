@@ -38,7 +38,7 @@ async function apiFetch(path, opts = {}) {
 }
 
 function fmtDate(iso) {
-  if (!iso) return '<span class="text-muted">—</span>';
+  if (!iso) return "—";
   return iso.slice(0, 10);
 }
 
