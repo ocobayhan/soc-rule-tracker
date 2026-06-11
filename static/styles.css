@@ -159,7 +159,7 @@ input, select, textarea { font-family: inherit; }
   font-size: 13px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.15s, color 0.15s;
   margin-bottom: 1px;
   position: relative;
 }
@@ -234,6 +234,8 @@ input, select, textarea { font-family: inherit; }
   overflow-y: auto;
   overflow-x: hidden;
   padding: 24px 32px;
+  will-change: scroll-position;
+  overscroll-behavior: contain;
 }
 
 /* ============================================================ PAGE HEADER */
@@ -259,12 +261,14 @@ input, select, textarea { font-family: inherit; }
 .kpi-module {
   background: var(--bg-secondary);
   border: 0.5px solid var(--border);
+  transition: border-color 0.15s, box-shadow 0.15s;
   border-radius: var(--r-lg);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+.kpi-module:hover { border-color: var(--border-md); box-shadow: 0 4px 16px rgba(0,0,0,.15); }
 .kpi-module-hdr {
   display: flex;
   align-items: center;
@@ -387,7 +391,7 @@ input, select, textarea { font-family: inherit; }
   appearance: none;
   -webkit-appearance: none;
 }
-.form-input:focus { border-color: var(--accent); }
+.form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94,106,210,.12); }
 .form-input::placeholder { color: var(--text-3); }
 .form-input[disabled] { opacity: 0.45; cursor: not-allowed; }
 .form-textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
@@ -415,9 +419,10 @@ input, select, textarea { font-family: inherit; }
   border-radius: var(--r-sm);
   font-size: 12px; font-weight: 500;
   border: none; cursor: pointer;
-  transition: background 0.12s, opacity 0.12s;
+  transition: background 0.12s, opacity 0.12s, transform 0.06s;
   white-space: nowrap;
 }
+.btn:active { transform: scale(0.97); }
 .btn-primary {
   background: var(--accent); color: #fff;
 }
@@ -462,11 +467,13 @@ input, select, textarea { font-family: inherit; }
 .btn-icon {
   background: none;
   border: 0.5px solid var(--border);
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.06s;
   border-radius: var(--r-sm);
   padding: 4px 7px;
   font-size: 12px; color: var(--text-2); cursor: pointer;
 }
-.btn-icon:hover { background: var(--bg-hover); color: var(--text-1); border-color: var(--border-md); }
+.btn-icon:hover  { background: var(--bg-hover); color: var(--text-1); border-color: var(--border-md); }
+.btn-icon:active { transform: scale(0.88); }
 .btn-icon.danger { color: var(--red); border-color: rgba(229,72,77,0.2); }
 .btn-icon.danger:hover { background: var(--red-subtle); }
 .btn-icon.success { color: var(--green); border-color: rgba(45,178,125,0.2); }
@@ -495,6 +502,7 @@ input, select, textarea { font-family: inherit; }
   font-size: 12px;
   color: var(--text-1);
   vertical-align: middle;
+  transition: background 0.08s;
 }
 .table tr:hover td { background: var(--bg-secondary); }
 .table-fixed { table-layout: fixed; }
@@ -586,6 +594,14 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ============================================================ MODALS */
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.6);
@@ -593,6 +609,7 @@ input, select, textarea { font-family: inherit; }
   z-index: 1000;
   padding: 20px;
   backdrop-filter: blur(2px);
+  animation: overlay-in 0.15s ease;
 }
 .modal {
   background: var(--bg-secondary);
@@ -604,6 +621,7 @@ input, select, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: modal-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .modal-sm { max-width: 400px; }
 .modal-lg { max-width: 800px; }
@@ -856,7 +874,7 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* Clickable cell text */
-.cell-link { cursor: pointer; }
+.cell-link { cursor: pointer; transition: color 0.1s; }
 .cell-link:hover { color: var(--accent); text-decoration: underline; }
 
 /* MITRE add row */
