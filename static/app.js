@@ -1366,7 +1366,7 @@ document.getElementById("new-env-input")?.addEventListener("keydown", e => { if 
 ["tune-modal","tune-edit-modal","tune-claim-modal","tune-close-modal","tune-approve-modal",
  "tune-detail-modal","uc-detail-modal",
  "uc-modal","uc-edit-modal","uc-claim-modal","uc-close-modal","uc-test-approve-modal",
- "hunt-modal","hunt-edit-modal","hunt-claim-modal","hunt-report-modal","hunt-detail-modal"].forEach(id => {
+ "hunt-modal","hunt-edit-modal","hunt-claim-modal","hunt-detail-modal"].forEach(id => {
   document.getElementById(id)?.addEventListener("click", e => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = "none";
   });
