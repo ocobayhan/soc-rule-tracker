@@ -986,8 +986,8 @@
 </div>
 
 <!-- ===== MODAL: Hunt Raporu ===== -->
-<div id="hunt-report-modal" class="modal-overlay" style="display:none">
-  <div class="modal modal-wide">
+<div id="hunt-report-modal" class="modal-overlay" style="display:none" onclick="huntReportOverlayClick(event)">
+  <div class="modal modal-wide" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h2 class="modal-title" id="hunt-report-title">Hunt Raporu</h2>
       <button class="modal-close" onclick="closeHuntReportModal()">&#x2715;</button>
@@ -1068,9 +1068,13 @@
           <input type="hidden" id="report-hunt-ioc-json" value="[]"/>
         </div>
         <div class="form-group form-col-2">
-          <label class="form-label">Etkilenen Varlıklar</label>
+          <label class="form-label">Etkilenen Varlıklar
+            <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+          </label>
           <textarea class="form-input form-textarea" id="report-hunt-affected-assets" rows="3"
                     placeholder="Etkilenen sistemler, kullanıcılar, IP adresleri…"></textarea>
+          <div id="report-hunt-affected-assets-preview" class="paste-preview-area"></div>
+          <input type="hidden" id="report-hunt-affected-assets-image"/>
         </div>
       </div>
 
@@ -1093,21 +1097,62 @@
           <option value="Evet">Evet</option>
         </select>
         <div id="detection-detail-group" style="display:none;margin-top:8px">
-          <label class="form-label" style="margin-bottom:4px">Detection Detayı</label>
+          <label class="form-label" style="margin-bottom:4px">Detection Detayı
+            <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+          </label>
           <textarea class="form-input form-textarea" id="report-hunt-detection-detail"
                     placeholder="Önerilen kural veya detection mantığı…"></textarea>
+          <div id="report-hunt-detection-detail-preview" class="paste-preview-area"></div>
+          <input type="hidden" id="report-hunt-detection-detail-image"/>
+          <!-- UC oluşturma alt formu -->
+          <div id="uc-create-form" style="margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+              <input type="checkbox" id="report-create-uc" onchange="toggleUcCreateFields()" style="width:14px;height:14px;accent-color:var(--accent)">
+              <label for="report-create-uc" style="font-size:13px;font-weight:500;color:var(--text-primary);cursor:pointer">
+                Bu Hunt için Use-Case oluştur
+              </label>
+            </div>
+            <div id="uc-create-fields" style="display:none">
+              <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <label class="form-label" style="margin-bottom:4px">Talep Eden</label>
+                  <input type="text" class="form-input" id="uc-create-requester" placeholder="Analist adı…">
+                </div>
+                <div>
+                  <label class="form-label" style="margin-bottom:4px">Ortam</label>
+                  <select class="form-input" id="uc-create-environment">
+                    <option value="Dev">Dev</option>
+                    <option value="Test">Test</option>
+                    <option value="Prod">Prod</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top:8px">
+                <label class="form-label" style="margin-bottom:4px">UC Açıklaması <span style="color:var(--text-muted);font-weight:400">(boş bırakılırsa Detection Detayı kullanılır)</span></label>
+                <textarea class="form-input form-textarea" id="uc-create-description" rows="2"
+                          placeholder="Use-Case tanımı…" style="min-height:60px"></textarea>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Öneriler -->
-      <div class="form-group form-col-2" style="margin-top:8px;margin-bottom:0">
-        <label class="form-label">Öneriler
-          <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+      <!-- Keşfedilen Güvenlik Açıkları (opsiyonel) -->
+      <div class="form-group form-col-2" style="margin-top:8px">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Keşfedilen Güvenlik Açıkları <span style="color:var(--text-muted);font-weight:400">(opsiyonel)</span></span>
+          <button type="button" class="btn btn-sm" onclick="addVulnerability()" style="padding:2px 10px;font-size:12px">+ Ekle</button>
         </label>
-        <textarea class="form-input form-textarea" id="report-hunt-recommendations"
-                  placeholder="Aksiyon önerileri, remediasyon adımları…"></textarea>
-        <div id="report-hunt-recommendations-preview" class="paste-preview-area"></div>
-        <input type="hidden" id="report-hunt-recommendations-image"/>
+        <div id="vuln-list" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+      </div>
+
+      <!-- Güvenlik Önerileri -->
+      <div class="form-group form-col-2" style="margin-top:8px;margin-bottom:0">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Güvenlik Önerileri</span>
+          <button type="button" class="btn btn-sm" onclick="addRecommendation()" style="padding:2px 10px;font-size:12px">+ Ekle</button>
+        </label>
+        <div id="rec-list" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
       </div>
 
       <!-- Sonuç + Süre + Rapor Durumu + Hunt Durumu -->
@@ -1116,8 +1161,8 @@
           <label class="form-label">Sonuç</label>
           <select class="form-input" id="report-hunt-result">
             <option value="">— Seçin —</option>
-            <option>Pozitif</option>
-            <option>Negatif</option>
+            <option>Tehdit Tespit Edildi</option>
+            <option>Tehdit Tespit Edilmedi</option>
             <option>Yetersiz Veri</option>
           </select>
         </div>

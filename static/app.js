@@ -872,6 +872,7 @@ function renderUCRows() {
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.usecase_description)}">
       <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
+      ${r.source_hunt_id ? `<span class="status-dot" style="font-size:10px;padding:1px 5px;margin-left:4px;background:rgba(94,106,210,.15);color:var(--accent-blue)">Hunt #${r.source_hunt_id}</span>` : ""}
     </td>
     <td class="td-truncate">${esc(parseEnvStr(r.environment).join(", ") || r.environment)}</td>
     <td class="td-truncate">${esc(r.requester)}</td>
@@ -1381,9 +1382,10 @@ function setupAllPaste() {
   setupPaste("edit-tune-how",     "edit-tune-resolution-preview","edit-tune-resolution-image");
   setupPaste("close-tune-how",    "close-tune-img-preview",     "close-tune-resolution-image");
   // Hunt report paste targets
-  setupPaste("report-hunt-scope",           "report-hunt-scope-preview",           "report-hunt-scope-image");
-  setupPaste("report-hunt-findings",        "report-hunt-findings-preview",        "report-hunt-findings-image");
-  setupPaste("report-hunt-recommendations","report-hunt-recommendations-preview",  "report-hunt-recommendations-image");
+  setupPaste("report-hunt-scope",            "report-hunt-scope-preview",            "report-hunt-scope-image");
+  setupPaste("report-hunt-affected-assets",  "report-hunt-affected-assets-preview",  "report-hunt-affected-assets-image");
+  setupPaste("report-hunt-findings",         "report-hunt-findings-preview",         "report-hunt-findings-image");
+  setupPaste("report-hunt-detection-detail", "report-hunt-detection-detail-preview", "report-hunt-detection-detail-image");
 }
 
 function setupPaste(textareaId, previewAreaId, hiddenId) {
@@ -1673,6 +1675,7 @@ function openHuntClaimModal(id) {
   document.getElementById("hunt-claim-modal").style.display = "flex";
 }
 function closeHuntClaimModal() { document.getElementById("hunt-claim-modal").style.display = "none"; }
+function closeHuntDetailModal() { document.getElementById("hunt-detail-modal").style.display = "none"; }
 
 async function saveHuntClaim() {
   const id      = document.getElementById("claim-hunt-id").value;
@@ -1907,16 +1910,71 @@ function toggleFindingsSection() {
 // ---------------------------------------------------------------------------
 // Hunt — Report modal
 // ---------------------------------------------------------------------------
+function huntReportOverlayClick(e) {
+  if (e.target !== e.currentTarget) return;
+  if (!confirm("Raporu kapatmak istediğinize emin misiniz? Kaydedilmemiş değişiklikler kaybolacak.")) return;
+  closeHuntReportModal();
+}
+
+let _huntRecommendations = [];
+let _huntVulnerabilities = [];
+
+function renderRecommendations() {
+  const list = document.getElementById("rec-list");
+  if (!list) return;
+  list.innerHTML = _huntRecommendations.map((v, i) => `
+    <div class="list-item-row">
+      <textarea class="form-input" rows="2" placeholder="Öneri maddesi…" oninput="_huntRecommendations[${i}]=this.value">${esc(v)}</textarea>
+      <button class="btn-remove" onclick="removeRecommendation(${i})">×</button>
+    </div>`).join("");
+}
+function addRecommendation() {
+  _huntRecommendations.push("");
+  renderRecommendations();
+  const els = document.querySelectorAll("#rec-list textarea");
+  if (els.length) els[els.length - 1].focus();
+}
+function removeRecommendation(i) { _huntRecommendations.splice(i, 1); renderRecommendations(); }
+
+function renderVulnerabilities() {
+  const list = document.getElementById("vuln-list");
+  if (!list) return;
+  list.innerHTML = _huntVulnerabilities.map((v, i) => `
+    <div class="list-item-row">
+      <textarea class="form-input" rows="2" placeholder="Güvenlik açığı…" oninput="_huntVulnerabilities[${i}]=this.value">${esc(v)}</textarea>
+      <button class="btn-remove" onclick="removeVulnerability(${i})">×</button>
+    </div>`).join("");
+}
+function addVulnerability() {
+  _huntVulnerabilities.push("");
+  renderVulnerabilities();
+  const els = document.querySelectorAll("#vuln-list textarea");
+  if (els.length) els[els.length - 1].focus();
+}
+function removeVulnerability(i) { _huntVulnerabilities.splice(i, 1); renderVulnerabilities(); }
+
+function toggleUcCreateFields() {
+  const cb = document.getElementById("report-create-uc");
+  const fields = document.getElementById("uc-create-fields");
+  if (fields) fields.style.display = cb?.checked ? "block" : "none";
+}
+
 function toggleDetectionDetail() {
   const val = document.getElementById("report-hunt-detection-suggest")?.value;
   const grp = document.getElementById("detection-detail-group");
   if (grp) grp.style.display = val === "Evet" ? "block" : "none";
+  if (val !== "Evet") {
+    const cb = document.getElementById("report-create-uc");
+    if (cb) { cb.checked = false; toggleUcCreateFields(); }
+  }
 }
 
 async function openHuntReportModal(id) {
-  const r = huntRows.find(x => x.id === id); if (!r) return;
+  let r = huntRows.find(x => x.id === id); if (!r) return;
   await loadMitreData();
   setupAllPaste();
+  // Fetch linked_uc_id — not in list cache, computed by single-item endpoint
+  try { const fresh = await apiFetch(`/api/hunt/${id}`); r = { ...r, linked_uc_id: fresh.linked_uc_id }; } catch {}
 
   // Hunt env tags
   _huntEnvList = parseEnvStr(r.hunt_environment);
@@ -1954,7 +2012,34 @@ async function openHuntReportModal(id) {
   document.getElementById("report-hunt-detection-suggest").value = r.detection_suggestion || "Hayır";
   document.getElementById("report-hunt-detection-detail").value  = r.detection_detail || "";
   toggleDetectionDetail();
-  document.getElementById("report-hunt-recommendations").value  = r.recommendations || "";
+
+  // Recommendations list
+  try {
+    _huntRecommendations = JSON.parse(r.recommendations || "[]");
+    if (!Array.isArray(_huntRecommendations)) _huntRecommendations = r.recommendations ? [r.recommendations] : [];
+  } catch { _huntRecommendations = r.recommendations ? [r.recommendations] : []; }
+  renderRecommendations();
+
+  // Vulnerabilities list
+  try {
+    _huntVulnerabilities = JSON.parse(r.discovered_vulnerabilities || "[]");
+    if (!Array.isArray(_huntVulnerabilities)) _huntVulnerabilities = [];
+  } catch { _huntVulnerabilities = []; }
+  renderVulnerabilities();
+
+  // UC creation form — reset; disable if a linked UC already exists
+  const createUcCb = document.getElementById("report-create-uc");
+  if (createUcCb) { createUcCb.checked = false; createUcCb.disabled = !!r.linked_uc_id; }
+  document.getElementById("uc-create-requester").value    = r.requester || "";
+  document.getElementById("uc-create-environment").value  = "";
+  document.getElementById("uc-create-description").value  = "";
+  toggleUcCreateFields();
+  const ucForm = document.getElementById("uc-create-form");
+  if (ucForm) {
+    ucForm.querySelector("label[for='report-create-uc']").textContent = r.linked_uc_id
+      ? `Bu Hunt için Use-Case zaten oluşturuldu (UC #${r.linked_uc_id})`
+      : "Bu Hunt için Use-Case oluştur";
+  }
 
   document.getElementById("report-hunt-result").value        = r.hunt_result || "";
   document.getElementById("report-hunt-duration").value      = r.hunt_duration_hours != null ? r.hunt_duration_hours : "";
@@ -1962,9 +2047,14 @@ async function openHuntReportModal(id) {
   document.getElementById("report-hunt-status").value        = r.status || "İnceleniyor";
 
   // Images
-  ["scope","findings","recommendations"].forEach(f => {
-    clearPastePreview(`report-hunt-${f}-preview`, `report-hunt-${f}-image`);
-    if (r[`${f}_image`]) restorePreview(r[`${f}_image`], `report-hunt-${f}-preview`, `report-hunt-${f}-image`);
+  [
+    ["scope",           "scope_image"],
+    ["affected-assets", "affected_assets_image"],
+    ["findings",        "findings_image"],
+    ["detection-detail","detection_detail_image"],
+  ].forEach(([htmlKey, apiKey]) => {
+    clearPastePreview(`report-hunt-${htmlKey}-preview`, `report-hunt-${htmlKey}-image`);
+    if (r[apiKey]) restorePreview(r[apiKey], `report-hunt-${htmlKey}-preview`, `report-hunt-${htmlKey}-image`);
   });
 
   document.getElementById("hunt-report-modal-error").style.display = "none";
@@ -1976,29 +2066,41 @@ async function saveHuntReport() {
   const id    = document.getElementById("report-hunt-id").value;
   const errEl = document.getElementById("hunt-report-modal-error");
   errEl.style.display = "none";
+  const detectionSuggest = document.getElementById("report-hunt-detection-suggest").value;
+  const createUcCb = document.getElementById("report-create-uc");
   const payload = {
-    scope:                 document.getElementById("report-hunt-scope").value.trim(),
-    scope_image:           document.getElementById("report-hunt-scope-image").value || null,
-    mitre_techniques:      _huntMitreEntries,
-    has_findings:          document.getElementById("report-hunt-has-findings").value,
-    severity:              document.getElementById("report-hunt-severity").value,
-    ioc_list:              _huntIOCList,
-    affected_assets:       document.getElementById("report-hunt-affected-assets").value.trim(),
-    findings:              document.getElementById("report-hunt-findings").value.trim(),
-    findings_image:        document.getElementById("report-hunt-findings-image").value || null,
-    detection_suggestion:  document.getElementById("report-hunt-detection-suggest").value,
-    detection_detail:      document.getElementById("report-hunt-detection-detail").value.trim(),
-    recommendations:       document.getElementById("report-hunt-recommendations").value.trim(),
-    recommendations_image: document.getElementById("report-hunt-recommendations-image").value || null,
-    hunt_environment:      _huntEnvList.join(","),
-    hunt_result:           document.getElementById("report-hunt-result").value,
-    hunt_duration_hours:   document.getElementById("report-hunt-duration").value !== "" ? parseInt(document.getElementById("report-hunt-duration").value) : null,
-    report_status:         document.getElementById("report-hunt-report-status").value,
-    status:                document.getElementById("report-hunt-status").value,
+    scope:                    document.getElementById("report-hunt-scope").value.trim(),
+    scope_image:              document.getElementById("report-hunt-scope-image").value || null,
+    mitre_techniques:         _huntMitreEntries,
+    has_findings:             document.getElementById("report-hunt-has-findings").value,
+    severity:                 document.getElementById("report-hunt-severity").value,
+    ioc_list:                 _huntIOCList,
+    affected_assets:          document.getElementById("report-hunt-affected-assets").value.trim(),
+    affected_assets_image:    document.getElementById("report-hunt-affected-assets-image").value || null,
+    findings:                 document.getElementById("report-hunt-findings").value.trim(),
+    findings_image:           document.getElementById("report-hunt-findings-image").value || null,
+    detection_suggestion:     detectionSuggest,
+    detection_detail:         document.getElementById("report-hunt-detection-detail").value.trim(),
+    detection_detail_image:   document.getElementById("report-hunt-detection-detail-image").value || null,
+    recommendations:          JSON.stringify(_huntRecommendations.filter(v => v.trim())),
+    discovered_vulnerabilities: JSON.stringify(_huntVulnerabilities.filter(v => v.trim())),
+    hunt_environment:         _huntEnvList.join(","),
+    hunt_result:              document.getElementById("report-hunt-result").value,
+    hunt_duration_hours:      document.getElementById("report-hunt-duration").value !== "" ? parseInt(document.getElementById("report-hunt-duration").value) : null,
+    report_status:            document.getElementById("report-hunt-report-status").value,
+    status:                   document.getElementById("report-hunt-status").value,
+    create_uc:                !!(createUcCb?.checked && !createUcCb?.disabled && detectionSuggest === "Evet"),
+    uc_description:           document.getElementById("uc-create-description").value.trim(),
+    uc_requester:             document.getElementById("uc-create-requester").value.trim(),
+    uc_environment:           document.getElementById("uc-create-environment").value,
   };
   try {
-    await apiFetch(`/api/hunt/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    const res = await apiFetch(`/api/hunt/${id}`, { method: "PUT", body: JSON.stringify(payload) });
     closeHuntReportModal(); loadHunt(); loadKPI();
+    if (res?.uc_created_id) {
+      setTimeout(() => alert(`Use-Case #${res.uc_created_id} başarıyla oluşturuldu (Hunt #${id} sonucu).`), 200);
+      loadUseCase();
+    }
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
 }
 
@@ -2009,7 +2111,7 @@ async function openHuntDetail(id) {
   try {
     const r = await apiFetch(`/api/hunt/${id}`);
     document.getElementById("hunt-detail-title").textContent = `Hunt #${r.id} — ${r.hunt_subject}`;
-    const HUNT_RESULT_CLS = { "Pozitif": "status-done", "Negatif": "status-reviewing", "Yetersiz Veri": "status-nottuned" };
+    const HUNT_RESULT_CLS = { "Tehdit Tespit Edildi": "status-done", "Tehdit Tespit Edilmedi": "status-reviewing", "Yetersiz Veri": "status-nottuned" };
     const reportBadge = r.report_status === "Tamamlandı"
       ? `<span class="status-dot status-done">${esc(r.report_status)}</span>`
       : `<span class="status-dot status-open">${esc(r.report_status||"Taslak")}</span>`;
@@ -2036,6 +2138,16 @@ async function openHuntDetail(id) {
       `<div style="margin-top:8px"><span class="mitre-tag">${esc(e.id)}</span> <span class="text-muted" style="font-size:11px">${esc(e.tactic)}</span><br/><span style="white-space:pre-wrap;font-size:13px">${esc(e.method)}</span></div>`
     ).join("");
 
+    // Parse recommendations and vulnerabilities
+    let recList = [], vulnList = [];
+    try { recList = JSON.parse(r.recommendations || "[]"); if (!Array.isArray(recList)) recList = r.recommendations ? [r.recommendations] : []; } catch { recList = r.recommendations ? [r.recommendations] : []; }
+    try { vulnList = JSON.parse(r.discovered_vulnerabilities || "[]"); if (!Array.isArray(vulnList)) vulnList = []; } catch {}
+    recList  = recList.filter(v => v.trim());
+    vulnList = vulnList.filter(v => v.trim());
+
+    const recHtml  = recList.length  ? recList.map((v, i)  => `<div style="padding:4px 0;border-bottom:1px solid var(--border-subtle, rgba(255,255,255,.06))"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
+    const vulnHtml = vulnList.length ? vulnList.map((v, i) => `<div style="padding:4px 0;border-bottom:1px solid var(--border-subtle, rgba(255,255,255,.06))"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
+
     let body = `
       <div class="detail-section">
         ${detailRow("Durum", r.status)}
@@ -2053,16 +2165,18 @@ async function openHuntDetail(id) {
         <div class="detail-section-title">Rapor</div>
         <div class="detail-row"><span class="detail-label">Rapor Durumu</span><span class="detail-value">${reportBadge}</span></div>
         ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="status-dot ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
+        ${r.linked_uc_id ? `<div class="detail-row"><span class="detail-label">Bağlı Use-Case</span><span class="detail-value"><span class="status-dot status-done" style="cursor:pointer" onclick="closeHuntDetailModal();openUCDetail(${r.linked_uc_id})">UC #${r.linked_uc_id}</span></span></div>` : ""}
         ${r.has_findings === "Evet" ? `<div class="detail-row"><span class="detail-label">Bulgu</span><span class="detail-value"><span class="status-dot status-done">Evet</span></span></div>` : ""}
         ${r.severity ? detailRow("Şiddet", r.severity) : ""}
         ${mitreBadges ? `<div class="detail-row"><span class="detail-label">MITRE ATT&amp;CK</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${mitreBadges}</span></div>` : ""}
         ${mitreDetail ? `<div style="padding:8px 0">${mitreDetail}</div>` : ""}
         ${r.scope ? `<div class="detail-section-title" style="margin-top:12px">Hedef &amp; Kapsam</div>${detailRow("", r.scope)}${r.scope_image ? detailImgRow("Görsel", [r.scope_image]) : ""}` : ""}
         ${iocBadges ? `<div class="detail-row"><span class="detail-label">IOC Listesi</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${iocBadges}</span></div>` : ""}
-        ${r.affected_assets ? detailRow("Etkilenen Varlıklar", r.affected_assets) : ""}
+        ${r.affected_assets ? `${detailRow("Etkilenen Varlıklar", r.affected_assets)}${r.affected_assets_image ? detailImgRow("Görsel", [r.affected_assets_image]) : ""}` : ""}
         ${r.findings ? `<div class="detail-section-title" style="margin-top:12px">Bulgular</div>${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : ""}
-        ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title" style="margin-top:12px">Detection Önerisi</div>${detailRow("", r.detection_detail)}` : ""}
-        ${r.recommendations ? `<div class="detail-section-title" style="margin-top:12px">Öneriler</div>${detailRow("", r.recommendations)}${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}
+        ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title" style="margin-top:12px">Detection Önerisi</div>${detailRow("", r.detection_detail)}${r.detection_detail_image ? detailImgRow("Görsel", [r.detection_detail_image]) : ""}` : ""}
+        ${vulnHtml ? `<div class="detail-section-title" style="margin-top:12px">Keşfedilen Güvenlik Açıkları</div><div style="font-size:13px;line-height:1.6">${vulnHtml}</div>` : ""}
+        ${recHtml  ? `<div class="detail-section-title" style="margin-top:12px">Güvenlik Önerileri</div><div style="font-size:13px;line-height:1.6">${recHtml}</div>` : ""}
       </div>`;
     document.getElementById("hunt-detail-body").innerHTML = body;
     document.getElementById("hunt-detail-modal").style.display = "flex";

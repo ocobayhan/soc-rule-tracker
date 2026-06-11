@@ -916,3 +916,9 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 
 /* Paste preview area */
 .paste-preview-area { margin-top: 6px; }
+
+/* List-item rows (recommendations / vulnerabilities in hunt report) */
+.list-item-row { display: flex; align-items: flex-start; gap: 6px; }
+.list-item-row textarea { flex: 1; min-height: 40px; resize: vertical; }
+.list-item-row .btn-remove { flex-shrink: 0; padding: 4px 8px; font-size: 16px; line-height: 1; color: var(--text-3); background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+.list-item-row .btn-remove:hover { color: var(--danger, #e5534b); border-color: var(--danger, #e5534b); }

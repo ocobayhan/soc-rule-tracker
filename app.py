@@ -190,6 +190,17 @@ def init_db():
     for col, default in hunt_new_cols:
         if not _col_exists(db, "threat_hunt_requests", col):
             db.execute(f"ALTER TABLE threat_hunt_requests ADD COLUMN {col} TEXT DEFAULT {default}")
+    if not _col_exists(db, "threat_hunt_requests", "discovered_vulnerabilities"):
+        db.execute("ALTER TABLE threat_hunt_requests ADD COLUMN discovered_vulnerabilities TEXT DEFAULT '[]'")
+    if not _col_exists(db, "threat_hunt_requests", "affected_assets_image"):
+        db.execute("ALTER TABLE threat_hunt_requests ADD COLUMN affected_assets_image TEXT")
+    if not _col_exists(db, "threat_hunt_requests", "detection_detail_image"):
+        db.execute("ALTER TABLE threat_hunt_requests ADD COLUMN detection_detail_image TEXT")
+    if not _col_exists(db, "usecase_requests", "source_hunt_id"):
+        db.execute("ALTER TABLE usecase_requests ADD COLUMN source_hunt_id INTEGER")
+    # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
+    db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
+    db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
     # Clear MITRE cache if it contains stale multi-tactic entries (force re-fetch with clean data)
     stale = db.execute("SELECT COUNT(*) c FROM mitre_cache WHERE tactic LIKE '%, %'").fetchone()["c"]
     if stale > 0:
@@ -748,18 +759,19 @@ def create_usecase():
     db  = get_db()
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_id = next_available_id(db, "usecase_requests")
+    source_hunt_id = data.get("source_hunt_id") or None
     cur = db.execute("""
         INSERT INTO usecase_requests
           (id,requester,usecase_description,environment,rule_name,rule_author,notes,
-           status,created_at,completed_at,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+           status,source_hunt_id,created_at,completed_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
         new_id,
         data["requester"].strip(), data["usecase_description"].strip(),
         data["environment"],
         data.get("rule_name","").strip(), data.get("rule_author","").strip(),
         data.get("notes","").strip(), data.get("status","Açık"),
-        now, None, now
+        source_hunt_id, now, None, now
     ))
     db.commit()
     new_row = db.execute("SELECT * FROM usecase_requests WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1004,7 +1016,10 @@ def get_hunt(item_id):
     row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
-    return jsonify(dict(row))
+    r = dict(row)
+    linked = db.execute("SELECT id FROM usecase_requests WHERE source_hunt_id=?", (item_id,)).fetchone()
+    r["linked_uc_id"] = linked["id"] if linked else None
+    return jsonify(r)
 
 @app.route("/api/hunt/<int:item_id>", methods=["PUT"])
 @login_required
@@ -1045,8 +1060,8 @@ def update_hunt(item_id):
         if not is_assigned:
             for f in ("hunt_environment", "scope", "scope_image",
                       "mitre_techniques", "has_findings",
-                      "findings", "findings_image", "ioc_list", "affected_assets", "severity",
-                      "detection_suggestion", "detection_detail",
+                      "findings", "findings_image", "ioc_list", "affected_assets", "affected_assets_image", "severity",
+                      "detection_suggestion", "detection_detail", "detection_detail_image",
                       "recommendations", "recommendations_image",
                       "related_requests", "hunt_result", "report_status"):
                 data[f] = row[f]
@@ -1084,8 +1099,10 @@ def update_hunt(item_id):
     report_fields = ("hunt_environment", "scope", "mitre_techniques", "has_findings",
                      "findings", "ioc_list", "affected_assets", "severity",
                      "detection_suggestion", "detection_detail", "recommendations",
+                     "discovered_vulnerabilities",
                      "hunt_result", "report_status", "related_requests",
-                     "scope_image", "findings_image", "recommendations_image",
+                     "scope_image", "findings_image", "affected_assets_image",
+                     "detection_detail_image", "recommendations_image",
                      "hunt_duration_hours")
     report_changed = any(
         str(data.get(f) if data.get(f) is not None else row[f] or "") != str(row[f] or "")
@@ -1124,9 +1141,10 @@ def update_hunt(item_id):
           hunt_subject=?, requester=?, assigned_analyst=?, notes=?, status=?,
           hunt_environment=?, scope=?, scope_image=?,
           mitre_techniques=?, has_findings=?,
-          findings=?, findings_image=?, ioc_list=?, affected_assets=?, severity=?,
-          detection_suggestion=?, detection_detail=?,
+          findings=?, findings_image=?, ioc_list=?, affected_assets=?, affected_assets_image=?, severity=?,
+          detection_suggestion=?, detection_detail=?, detection_detail_image=?,
           recommendations=?, recommendations_image=?,
+          discovered_vulnerabilities=?,
           related_requests=?, hunt_result=?, report_status=?,
           hunt_duration_hours=?,
           created_at=?, started_at=?, completed_at=?, report_updated_at=?, updated_at=?
@@ -1136,9 +1154,10 @@ def update_hunt(item_id):
         sv("hunt_subject"), sv("requester"), sv("assigned_analyst"), sv("notes"), new_status,
         sv("hunt_environment"), sv("scope"), nv("scope_image"),
         jv("mitre_techniques"), sv("has_findings", "Hayır"),
-        sv("findings"), nv("findings_image"), jv("ioc_list"), sv("affected_assets"), sv("severity"),
-        sv("detection_suggestion", "Hayır"), sv("detection_detail"),
+        sv("findings"), nv("findings_image"), jv("ioc_list"), sv("affected_assets"), nv("affected_assets_image"), sv("severity"),
+        sv("detection_suggestion", "Hayır"), sv("detection_detail"), nv("detection_detail_image"),
         sv("recommendations"), nv("recommendations_image"),
+        jv("discovered_vulnerabilities", "[]"),
         jv("related_requests"), sv("hunt_result"), sv("report_status", "Taslak"),
         hunt_duration_hours,
         hunt_created_at,
@@ -1146,6 +1165,28 @@ def update_hunt(item_id):
     ))
     db.commit()
     updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (hunt_new_id,)).fetchone()
+
+    # Auto-create UC if requested and not yet exists
+    uc_created_id = None
+    if data.get("create_uc") and sv("detection_suggestion", "Hayır") == "Evet":
+        existing_uc = db.execute("SELECT id FROM usecase_requests WHERE source_hunt_id=?", (hunt_new_id,)).fetchone()
+        if not existing_uc:
+            uc_desc = (data.get("uc_description") or "").strip() or sv("detection_detail")
+            uc_req  = (data.get("uc_requester")  or "").strip() or sv("requester")
+            uc_env  = (data.get("uc_environment") or "").strip() or sv("hunt_environment")
+            if uc_desc and uc_req:
+                uc_id = next_available_id(db, "usecase_requests")
+                db.execute("""
+                    INSERT INTO usecase_requests
+                      (id,requester,usecase_description,environment,status,source_hunt_id,
+                       notes,created_at,updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                """, (uc_id, uc_req, uc_desc, uc_env, "Açık", hunt_new_id,
+                      f"Threat Hunt #{hunt_new_id} sonucu oluşturuldu.", now, now))
+                db.commit()
+                uc_created_id = uc_id
+                write_audit("CREATE_UC", "usecase", uc_id,
+                            f"Tanım: {uc_desc[:80]} | Hunt #{hunt_new_id}'den oluşturuldu")
 
     if new_status == "İnceleniyor" and data.get("assigned_analyst") and not row["assigned_analyst"]:
         a_action = "CLAIM_HUNT"
@@ -1160,7 +1201,9 @@ def update_hunt(item_id):
         a_action = "EDIT_HUNT"
         a_detail = f"Konu: {updated['hunt_subject']}"
     write_audit(a_action, "hunt", item_id, a_detail)
-    return jsonify(dict(updated))
+    r = dict(updated)
+    r["uc_created_id"] = uc_created_id
+    return jsonify(r)
 
 @app.route("/api/hunt/<int:item_id>", methods=["DELETE"])
 @login_required
