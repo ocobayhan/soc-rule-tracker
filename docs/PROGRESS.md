@@ -1,6 +1,6 @@
 # SOC Tracker — İlerleme Günlüğü
 
-## Son Güncelleme: 2026-05-06
+## Son Güncelleme: 2026-06-11
 
 ---
 
@@ -72,11 +72,46 @@
 
 ---
 
+### Tune Onaylama Süreci (2026-06-11)
+- [x] Yeni durum akışı: Açık → İnceleniyor → Tune Edildi → Tune Başarılı / Yeniden Tune
+- [x] `tuned_at` + `approval_deadline` (5 gün) kolonları
+- [x] `approved_by`, `approved_at` kolonları
+- [x] POST /api/tune/<id>/approve — admin veya talep eden onaylar
+- [x] POST /api/tune/<id>/retry — admin geri alır, Açık'a döner
+- [x] Tune Onaylama modal'ı (Tune Başarılı / Yeniden Tune butonları)
+- [x] Tablo: "Tune Edildi" satırında "Onayla" butonu (son onay tarihi tooltip)
+
+### UC Test Süreci (2026-06-11)
+- [x] Yeni durum akışı: Açık → İnceleniyor → Test Ediliyor → Prod'da Aktif / Revizyon
+- [x] `test_started_at`, `test_approved_at`, `test_approved_by`, `test_notes` kolonları
+- [x] POST /api/usecase/<id>/test-approve — Prod'da Aktif yapar
+- [x] POST /api/usecase/<id>/test-reject — İnceleniyor'a döner
+- [x] Test Onaylama modal'ı (Prod'a Geç / Revizyon + test notu)
+- [x] Tablo: "Test Ediliyor" satırında "Test Onayla" butonu (admin only)
+
+### KPI Güncellemesi (2026-06-11)
+- [x] Yeni kartlar: Onay Bekleyen, Tune Başarılı, Başarı Oranı, Test Ediliyor, Prod'da Aktif
+- [x] `tune_success_rate` (yüzde) hesabı
+
+### Linear UI Redesign (2026-06-11)
+- [x] CSS v11: tam yeniden yazım, Linear #5E6AD2 accent, koyu tema
+- [x] Sidebar navigasyon (header yerine sol kenar çubuğu)
+- [x] Yeni badge/dot renk sistemi (TUNE_DOT, UC_DOT, HUNT_DOT ayrı haritalar)
+- [x] Temiz tablo stili, KPI kart düzeni, modal geliştirmeleri
+- [x] JS v15: tüm yeni durum sınıfları, onaylama fonksiyonları
+
+### Docker & Deployment (2026-06-11)
+- [x] Dockerfile + docker-compose.yml (port 9897, named volumes)
+- [x] Settings kullanıcısı tüm sekmeleri (Tuning/UC/Hunt) görebilir
+- [x] Settings kullanıcısı tüm düzenleme modallarını açabilir
+
+---
+
 ## 🔧 Bilinen Sorunlar / Bekleyen İşler
 
-- [ ] Sunucu testi: son oturumda sunucu offline'dı (192.168.1.39) — tüm değişiklikler pull + restart bekliyor
-- [ ] Excel export'ta Hunt Ortamı multi-select düzgün görünüyor mu kontrol edilmeli
-- [ ] Hunt raporu görselleri (scope_image, findings_image, recommendations_image) backend'de kayıt + detay görünümünde render
+- [ ] Detay görünümlerinde (tune/UC/hunt) `approved_by`, `tuned_at`, `test_notes` alanları gösterilmeli
+- [ ] KPI ay filtresi: Hunt tablosu için `completed_at` bazlı doğru filtreleme kontrol edilmeli
+- [ ] Excel export: yeni kolonlar (tuned_at, approved_by, test_notes vb.) eklenmeli
 
 ---
 
