@@ -260,44 +260,67 @@ async function loadKPI() {
   const month = document.getElementById("kpi-month").value;
   try {
     const d = await apiFetch(`/api/kpi${month ? "?month="+month : ""}`);
-    document.getElementById("kpi-tune-open").textContent    = d.tune_open    ?? "—";
-    document.getElementById("kpi-tune-pending").textContent = d.tune_pending  ?? "—";
-    document.getElementById("kpi-tune-success").textContent = d.tune_success  ?? "—";
-    document.getElementById("kpi-tune-rate").textContent    = (d.tune_success_rate ?? "—") + (d.tune_success_rate != null ? "%" : "");
-    document.getElementById("kpi-uc-testing").textContent   = d.uc_testing    ?? "—";
-    document.getElementById("kpi-uc-prod").textContent      = d.uc_prod       ?? "—";
-    document.getElementById("kpi-hunt-open").textContent    = d.hunt_open     ?? "—";
-    document.getElementById("kpi-hunt-done").textContent    = d.hunt_done     ?? "—";
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? "—"; };
+    set("kpi-tune-total",     d.tune_total);
+    set("kpi-tune-open",      d.tune_open);
+    set("kpi-tune-pending",   d.tune_pending);
+    set("kpi-tune-success",   d.tune_success);
+    const rate = d.tune_success_rate ?? 0;
+    set("kpi-tune-rate", rate + "%");
+    const fill = document.getElementById("kpi-tune-rate-fill");
+    if (fill) fill.style.width = Math.min(rate, 100) + "%";
+    set("kpi-uc-total",       d.uc_total);
+    set("kpi-uc-open",        d.uc_open);
+    set("kpi-uc-testing",     d.uc_testing);
+    set("kpi-uc-prod",        d.uc_prod);
+    set("kpi-hunt-total",     d.hunt_total);
+    set("kpi-hunt-open",      d.hunt_open);
+    set("kpi-hunt-reviewing", d.hunt_reviewing);
+    set("kpi-hunt-done",      d.hunt_done);
   } catch (_) {}
 }
 
 async function loadDashboardTables() {
+  const empty = (n) => `<tr><td colspan="${n}" class="text-muted" style="padding:16px;text-align:center">Henüz kayıt yok.</td></tr>`;
+
   try {
     const rows = await apiFetch("/api/tune?");
     const tb   = document.getElementById("dash-tune-tbody");
     tb.innerHTML = rows.length
-      ? rows.slice(0,8).map(r => `<tr>
+      ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,TUNE_CLS)}</td>
           <td class="td-truncate">${esc(r.rule_name)}</td>
-          <td>${esc(r.environment)}</td>
-          <td>${esc(r.reporter)}</td>
+          <td class="text-muted">${esc(r.tuning_analyst || r.reporter)}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
-      : `<tr><td colspan="5" class="text-muted" style="padding:16px;text-align:center">Henüz kayıt yok.</td></tr>`;
+      : empty(4);
   } catch (_) {}
 
   try {
     const rows = await apiFetch("/api/usecase?");
     const tb   = document.getElementById("dash-uc-tbody");
     tb.innerHTML = rows.length
-      ? rows.slice(0,8).map(r => `<tr>
+      ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,UC_CLS)}</td>
           <td class="td-truncate">${esc(r.usecase_description)}</td>
-          <td>${esc(r.environment)}</td>
-          <td>${esc(r.requester)}</td>
+          <td class="text-muted">${esc(r.rule_author || r.requester)}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
-      : `<tr><td colspan="5" class="text-muted" style="padding:16px;text-align:center">Henüz kayıt yok.</td></tr>`;
+      : empty(4);
+  } catch (_) {}
+
+  try {
+    const rows = await apiFetch("/api/hunt");
+    const tb   = document.getElementById("dash-hunt-tbody");
+    if (!tb) return;
+    tb.innerHTML = rows.length
+      ? rows.slice(0,6).map(r => `<tr>
+          <td>${badge(r.status,HUNT_CLS)}</td>
+          <td class="td-truncate">${esc(r.hunt_subject)}</td>
+          <td class="text-muted">${esc(r.assigned_analyst || r.requester)}</td>
+          <td class="text-muted">${fmtDate(r.created_at)}</td>
+        </tr>`).join("")
+      : empty(4);
   } catch (_) {}
 }
 

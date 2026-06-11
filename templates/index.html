@@ -80,26 +80,106 @@
         &#128438; Rapor
       </button>
     </div>
-    <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-label">Açık Tuning</div><div class="kpi-value" id="kpi-tune-open">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Onay Bekleyen</div><div class="kpi-value kpi-purple" id="kpi-tune-pending">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Tune Başarılı</div><div class="kpi-value kpi-green" id="kpi-tune-success">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Başarı Oranı</div><div class="kpi-value kpi-teal" id="kpi-tune-rate">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Test Ediliyor</div><div class="kpi-value kpi-blue" id="kpi-uc-testing">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Prod'da Aktif</div><div class="kpi-value kpi-green" id="kpi-uc-prod">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Açık Hunt</div><div class="kpi-value kpi-orange" id="kpi-hunt-open">—</div></div>
-      <div class="kpi-card"><div class="kpi-label">Tamamlanan Hunt</div><div class="kpi-value kpi-green" id="kpi-hunt-done">—</div></div>
+    <div class="kpi-modules">
+
+      <!-- Kural Tuning -->
+      <div class="kpi-module">
+        <div class="kpi-module-hdr">
+          <div class="kpi-module-name">
+            <span class="kpi-module-dot" style="background:var(--amber)"></span>
+            Kural Tuning
+          </div>
+          <span class="kpi-module-total"><span id="kpi-tune-total">—</span> toplam talep</span>
+        </div>
+        <div class="kpi-module-stats">
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" id="kpi-tune-open">—</div>
+            <div class="kpi-stat-lbl">Açık</div>
+          </div>
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" style="color:var(--accent)" id="kpi-tune-pending">—</div>
+            <div class="kpi-stat-lbl">Onay Bekliyor</div>
+          </div>
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" style="color:var(--green)" id="kpi-tune-success">—</div>
+            <div class="kpi-stat-lbl">Tune Başarılı</div>
+          </div>
+        </div>
+        <div class="kpi-module-rate">
+          <div class="kpi-rate-track">
+            <div class="kpi-rate-fill" id="kpi-tune-rate-fill" style="width:0%"></div>
+          </div>
+          <span class="kpi-rate-label">Başarı oranı: <strong id="kpi-tune-rate">—</strong></span>
+        </div>
+      </div>
+
+      <!-- Use-Case -->
+      <div class="kpi-module">
+        <div class="kpi-module-hdr">
+          <div class="kpi-module-name">
+            <span class="kpi-module-dot" style="background:var(--teal)"></span>
+            Use-Case
+          </div>
+          <span class="kpi-module-total"><span id="kpi-uc-total">—</span> toplam talep</span>
+        </div>
+        <div class="kpi-module-stats">
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" id="kpi-uc-open">—</div>
+            <div class="kpi-stat-lbl">Açık</div>
+          </div>
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" style="color:var(--blue)" id="kpi-uc-testing">—</div>
+            <div class="kpi-stat-lbl">Test Ediliyor</div>
+          </div>
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" style="color:var(--green)" id="kpi-uc-prod">—</div>
+            <div class="kpi-stat-lbl">Prod'da Aktif</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Threat Hunting -->
+      <div class="kpi-module">
+        <div class="kpi-module-hdr">
+          <div class="kpi-module-name">
+            <span class="kpi-module-dot" style="background:var(--purple)"></span>
+            Threat Hunting
+          </div>
+          <span class="kpi-module-total"><span id="kpi-hunt-total">—</span> toplam talep</span>
+        </div>
+        <div class="kpi-module-stats">
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" id="kpi-hunt-open">—</div>
+            <div class="kpi-stat-lbl">Açık</div>
+          </div>
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" style="color:var(--accent)" id="kpi-hunt-reviewing">—</div>
+            <div class="kpi-stat-lbl">Devam Ediyor</div>
+          </div>
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" style="color:var(--green)" id="kpi-hunt-done">—</div>
+            <div class="kpi-stat-lbl">Tamamlandı</div>
+          </div>
+        </div>
+      </div>
+
     </div>
+
     <div class="dashboard-row">
       <div class="dash-section">
         <div class="section-title">Son Tuning Talepleri</div>
-        <table class="table"><thead><tr><th>Durum</th><th>Kural</th><th>Ortam</th><th>Raporlayan</th><th>Raporlandı</th></tr></thead>
+        <table class="table"><thead><tr><th>Durum</th><th>Kural</th><th>Analist</th><th>Tarih</th></tr></thead>
         <tbody id="dash-tune-tbody"></tbody></table>
       </div>
       <div class="dash-section">
         <div class="section-title">Son Use-Case Talepleri</div>
-        <table class="table"><thead><tr><th>Durum</th><th>Use-Case</th><th>Ortam</th><th>Talep Eden</th><th>Tarih</th></tr></thead>
+        <table class="table"><thead><tr><th>Durum</th><th>Use-Case</th><th>Analist</th><th>Tarih</th></tr></thead>
         <tbody id="dash-uc-tbody"></tbody></table>
+      </div>
+      <div class="dash-section">
+        <div class="section-title">Son Hunt Talepleri</div>
+        <table class="table"><thead><tr><th>Durum</th><th>Konu</th><th>Analist</th><th>Tarih</th></tr></thead>
+        <tbody id="dash-hunt-tbody"></tbody></table>
       </div>
     </div>
   </section>

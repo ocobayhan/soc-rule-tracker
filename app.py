@@ -453,10 +453,13 @@ def get_kpi():
     tune_retry       = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Yeniden Tune' {mf('updated_at')}").fetchone()["c"]
     tune_total       = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
     uc_total         = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
+    uc_open          = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
     uc_testing       = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Test Ediliyor' {mf('test_started_at')}").fetchone()["c"]
     uc_prod          = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Prod''da Aktif' {mf('test_approved_at')}").fetchone()["c"]
     hunt_open        = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
+    hunt_reviewing   = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İnceleniyor' {mf('created_at')}").fetchone()["c"]
     hunt_done        = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı' {mf('completed_at')}").fetchone()["c"]
+    hunt_total       = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
 
     tune_resolved    = tune_success + tune_retry
     tune_success_rate = round(tune_success / tune_resolved * 100) if tune_resolved else 0
@@ -469,10 +472,13 @@ def get_kpi():
         "tune_total":         tune_total,
         "tune_success_rate":  tune_success_rate,
         "uc_total":           uc_total,
+        "uc_open":            uc_open,
         "uc_testing":         uc_testing,
         "uc_prod":            uc_prod,
         "hunt_open":          hunt_open,
+        "hunt_reviewing":     hunt_reviewing,
         "hunt_done":          hunt_done,
+        "hunt_total":         hunt_total,
     })
 
 # ---------------------------------------------------------------------------
