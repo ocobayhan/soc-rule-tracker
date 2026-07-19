@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v22
+   SOC Tracker — Frontend  v23
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1062,7 +1062,7 @@ function renderUCRows() {
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.usecase_description)}">
       <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
-      ${r.source_hunt_id ? `<span class="status-dot" style="font-size:10px;padding:1px 5px;margin-left:4px;background:rgba(94,106,210,.15);color:var(--accent-blue)">Hunt #${r.source_hunt_id}</span>` : ""}
+      ${r.source_hunt_id ? `<span class="badge" style="font-size:10px;padding:1px 5px;margin-left:4px;background:rgba(94,106,210,.15);color:var(--accent-blue)">Hunt #${r.source_hunt_id}</span>` : ""}
     </td>
     <td class="td-truncate" title="${esc(parseEnvStr(r.environment).join(', ') || r.environment)}">${esc(parseEnvStr(r.environment).join(", ") || r.environment)}</td>
     <td class="td-truncate" title="${esc(r.requester)}">${esc(r.requester)}</td>
@@ -2415,8 +2415,8 @@ async function openHuntDetail(id) {
     document.getElementById("hunt-detail-title").textContent = `Hunt #${r.id} — ${r.hunt_subject}`;
     const HUNT_RESULT_CLS = { "Tehdit Tespit Edildi": "status-done", "Tehdit Tespit Edilmedi": "status-reviewing", "Yetersiz Veri": "status-nottuned" };
     const reportBadge = r.report_status === "Tamamlandı"
-      ? `<span class="status-dot status-done">${esc(r.report_status)}</span>`
-      : `<span class="status-dot status-open">${esc(r.report_status||"Taslak")}</span>`;
+      ? `<span class="badge status-done">${esc(r.report_status)}</span>`
+      : `<span class="badge status-open">${esc(r.report_status||"Taslak")}</span>`;
 
     // Parse JSON fields safely
     let mitreEntries = [];
@@ -2472,9 +2472,9 @@ async function openHuntDetail(id) {
       <div class="detail-section">
         <div class="detail-section-title">Rapor</div>
         <div class="detail-row"><span class="detail-label">Rapor Durumu</span><span class="detail-value">${reportBadge}</span></div>
-        ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="status-dot ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
-        ${r.linked_uc_id ? `<div class="detail-row"><span class="detail-label">Bağlı Use-Case</span><span class="detail-value"><span class="status-dot status-done" style="cursor:pointer" onclick="closeHuntDetailModal();openUCDetail(${r.linked_uc_id})">UC #${r.linked_uc_id}</span></span></div>` : ""}
-        ${r.has_findings === "Evet" ? `<div class="detail-row"><span class="detail-label">Bulgu</span><span class="detail-value"><span class="status-dot status-done">Evet</span></span></div>` : ""}
+        ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="badge ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
+        ${r.linked_uc_id ? `<div class="detail-row"><span class="detail-label">Bağlı Use-Case</span><span class="detail-value"><span class="badge status-done" style="cursor:pointer" onclick="closeHuntDetailModal();openUCDetail(${r.linked_uc_id})">UC #${r.linked_uc_id}</span></span></div>` : ""}
+        ${r.has_findings === "Evet" ? `<div class="detail-row"><span class="detail-label">Bulgu</span><span class="detail-value"><span class="badge status-done">Evet</span></span></div>` : ""}
         ${r.severity ? detailRow("Şiddet", r.severity) : ""}
         ${mitreBadges ? `<div class="detail-row"><span class="detail-label">MITRE ATT&amp;CK</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${mitreBadges}</span></div>` : ""}
         ${mitreDetail ? `<div style="padding:8px 0">${mitreDetail}</div>` : ""}

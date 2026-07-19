@@ -360,6 +360,40 @@ eklendi:
   sqlite3 ile temizlenip `/logout` ile sıfırlandı; tüm tablo satır
   sayıları test öncesiyle birebir aynı doğrulandı.
 
+### Faz G — Detay Modalinde Rozet Metninin Harf Harf Bölünmesi (2026-07-19)
+
+Kullanıcı ekran görüntüsüyle bildirdi: Hunt detay kutucuğunda "Rapor
+Durumu" değeri ("Taslak") her harfi ayrı satıra düşecek şekilde dikey
+akıyordu (T/a/s/l/a/k). Kök neden bulundu: `.status-dot` sınıfı **7x7px
+sabit genişlikli, dekoratif bir nokta** için tasarlanmış (bkz.
+`static/styles.css`) — metin içermesi hiç düşünülmemiş. Ama
+`static/app.js`'te 6 yerde (Hunt detayında Rapor Durumu, Sonuç, Bağlı
+Use-Case, Bulgu rozetleri; UC listesinde "Hunt #N" rozeti) bu sınıf
+yanlışlıkla gerçek metin badge'i gibi kullanılmıştı — doğrusu `.badge`
+sınıfıydı (`inline-flex`, düzgün padding, `white-space:nowrap`).
+
+Bu yanlış kullanım önceden de vardı ama görünürde daha az zararlıydı
+(metin sadece 7px'lik kutunun dışına taşıp görünür kalıyordu). Faz D'de
+`.detail-value`'ya eklediğim `overflow-wrap/word-break:break-word` bu
+alt öğelere **miras yoluyla** geçince, 7px'lik kutu içindeki metin artık
+her karakterde satır değiştirmeye zorlandı — iki ayrı, kendi başına
+zararsız değişikliğin kesişimi asıl hatayı ortaya çıkardı.
+
+- [x] 6 yerin tamamı `status-dot` → `badge` olarak düzeltildi
+  (`dot()`/`badge()` yardımcı fonksiyonları zaten doğru ayrılmıştı —
+  sorun sadece bu 6 elle yazılmış HTML parçasındaydı, ana tablolardaki
+  `dot()`/`badge()` kullanımları hiç etkilenmemişti).
+- [x] **Yan bulgu:** `HUNT_RESULT_CLS`'in "Yetersiz Veri" için eşlediği
+  `status-nottuned` sınıfı CSS'te hiç tanımlı değildi (stilsiz/renksiz
+  kalıyordu) — amber renkte eklendi.
+- [x] **Doğrulandı:** gerçek bir Hunt kaydı üzerinde (`report_status:
+  "Taslak"`, `hunt_result: "Tehdit Tespit Edildi"`) rozet genişlik/
+  yükseklik ölçümüyle (49x20px, 113x20px — tek satır, orantılı) ve
+  ekran görüntüsüyle; UC listesindeki "Hunt #1" rozeti de (46x17px)
+  ayrıca doğrulandı. Tune ve UC detay modalleri de (2 kolonlu
+  `.detail-grid` düzeni) ekran görüntüsüyle kontrol edildi — başka bir
+  görsel bozukluk bulunmadı.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
