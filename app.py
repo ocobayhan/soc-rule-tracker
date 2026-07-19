@@ -14,6 +14,7 @@ from verify_audit import audit_hash, AUDIT_GENESIS, verify_chain
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "soc-rule-tracker-dev-key-change-in-prod")
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB — paste/upload görsel limiti
 
 _BASE = os.path.dirname(os.path.abspath(__file__))
 DATABASE      = os.environ.get("DATABASE",      os.path.join(_BASE, "tracker.db"))
@@ -443,8 +444,17 @@ def upload_file():
     if ext not in ALLOWED_EXT:
         return jsonify({"error": "Geçersiz dosya türü (jpg/png/gif/webp)"}), 400
     filename = str(uuid.uuid4()) + ext
-    file.save(os.path.join(UPLOAD_FOLDER, filename))
+    try:
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        file.save(os.path.join(UPLOAD_FOLDER, filename))
+    except OSError as e:
+        app.logger.error(f"[upload] Dosya kaydedilemedi: {e}")
+        return jsonify({"error": "Görsel sunucuya kaydedilemedi (disk/izin sorunu olabilir)."}), 500
     return jsonify({"filename": filename, "url": f"/static/uploads/{filename}"})
+
+@app.errorhandler(413)
+def _upload_too_large(_e):
+    return jsonify({"error": "Dosya çok büyük (maksimum 10 MB)."}), 413
 
 # ---------------------------------------------------------------------------
 # Environments

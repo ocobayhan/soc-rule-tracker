@@ -1171,6 +1171,14 @@
           <button type="button" class="btn btn-sm" onclick="addRecommendation()" style="padding:2px 10px;font-size:12px">+ Ekle</button>
         </label>
         <div id="rec-list" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+        <label class="form-label" style="margin-top:8px">
+          Öneriler Görseli <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+        </label>
+        <textarea class="form-input form-textarea" id="report-hunt-recommendations-paste" rows="1"
+                  placeholder="Görsel yapıştırmak için buraya tıklayıp Ctrl+V yapın… (yalnızca görsel alanıdır)"
+                  style="min-height:34px"></textarea>
+        <div id="report-hunt-recommendations-preview" class="paste-preview-area"></div>
+        <input type="hidden" id="report-hunt-recommendations-image"/>
       </div>
 
       <!-- Sonuç + Süre + Rapor Durumu + Hunt Durumu -->

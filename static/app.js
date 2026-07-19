@@ -143,7 +143,11 @@ async function uploadBlob(blob, filename = "paste.png") {
   const fd = new FormData();
   fd.append("file", blob, filename);
   const res = await fetch("/api/upload", { method: "POST", body: fd });
-  if (!res.ok) throw new Error("Görsel yüklenemedi");
+  if (!res.ok) {
+    let msg = "Görsel yüklenemedi";
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new Error(msg);
+  }
   return (await res.json()).filename;
 }
 
@@ -173,24 +177,6 @@ function restorePreview(filename, previewAreaId, hiddenId) {
   showPastePreview(filename, previewAreaId, hiddenId);
 }
 
-// Attach paste listener to a textarea; captured image goes to previewAreaId / hiddenId
-function setupPaste(textareaId, previewAreaId, hiddenId) {
-  const el = document.getElementById(textareaId);
-  if (!el) return;
-  el.addEventListener("paste", async (e) => {
-    const items = Array.from(e.clipboardData?.items || []);
-    const img   = items.find(i => i.type.startsWith("image/"));
-    if (!img) return;
-    e.preventDefault();
-    try {
-      const blob     = img.getAsFile();
-      const filename = await uploadBlob(blob);
-      showPastePreview(filename, previewAreaId, hiddenId);
-    } catch (err) {
-      console.error("Paste upload failed:", err);
-    }
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Dropdown data
@@ -1583,8 +1569,12 @@ function setupAllPaste() {
   setupPaste("report-hunt-affected-assets",  "report-hunt-affected-assets-preview",  "report-hunt-affected-assets-image");
   setupPaste("report-hunt-findings",         "report-hunt-findings-preview",         "report-hunt-findings-image");
   setupPaste("report-hunt-detection-detail", "report-hunt-detection-detail-preview", "report-hunt-detection-detail-image");
+  setupPaste("report-hunt-recommendations-paste", "report-hunt-recommendations-preview", "report-hunt-recommendations-image");
 }
 
+// Attach paste listener to a textarea; captured image goes to previewAreaId / hiddenId.
+// _pasteReady guard prevents double-binding when setupAllPaste() reruns (e.g. hunt
+// report modal reopened) — without it, listeners stack and re-upload on every paste.
 function setupPaste(textareaId, previewAreaId, hiddenId) {
   const el = document.getElementById(textareaId);
   if (!el || el._pasteReady) return;
@@ -1598,7 +1588,10 @@ function setupPaste(textareaId, previewAreaId, hiddenId) {
       const blob     = img.getAsFile();
       const filename = await uploadBlob(blob);
       showPastePreview(filename, previewAreaId, hiddenId);
-    } catch (err) { console.error("Paste upload failed:", err); }
+    } catch (err) {
+      console.error("Paste upload failed:", err);
+      alert("Görsel yüklenemedi: " + err.message);
+    }
   });
 }
 
@@ -2269,6 +2262,7 @@ async function openHuntReportModal(id) {
     ["affected-assets", "affected_assets_image"],
     ["findings",        "findings_image"],
     ["detection-detail","detection_detail_image"],
+    ["recommendations", "recommendations_image"],
   ].forEach(([htmlKey, apiKey]) => {
     clearPastePreview(`report-hunt-${htmlKey}-preview`, `report-hunt-${htmlKey}-image`);
     if (r[apiKey]) restorePreview(r[apiKey], `report-hunt-${htmlKey}-preview`, `report-hunt-${htmlKey}-image`);
@@ -2300,6 +2294,7 @@ async function saveHuntReport() {
     detection_detail:         document.getElementById("report-hunt-detection-detail").value.trim(),
     detection_detail_image:   document.getElementById("report-hunt-detection-detail-image").value || null,
     recommendations:          JSON.stringify(_huntRecommendations.filter(v => v.trim())),
+    recommendations_image:    document.getElementById("report-hunt-recommendations-image").value || null,
     discovered_vulnerabilities: JSON.stringify(_huntVulnerabilities.filter(v => v.trim())),
     hunt_environment:         _huntEnvList.join(","),
     hunt_result:              document.getElementById("report-hunt-result").value,
@@ -2399,7 +2394,7 @@ async function openHuntDetail(id) {
         ${r.findings ? `<div class="detail-section-title" style="margin-top:12px">Bulgular</div>${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : ""}
         ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title" style="margin-top:12px">Detection Önerisi</div>${detailRow("", r.detection_detail)}${r.detection_detail_image ? detailImgRow("Görsel", [r.detection_detail_image]) : ""}` : ""}
         ${vulnHtml ? `<div class="detail-section-title" style="margin-top:12px">Keşfedilen Güvenlik Açıkları</div><div style="font-size:13px;line-height:1.6">${vulnHtml}</div>` : ""}
-        ${recHtml  ? `<div class="detail-section-title" style="margin-top:12px">Güvenlik Önerileri</div><div style="font-size:13px;line-height:1.6">${recHtml}</div>` : ""}
+        ${recHtml  ? `<div class="detail-section-title" style="margin-top:12px">Güvenlik Önerileri</div><div style="font-size:13px;line-height:1.6">${recHtml}</div>${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}
       </div>`;
     document.getElementById("hunt-detail-body").innerHTML = body;
     const pdfLink = document.getElementById("hunt-detail-pdf-link");

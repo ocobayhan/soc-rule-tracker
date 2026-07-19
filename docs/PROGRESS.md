@@ -208,6 +208,14 @@
 - [ ] Sadece Tuning modülünde — UC/Hunt'a genişletme ileride aynı desenle (`api_key_required` + yeni bir uç) yapılabilir
 - [ ] Ubuntu test sunucusunda henüz denenmedi; XSOAR tarafının gerçek isteği atıp atamadığı (ağ erişimi teyit edildi ama gerçek deneme yapılmadı) deploy günü doğrulanacak
 
+### Faz A — Görsel Ekleme Akışı Düzeltmeleri (2026-07-19)
+- [x] `recommendations_image` uçtan uca bağlandı — DB kolonu ve Hunt PDF şablonu zaten vardı (Faz 6) ama hiçbir UI onu doldurmuyordu: yeni bir paste-hedefi (`report-hunt-recommendations-paste`) + preview + hidden input eklendi, `setupAllPaste()`'e kaydedildi, `saveHuntReport()` payload'ına eklendi, modal yeniden açıldığında restore ediliyor, detay panelinde gösteriliyor
+- [x] Ölü/yinelenen `setupPaste()` tanımı silindi (iki tanım vardı; `_pasteReady` guard'ı olmayanı — modal her yeniden açıldığında listener'ların birikmesini önleyen guard'lı tanım korundu)
+- [x] `uploadBlob()` artık backend'in gerçek hata mesajını gösteriyor (önceden sabit "Görsel yüklenemedi" metni basıyordu, gerçek sebep kayboluyordu)
+- [x] `/api/upload`: `file.save()` etrafına try/except eklendi (disk/izin hatası artık çirkin 500 yerine anlamlı JSON hatası döndürüyor); `MAX_CONTENT_LENGTH` (10 MB) + 413 handler eklendi
+- [x] **Doğrulandı (API + DOM):** görsel yükleme → hunt kaydına kaydetme → kayıt yeniden çekildiğinde kalıcı olduğu → rapor modalı yeniden açıldığında önizlemenin geri geldiği → detay panelinde `<img>` olarak göründüğü uçtan uca test edildi
+- [ ] İlk ajan raporunun "`restorePreview()` hiç çağrılmıyor" iddiası **yanlıştı** — grep ile doğrulandı, zaten 3 yerde çağrılıyordu; bu not gelecekte aynı yanlış varsayımın tekrarlanmaması için
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
