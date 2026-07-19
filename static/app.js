@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v21
+   SOC Tracker — Frontend  v22
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -294,8 +294,8 @@ async function loadDashboardTables() {
     tb.innerHTML = rows.length
       ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,TUNE_CLS)}</td>
-          <td class="td-truncate">${esc(r.rule_name)}</td>
-          <td class="text-muted">${esc(r.tuning_analyst || r.reporter)}</td>
+          <td class="td-truncate" title="${esc(r.rule_name)}">${esc(r.rule_name)}</td>
+          <td class="text-muted" title="${esc(r.tuning_analyst || r.reporter)}">${esc(r.tuning_analyst || r.reporter)}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
       : empty(4);
@@ -307,8 +307,8 @@ async function loadDashboardTables() {
     tb.innerHTML = rows.length
       ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,UC_CLS)}</td>
-          <td class="td-truncate">${esc(r.usecase_description)}</td>
-          <td class="text-muted">${esc(r.rule_author || r.requester)}</td>
+          <td class="td-truncate" title="${esc(r.usecase_description)}">${esc(r.usecase_description)}</td>
+          <td class="text-muted" title="${esc(r.rule_author || r.requester)}">${esc(r.rule_author || r.requester)}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
       : empty(4);
@@ -321,8 +321,8 @@ async function loadDashboardTables() {
     tb.innerHTML = rows.length
       ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,HUNT_CLS)}</td>
-          <td class="td-truncate">${esc(r.hunt_subject)}</td>
-          <td class="text-muted">${esc(r.assigned_analyst || r.requester)}</td>
+          <td class="td-truncate" title="${esc(r.hunt_subject)}">${esc(r.hunt_subject)}</td>
+          <td class="text-muted" title="${esc(r.assigned_analyst || r.requester)}">${esc(r.assigned_analyst || r.requester)}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
       : empty(4);
@@ -591,11 +591,11 @@ function renderTuneRows() {
     <td class="td-truncate" title="${esc(r.rule_name)}">
       <span class="cell-link" onclick="openTuneDetail(${r.id})" style="cursor:pointer">${esc(r.rule_name)}</span>
     </td>
-    <td class="td-truncate">${esc(r.environment)}</td>
-    <td class="td-truncate">${esc(r.reporter)}</td>
+    <td class="td-truncate" title="${esc(r.environment)}">${esc(r.environment)}</td>
+    <td class="td-truncate" title="${esc(r.reporter)}">${esc(r.reporter)}</td>
     <td class="td-truncate" title="${esc(r.tune_reason)}">${esc(r.tune_reason)}</td>
     <td>${freqBadge(r.trigger_frequency)}</td>
-    <td class="td-truncate">${esc(r.tuning_analyst)||'<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(r.tuning_analyst||'')}">${esc(r.tuning_analyst)||'<span class="text-muted">—</span>'}</td>
     <td>${badge(r.status, TUNE_CLS)}</td>
     <td class="text-muted">${fmtDate(r.created_at)}</td>
     <td class="text-muted">${fmtDate(r.completed_at)}</td>
@@ -1010,10 +1010,10 @@ function renderUCRows() {
       <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
       ${r.source_hunt_id ? `<span class="status-dot" style="font-size:10px;padding:1px 5px;margin-left:4px;background:rgba(94,106,210,.15);color:var(--accent-blue)">Hunt #${r.source_hunt_id}</span>` : ""}
     </td>
-    <td class="td-truncate">${esc(parseEnvStr(r.environment).join(", ") || r.environment)}</td>
-    <td class="td-truncate">${esc(r.requester)}</td>
-    <td class="td-truncate">${esc(r.rule_name)||'<span class="text-muted">—</span>'}</td>
-    <td class="td-truncate">${esc(r.rule_author)||'<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(parseEnvStr(r.environment).join(', ') || r.environment)}">${esc(parseEnvStr(r.environment).join(", ") || r.environment)}</td>
+    <td class="td-truncate" title="${esc(r.requester)}">${esc(r.requester)}</td>
+    <td class="td-truncate" title="${esc(r.rule_name||'')}">${esc(r.rule_name)||'<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(r.rule_author||'')}">${esc(r.rule_author)||'<span class="text-muted">—</span>'}</td>
     <td>${badge(r.status, UC_CLS)}</td>
     <td class="text-muted">${fmtDate(r.created_at)}</td>
     <td class="text-muted">${fmtDate(r.completed_at)}</td>
@@ -1741,8 +1741,8 @@ function renderHuntRows() {
     <td class="td-truncate" title="${esc(r.hunt_subject)}">
       <span class="cell-link" onclick="openHuntDetail(${r.id})" style="cursor:pointer">${esc(r.hunt_subject)}</span>
     </td>
-    <td class="td-truncate">${esc(r.requester)}</td>
-    <td class="td-truncate">${esc(r.assigned_analyst)||'<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(r.requester)}">${esc(r.requester)}</td>
+    <td class="td-truncate" title="${esc(r.assigned_analyst||'')}">${esc(r.assigned_analyst)||'<span class="text-muted">—</span>'}</td>
     <td>${badge(r.status, HUNT_CLS)}</td>
     <td class="text-muted">${fmtDate(r.created_at)}</td>
     <td class="text-muted">${fmtDate(r.completed_at)}</td>

@@ -226,6 +226,17 @@
 - [x] Dashboard KPI kartlarına yeni bir özet satırı eklendi ("Ön Onay Bekliyor: N · Reddedildi: N") — mevcut 3-slotluk tasarım bozulmadan hiçbir sayı gizli kalmıyor
 - [x] **Doğrulandı (API + gerçek Excel dosyası indirilip açılarak):** her üç modül için `/api/kpi`'de gösterilen tüm bucket'ların toplamının `*_total`'a **birebir eşit olduğu** doğrulandı (Tuning 9=9, UC 3=3, Hunt 7=7); aynı doğrulama `/report`'un donut chart verileri ve indirilen Excel'in "KPI Özeti" sayfası için de tekrarlandı — üçü de aynı sayıları veriyor; Excel'in yeni onay-izi kolonlarının (ör. XSOAR case ID) gerçek verilerle doğru dolduğu teyit edildi
 
+### Faz C — Logo, Favicon, Genel Arayüz Düzeltmeleri (2026-07-19)
+- [x] **Gerçek, canlı ortamda doğrulanmış bir tablo düzeni hatası bulundu ve düzeltildi:** Tuning/UC/Hunt tablolarında (`table-fixed`, karışık px/% kolon genişlikleri) dar bir görünürlük alanında sabit-pikselli kolonlar (Durum, İşlem, tarihler) yüzde-tabanlı kolonların (Kural İsmi, Ortam, Raporlayan, Tune Nedeni, Tune Eden) neredeyse tüm genişliğini yiyordu — canlı ölçümde bu kolonlar 7-15px'e kadar sıkışıp metin tamamen çakışıyordu ("KUBURTASREPORLAENI TONE EDEN" gibi okunaksız başlıklar). `.table-fixed`'e `min-width: 1100px` eklendi — artık `.table-wrapper`'ın zaten var olan `overflow-x:auto`'su devreye giriyor, kolonlar okunabilir kalıyor. `<th>` hücrelerine de taşma koruması eklendi.
+- [x] Yeni SVG logo (kalkan + onay işareti, `--accent` renginde) — `static/favicon.svg`; sidebar, login, aylık rapor'daki eski "harf kutusu" yerine kullanılıyor
+- [x] Favicon eklendi (`index.html`, `login.html`, `report.html`) — önceden hiç yoktu, tarayıcı sekmesi boştu
+- [x] **Yan düzeltme:** `login.html`'in `styles.css` versiyonu (`?v=3`) `index.html`'inkinden (`?v=11.5`) çok geride kalmıştı — login sayfası muhtemelen eski/stale CSS'i tarayıcı önbelleğinden sunuyordu. Versiyon eşitlendi.
+- [x] Dashboard mini-tablolarındaki ve ana tablolardaki kısaltılan hücrelere (`title=`) tooltip eklendi — üzerine gelince tam metin görünüyor
+- [x] `:focus-visible` durumları eklendi (`.btn`, `.btn-icon`, `.nav-btn`, `.modal-close`) — önceden sadece form input'larında vardı, klavye ile gezinme hiç görsel geri bildirim vermiyordu
+- [ ] `.th-sortable`/`.cell-link` (onclick'li `<th>`/`<span>`) hâlâ `tabindex` almıyor, Tab ile hiç odaklanamıyor — bu daha kapsamlı bir klavye-erişilebilirliği işi, bilinçli olarak bu turun dışında bırakıldı
+- [x] Mojibake/encoding taraması yapıldı — **sorun bulunmadı**, tüm dosyalar doğru UTF-8
+- [x] **Doğrulandı (ekran görüntüleriyle, önce/sonra karşılaştırmalı):** Tuning tablosunun başlıkları artık tamamen okunabilir ve ayrık; yeni logo hem sidebar'da hem login sayfasında doğru render oluyor
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

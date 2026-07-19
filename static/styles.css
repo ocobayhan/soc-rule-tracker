@@ -82,10 +82,7 @@ input, select, textarea { font-family: inherit; }
 }
 .login-logo-icon {
   width: 28px; height: 28px;
-  background: var(--accent);
-  border-radius: var(--r-sm);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 600; color: #fff;
+  flex-shrink: 0;
 }
 .login-logo-text { font-size: 15px; font-weight: 500; color: var(--text-1); }
 .login-title { font-size: 18px; font-weight: 500; margin-bottom: 6px; }
@@ -131,10 +128,6 @@ input, select, textarea { font-family: inherit; }
 }
 .sidebar-logo-icon {
   width: 22px; height: 22px;
-  background: var(--accent);
-  border-radius: 5px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; color: #fff;
   flex-shrink: 0;
 }
 .sidebar-section { padding: 0 8px; margin-bottom: 2px; }
@@ -433,6 +426,21 @@ input, select, textarea { font-family: inherit; }
   white-space: nowrap;
 }
 .btn:active { transform: scale(0.97); }
+
+/* Klavye ile gezinme (Tab) için görünür odak halkası — önceden sadece
+   .form-input:focus vardı, butonlar/nav hiç geri bildirim vermiyordu.
+   :focus-visible ile sadece klavye odağında görünür, mouse tıklamasında
+   tetiklenmez. Not: .th-sortable/.cell-link (onclick'li <th>/<span>)
+   şu an hiç tabindex almıyor, dolayısıyla zaten Tab ile hiç odaklanamıyor
+   — bu ayrı, daha kapsamlı bir klavye-erişilebilirliği işi (bkz. PROGRESS.md). */
+.btn:focus-visible,
+.btn-icon:focus-visible,
+.nav-btn:focus-visible,
+.modal-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .btn-primary {
   background: var(--accent); color: #fff;
 }
@@ -505,6 +513,8 @@ input, select, textarea { font-family: inherit; }
   letter-spacing: .06em;
   text-transform: uppercase;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .table td {
   padding: 9px 10px;
@@ -515,7 +525,12 @@ input, select, textarea { font-family: inherit; }
   transition: background 0.08s;
 }
 .table tr:hover td { background: var(--bg-secondary); }
-.table-fixed { table-layout: fixed; }
+/* table-fixed kolonları karışık px/% genişlik kullanıyor (bkz. aşağıdaki
+   "column widths"); dar bir konteynerde % kolonlar sıfıra sıkışıp metnin
+   üst üste binmesine yol açabiliyordu. min-width, tüm kolonların kendi
+   payını alabileceği bir genişliği garanti eder — konteyner darsa
+   .table-wrapper'ın overflow-x:auto'su devreye girip yatay kaydırma sunar. */
+.table-fixed { table-layout: fixed; min-width: 1100px; }
 .td-truncate { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .text-muted { color: var(--text-2); }
 .th-sortable { cursor: pointer; user-select: none; }
