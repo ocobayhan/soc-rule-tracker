@@ -280,6 +280,11 @@ def init_db():
     # SOAR case zorunluluğu manuel taleplerde de — "case bulunamadı" bayrağı
     if not _col_exists(db, "tune_requests", "xsoar_case_missing"):
         db.execute("ALTER TABLE tune_requests ADD COLUMN xsoar_case_missing TEXT DEFAULT 'Hayır'")
+    # Kullanıcı yönetimi genişletmesi — son giriş takibi + devre dışı bırakma
+    # (silme yerine); bkz. docs/rbac.md.
+    for col, default in [("last_login", "NULL"), ("active", "'Evet'")]:
+        if not _col_exists(db, "users", col):
+            db.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT {default}")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -418,10 +423,16 @@ def login():
         db = get_db()
         user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         if user and check_password_hash(user["password_hash"], password):
+            if user["active"] == "Hayır":
+                error = "Bu hesap devre dışı bırakılmış. Yetkiliyle iletişime geçin."
+                return render_template("login.html", error=error)
             session["user_id"]  = user["id"]
             session["username"] = user["username"]
             session["role"]     = user["role"]   # always fresh from DB
             session["tier"]     = user["tier"] if "tier" in user.keys() else TIER_ANALIST
+            now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            db.execute("UPDATE users SET last_login=? WHERE id=?", (now, user["id"]))
+            db.commit()
             return redirect(url_for("index"))
         error = "Kullanıcı adı veya şifre hatalı."
     return render_template("login.html", error=error)
@@ -1706,7 +1717,7 @@ def start_hunt(item_id):
 def list_users():
     db = get_db()
     rows = db.execute(
-        "SELECT id, username, role, tier, created_at FROM users "
+        "SELECT id, username, role, tier, created_at, last_login, active FROM users "
         "WHERE role != 'settings' ORDER BY username"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -1756,23 +1767,40 @@ def update_user(user_id):
     if user["role"] == "settings":
         return jsonify({"error": "Settings kullanıcısı düzenlenemez"}), 403
 
+    is_self = (user_id == session.get("user_id"))
+
     new_role = data.get("role", user["role"])
     if new_role not in ("admin", "analyst"):
         return jsonify({"error": "Geçersiz rol (admin veya analyst olmalı)"}), 400
+    # Kendi kendini düşürme koruması: bir admin kendi rolünü kaldırırsa
+    # Ayarlar sayfasına erişimini o an kaybeder — geri dönüşü sadece başka
+    # bir admin/settings kullanıcısıyla mümkün olur. Kazara kilitlenmeyi
+    # engellemek için bu değişikliğe izin verilmiyor.
+    if is_self and user["role"] == "admin" and new_role != "admin":
+        return jsonify({"error": "Kendi admin rolünüzü kaldıramazsınız (kilitlenme riski)."}), 400
+
     new_tier = data.get("tier", user["tier"] if "tier" in user.keys() else TIER_ANALIST)
     if new_tier not in TIERS:
         return jsonify({"error": f"Geçersiz onay seviyesi ({', '.join(TIERS)} olmalı)"}), 400
+
+    cur_active = user["active"] if "active" in user.keys() and user["active"] else "Evet"
+    new_active = data.get("active", cur_active)
+    if new_active not in ("Evet", "Hayır"):
+        return jsonify({"error": "Geçersiz aktiflik durumu (Evet/Hayır olmalı)"}), 400
+    if is_self and new_active == "Hayır":
+        return jsonify({"error": "Kendi hesabınızı devre dışı bırakamazsınız."}), 400
 
     new_password = data.get("password", "").strip()
     if new_password:
         if len(new_password) < 6:
             return jsonify({"error": "Şifre en az 6 karakter olmalıdır"}), 400
         db.execute(
-            "UPDATE users SET role=?, tier=?, password_hash=? WHERE id=?",
-            (new_role, new_tier, generate_password_hash(new_password), user_id)
+            "UPDATE users SET role=?, tier=?, active=?, password_hash=? WHERE id=?",
+            (new_role, new_tier, new_active, generate_password_hash(new_password), user_id)
         )
     else:
-        db.execute("UPDATE users SET role=?, tier=? WHERE id=?", (new_role, new_tier, user_id))
+        db.execute("UPDATE users SET role=?, tier=?, active=? WHERE id=?",
+                   (new_role, new_tier, new_active, user_id))
     db.commit()
 
     audit_parts = []
@@ -1780,11 +1808,15 @@ def update_user(user_id):
         audit_parts.append(f"Rol: {user['role']} → {new_role}")
     if new_tier != (user["tier"] if "tier" in user.keys() else TIER_ANALIST):
         audit_parts.append(f"Onay Seviyesi: {user['tier']} → {new_tier}")
+    if new_active != cur_active:
+        audit_parts.append(f"Durum: {cur_active} → {new_active}")
     if new_password:
         audit_parts.append("Şifre değiştirildi")
     write_audit("EDIT_USER", "user", user_id,
                 f"Kullanıcı: {user['username']} | " + " | ".join(audit_parts))
-    updated = db.execute("SELECT id,username,role,tier,created_at FROM users WHERE id=?", (user_id,)).fetchone()
+    updated = db.execute(
+        "SELECT id,username,role,tier,created_at,last_login,active FROM users WHERE id=?", (user_id,)
+    ).fetchone()
     return jsonify(dict(updated))
 
 @app.route("/api/users/<int:user_id>", methods=["DELETE"])
@@ -1797,6 +1829,8 @@ def delete_user(user_id):
         return jsonify({"error": "Kullanıcı bulunamadı"}), 404
     if user["role"] == "settings":
         return jsonify({"error": "Settings kullanıcısı silinemez"}), 403
+    if user_id == session.get("user_id"):
+        return jsonify({"error": "Kendi hesabınızı silemezsiniz."}), 400
     db.execute("DELETE FROM users WHERE id=?", (user_id,))
     db.commit()
     write_audit("DELETE_USER", "user", user_id, f"Kullanıcı: {user['username']}")

@@ -319,6 +319,47 @@ dokunmadan, izole bir temp dizinde eski-şema bir SQLite kopyası oluşturup
   kopyasıyla aynı testin tekrarlanması hâlâ değerli olur (bkz. Faz 0,
   hâlâ beklemede — kullanıcı SSH oturumunu şimdilik istemedi).
 
+### Faz F — Kullanıcı Yönetimi Genişletmesi (2026-07-19)
+
+Kullanıcı zaten var olan rol/onay-seviyesi yönetimini test edip onayladıktan
+sonra (muhtemelen ilk kez admin olarak Ayarlar'a erişebildiği için yeni
+keşfetti — bkz. Faz D'deki RBAC düzeltmesi), 4 ek özellik istendi ve hepsi
+eklendi:
+
+- [x] **Son giriş tarihi:** `users.last_login` kolonu; `/login` başarılı
+  girişte bunu günceller. Kullanıcı listesinde "Son giriş: ..." veya "Hiç
+  giriş yapmadı" olarak gösteriliyor. **Kapsam kararı:** sadece login
+  anında set edilir/okunur — role/tier'ın zaten yaptığı gibi (session'a
+  login'de bir kere yazılır, istek başına DB'den tekrar okunmaz), oturum
+  ortasında canlı geçersiz kılma yapılmıyor; bu tutarlı ama daha küçük bir
+  garanti — istenirse ayrı bir iş olarak genişletilebilir.
+- [x] **Hesap devre dışı bırakma (silme yerine):** `users.active`
+  ('Evet'/'Hayır', varsayılan 'Evet'). `/login` artık `active='Hayır'` olan
+  hesapları reddediyor ("Bu hesap devre dışı bırakılmış..."). Kullanıcı
+  listesinde ⏸/▶ ile tek tıkla aç/kapa; devre dışı kullanıcı satırı soluk
+  gösteriliyor + "Devre Dışı" rozeti. Kalıcı silme seçeneği de duruyor
+  (ayrı, ek bir yetenek olarak eklendi, yerini almadı).
+- [x] **Rol/Onay Seviyesi açıklama metni:** Kullanıcılar panelinin altına,
+  admin'in rolün ne yaptığını ve onay seviyesinin neyi kontrol ettiğini
+  (rolden bağımsız olarak) özetleyen kısa bir paragraf eklendi.
+- [x] **Kendi kendini kilitleme koruması** — üç ayrı uç noktada:
+  - `PUT /api/users/<id>`: kendi admin rolünü kaldırma → 400
+  - `PUT /api/users/<id>`: kendi hesabını devre dışı bırakma → 400
+  - `DELETE /api/users/<id>`: kendi hesabını silme → 400 (**yan bulgu:**
+    bu kontrol daha önce hiç yoktu — bir admin kazayla kendi hesabını
+    kalıcı olarak silebilirdi, rol düşürmeden bile daha geri dönüşsüz bir
+    risk)
+  - Frontend: kendi satırında devre dışı bırak/sil butonları devre dışı +
+    açıklayıcı tooltip; düzenle modalinde kendi rolü alanı kilitli + uyarı notu.
+- [x] **Uçtan uca doğrulandı:** create/edit/tier-değiştirme, devre dışı
+  bırakılan hesabın login'de reddedilmesi, üç kendi-kendini-kilitleme
+  korumasının hepsi, ve gerçek bir login sonrası `last_login`'in
+  set edildiği — hepsi test edilip test verileri temizlendi.
+  Test sırasında oturumun yanlışlıkla bir test kullanıcısına geçmesi
+  DB'yi etkilemedi (sadece tarayıcı session cookie'si) — doğrudan
+  sqlite3 ile temizlenip `/logout` ile sıfırlandı; tüm tablo satır
+  sayıları test öncesiyle birebir aynı doğrulandı.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

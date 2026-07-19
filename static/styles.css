@@ -496,6 +496,8 @@ input, select, textarea { font-family: inherit; }
 .btn-icon.danger:hover { background: var(--red-subtle); }
 .btn-icon.success { color: var(--green); border-color: rgba(45,178,125,0.2); }
 .btn-icon.success:hover { background: var(--green-subtle); }
+.btn-icon:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-icon:disabled:hover { background: none; border-color: var(--border); }
 
 /* ============================================================ TABLE */
 .table-wrapper { overflow-x: auto; min-width: 0; }

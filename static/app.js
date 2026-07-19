@@ -1497,26 +1497,52 @@ async function loadSettings() {
 const ROLE_LABEL = { admin: "Admin", analyst: "Analist" };
 const TIER_CLS   = { "Analist": "tier-analist", "Kıdemli Analist": "tier-kidemli", "Müdür": "tier-mudur" };
 
+function fmtLastLogin(iso) {
+  if (!iso) return "Hiç giriş yapmadı";
+  return iso.slice(0, 16).replace("T", " ");
+}
+
 async function loadUsersList() {
   const list = document.getElementById("user-settings-list");
   if (!list) return;
   try {
     const users = await apiFetch("/api/users");
     list.innerHTML = users.length
-      ? users.map(u => `<li>
-          <span>${esc(u.username)}
+      ? users.map(u => {
+          const isSelf   = u.username === CURRENT_USER;
+          const active   = (u.active || "Evet") !== "Hayır";
+          const rowStyle = active ? "" : "opacity:0.55";
+          return `<li style="${rowStyle}">
+          <span>
+            ${esc(u.username)}${isSelf ? ' <span class="text-muted" style="font-size:11px">(siz)</span>' : ""}
             <span class="user-role-badge role-${u.role}">${ROLE_LABEL[u.role] || u.role}</span>
             <span class="user-role-badge ${TIER_CLS[u.tier] || ""}">${esc(u.tier || "Analist")}</span>
+            ${active ? "" : '<span class="user-role-badge" style="background:var(--red-subtle);color:var(--red)">Devre Dışı</span>'}
+            <br><span class="text-muted" style="font-size:11px">Son giriş: ${fmtLastLogin(u.last_login)}</span>
           </span>
           <span style="display:flex;gap:4px">
             <button class="btn-icon" title="Düzenle"
               onclick="openEditUserModal(${u.id},'${esc(u.username)}','${u.role}','${esc(u.tier || "Analist")}')">&#9998;</button>
-            <button class="btn-icon danger" title="Sil"
+            <button class="btn-icon" title="${isSelf ? 'Kendi hesabınızı devre dışı bırakamazsınız' : (active ? 'Devre Dışı Bırak' : 'Yeniden Aktifleştir')}"
+              ${isSelf ? "disabled" : ""}
+              onclick="toggleUserActive(${u.id},'${esc(u.username)}','${active ? "Evet" : "Hayır"}')">${active ? "&#9208;" : "&#9654;"}</button>
+            <button class="btn-icon danger" title="${isSelf ? 'Kendi hesabınızı silemezsiniz' : 'Sil'}" ${isSelf ? "disabled" : ""}
               onclick="deleteUser(${u.id},'${esc(u.username)}')">&#x1F5D1;</button>
           </span>
-        </li>`).join("")
+        </li>`;
+        }).join("")
       : `<li class="text-muted" style="justify-content:center">Henüz kullanıcı eklenmedi.</li>`;
   } catch (e) { console.error(e); }
+}
+
+async function toggleUserActive(id, username, currentActive) {
+  const next = currentActive === "Hayır" ? "Evet" : "Hayır";
+  const verb = next === "Hayır" ? "devre dışı bırakmak" : "yeniden aktifleştirmek";
+  if (!confirm(`"${username}" kullanıcısını ${verb} istediğinize emin misiniz?`)) return;
+  try {
+    await apiFetch(`/api/users/${id}`, { method: "PUT", body: JSON.stringify({ active: next }) });
+    loadUsersList();
+  } catch (e) { alert(e.message); }
 }
 
 async function addUser() {
@@ -1548,13 +1574,16 @@ async function deleteUser(id, name) {
 // User edit modal
 // ---------------------------------------------------------------------------
 function openEditUserModal(id, username, role, tier) {
+  const isSelf = username === CURRENT_USER;
   document.getElementById("edit-user-id").value           = id;
   document.getElementById("edit-user-modal-title").textContent = `Kullanıcı Düzenle — ${username}`;
   document.getElementById("edit-user-name-display").value = username;
   document.getElementById("edit-user-role").value         = role;
+  document.getElementById("edit-user-role").disabled       = isSelf;
   document.getElementById("edit-user-tier").value         = tier || "Analist";
   document.getElementById("edit-user-password").value     = "";
   document.getElementById("edit-user-password2").value    = "";
+  document.getElementById("edit-user-self-note").style.display = isSelf ? "block" : "none";
   document.getElementById("edit-user-error").style.display = "none";
   document.getElementById("edit-user-modal").style.display = "flex";
 }

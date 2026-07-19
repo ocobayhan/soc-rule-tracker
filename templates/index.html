@@ -413,6 +413,15 @@
         </div>
       </div>
       <div id="user-form-error" class="form-error" style="display:none;margin:0 20px 12px"></div>
+      <div style="padding:0 20px 12px;font-size:11px;color:var(--text-3);line-height:1.6">
+        <strong style="color:var(--text-2)">Rol</strong> — günlük kullanım yetkisi:
+        <strong>Admin</strong> tüm modüllere tam erişir, kayıt siler, yedekleme/Ayarlar'ı yönetir;
+        <strong>Analist</strong> sadece kendi taleplerini açar/düzenler ve atandığı işleri yürütür.<br>
+        <strong style="color:var(--text-2)">Onay Seviyesi</strong> — Tuning/Use-Case/Threat Hunt
+        taleplerinde <em>onay verme</em> yetkisi, rolden bağımsızdır:
+        <strong>Analist</strong> onay veremez; <strong>Kıdemli Analist</strong> ve
+        <strong>Müdür</strong> ön onay ve son onay adımlarını imzalayabilir.
+      </div>
       <ul class="settings-list" id="user-settings-list"></ul>
     </div>
   {% if user_role == 'admin' %}
@@ -520,6 +529,9 @@
           <label class="form-label">Şifre Tekrar</label>
           <input class="form-input" id="edit-user-password2" type="password" placeholder="Yukarıdakini tekrarla…" autocomplete="new-password"/>
         </div>
+      </div>
+      <div id="edit-user-self-note" class="text-muted" style="display:none;font-size:11px;margin-top:8px">
+        Kendi hesabınızı düzenliyorsunuz — rolünüzü kaldırıp kendinizi kilitlemeyi önlemek için Rol alanı devre dışı bırakıldı.
       </div>
       <div id="edit-user-error" class="form-error" style="display:none"></div>
     </div>
