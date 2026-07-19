@@ -403,6 +403,25 @@ body {
       </div>
     </div>
 
+    <div class="section-title" style="margin-top:20px">Hunt Programı — Tüm Zamanlar</div>
+    <div class="kpi-grid" style="margin-top:8px">
+      <div class="kpi-card accent">
+        <div class="kpi-label">Planlanan/Gerçekleştirilen Hunt</div>
+        <div class="kpi-value">{{ kpi.hunt_planned_executed_rate }}%</div>
+        <div class="kpi-sub">{{ kpi.hunt_executed }} / {{ kpi.hunt_planned }} (ön onaydan geçmiş)</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">Hunt'tan Kurala Dönüşüm</div>
+        <div class="kpi-value">{{ kpi.hunt_detection_conversion_rate }}%</div>
+        <div class="kpi-sub">{{ kpi.hunt_detections_created }} / {{ kpi.hunt_detections_suggested }} öneri kurala döndü</div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-label">Toplam Hunt Süresi{% if month_label %} ({{ month_label }}){% endif %}</div>
+        <div class="kpi-value">{{ kpi.hunt_total_hours }} saat</div>
+        <div class="kpi-sub">Tamamlanan hunt'ların toplam süresi</div>
+      </div>
+    </div>
+
     <!-- Summary progress bars -->
     <div class="summary-bars">
       {% set tune_total = [kpi.tune_total, 1] | max %}

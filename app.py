@@ -383,6 +383,59 @@ def get_user_activity_stats():
         })
     return stats
 
+def get_hunt_program_stats(month=None):
+    """SOC-CMM tarzı Threat Hunting program metrikleri (2026-07-20 kullanıcı
+    isteği) — Excel "KPI Özeti" sayfası ve görsel Rapor bu fonksiyonu
+    paylaşır, tek yerden doğru (bkz. Faz B'deki ders).
+
+    - hunt_planned / hunt_executed / oran: kullanıcının kendi tanımı —
+      "planlanan" = ön onaydan geçmiş (Ön Onay Bekliyor/Reddedildi dışında)
+      her hunt talebi; "gerçekleştirilen" = Tamamlandı'ya ulaşanlar.
+      Bilinçli olarak ay filtresinden bağımsız (tüm zamanların toplamı) —
+      bu "programın bugüne kadarki etkinliği" sorusu, aylık akış değil.
+    - hunt_detections_suggested/created/oran: "detection önerisi verildi"
+      (detection_suggestion=Evet) ile "gerçekten bir kurala dönüştü"
+      (bağlı Use-Case'in Prod'da Aktif'e ulaşması) arasındaki fark.
+      Aynı sebeple ay filtresinden bağımsız.
+    - hunt_total_hours: SADECE bu ay filtreye duyarlı — kullanıcı toplam
+      hunt saatini kendi dışarıdaki "toplam analist saati" karşılaştırmasında
+      kullanacağını söyledi, bu yüzden aylık bir sayı olarak veriliyor.
+    """
+    db = get_db()
+    hunt_planned = db.execute(
+        "SELECT COUNT(*) c FROM threat_hunt_requests WHERE status NOT IN (?,?)",
+        (STATUS_PENDING_VALIDATION, STATUS_REJECTED)
+    ).fetchone()["c"]
+    hunt_executed = db.execute(
+        "SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı'"
+    ).fetchone()["c"]
+    hunt_detections_suggested = db.execute(
+        "SELECT COUNT(*) c FROM threat_hunt_requests WHERE detection_suggestion='Evet'"
+    ).fetchone()["c"]
+    hunt_detections_created = db.execute("""
+        SELECT COUNT(*) c FROM threat_hunt_requests h
+        JOIN usecase_requests u ON u.source_hunt_id = h.id
+        WHERE u.status = 'Prod''da Aktif'
+    """).fetchone()["c"]
+    if month:
+        hours_row = db.execute(
+            "SELECT COALESCE(SUM(hunt_duration_hours),0) s FROM threat_hunt_requests "
+            "WHERE status='Tamamlandı' AND strftime('%Y-%m',completed_at)=?", (month,)
+        ).fetchone()
+    else:
+        hours_row = db.execute(
+            "SELECT COALESCE(SUM(hunt_duration_hours),0) s FROM threat_hunt_requests WHERE status='Tamamlandı'"
+        ).fetchone()
+    return {
+        "hunt_planned":  hunt_planned,
+        "hunt_executed": hunt_executed,
+        "hunt_planned_executed_rate": round(hunt_executed / hunt_planned * 100) if hunt_planned else 0,
+        "hunt_detections_suggested": hunt_detections_suggested,
+        "hunt_detections_created":   hunt_detections_created,
+        "hunt_detection_conversion_rate": round(hunt_detections_created / hunt_detections_suggested * 100) if hunt_detections_suggested else 0,
+        "hunt_total_hours": hours_row["s"],
+    }
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -2205,6 +2258,19 @@ def export_data():
         ("Reddedildi (Ön Onay)",      hunt_rejected),
         ("Ön Onay Red Oranı (%)",     hunt_rejection_pct),
         ("", ""),
+        ("── HUNT PROGRAMI (Tüm Zamanlar) ─", ""),
+    ]
+    hunt_prog = get_hunt_program_stats(exp_month or None)
+    kpi_rows += [
+        ("Planlanan Hunt (ön onaydan geçmiş)", hunt_prog["hunt_planned"]),
+        ("Gerçekleştirilen Hunt (Tamamlandı)",  hunt_prog["hunt_executed"]),
+        ("Planlanan/Gerçekleştirilen Oranı (%)", hunt_prog["hunt_planned_executed_rate"]),
+        ("Detection Önerisi Verilen Hunt",     hunt_prog["hunt_detections_suggested"]),
+        ("Kurala Dönüşen (Prod'da Aktif UC)",  hunt_prog["hunt_detections_created"]),
+        ("Detection Dönüşüm Oranı (%)",        hunt_prog["hunt_detection_conversion_rate"]),
+        ("Toplam Hunt Süresi (saat)" + (f" — {exp_month}" if exp_month else " — Tüm Zamanlar"),
+         hunt_prog["hunt_total_hours"]),
+        ("", ""),
         ("Dışa Aktarım Tarihi",       date.today().isoformat()),
     ]
     for label, val in kpi_rows:
@@ -2302,6 +2368,9 @@ def monthly_report():
     kpi["tune_rejection_rate"] = _rejection_rate(kpi["tune_rejected"], kpi["tune_total"], kpi["tune_pending_validation"])
     kpi["uc_rejection_rate"]   = _rejection_rate(kpi["uc_rejected"],   kpi["uc_total"],   kpi["uc_pending_validation"])
     kpi["hunt_rejection_rate"] = _rejection_rate(kpi["hunt_rejected"], kpi["hunt_total"], kpi["hunt_pending_validation"])
+
+    # SOC-CMM tarzı hunt programı metrikleri (bkz. get_hunt_program_stats)
+    kpi.update(get_hunt_program_stats(month or None))
 
     # ── Records for tables ─────────────────────────────────────────────────
     def rows(sql, col="created_at"):

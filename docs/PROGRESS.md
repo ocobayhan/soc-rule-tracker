@@ -469,6 +469,45 @@ geri kalanıyla tutarsız iki serbest alan içeriyordu:
   doğru şekilde göründü. Test kayıtları (UC, geçici ortam, hunt'ın test
   amaçlı değiştirilen alanları) temizlendi.
 
+### Faz J — SOC-CMM Hunt Programı Metrikleri (2026-07-20)
+
+Kullanıcı SOC-CMM'in standart Threat Hunting metrik listesini paylaştı, hangi
+metriklerin zaten çıkarılabildiğini/hangilerinin eksik olduğunu sorup üç
+"kısmen" işaretlenen metrik için kendi yorumunu netleştirdi:
+- **% Time spent on threat hunting** — dışarıda ayrı şekilde kıyaslanacak,
+  sistem sadece hunt'a harcanan toplam süreyi tutsun yeterli (zaten
+  `hunt_duration_hours` ile tutuluyordu — yeni olan, bunun toplamının
+  raporlara çıkması).
+- **% Planned vs. executed hunts** — kullanıcının tanımı: onaylanan
+  (ön onaydan geçen) hunt talepleri "planlanmış" sayılsın.
+- **# Newly created detections** — Hunt'tan önerilen bir Use-Case, gerçekten
+  bir kurala (Prod'da Aktif) dönüşürse bu "hunt'tan doğan detection" sayılsın.
+
+Bu üç tanımı doğrudan uygulayan `get_hunt_program_stats()` eklendi — Excel
+"KPI Özeti" sayfası ve görsel Rapor arasında paylaşılan tek kaynak (yine
+Faz B dersi):
+- [x] **Planlanan/Gerçekleştirilen Hunt Oranı** — planlanan = durumu
+  `Ön Onay Bekliyor`/`Reddedildi` dışında olan tüm hunt talepleri (ön
+  onaydan geçmiş); gerçekleştirilen = `Tamamlandı`'ya ulaşanlar.
+- [x] **Hunt'tan Kurala Dönüşüm Oranı** — `detection_suggestion='Evet'`
+  olan hunt sayısı (öneri verildi) vs. bağlı Use-Case'i `Prod'da Aktif`'e
+  ulaşan hunt sayısı (`source_hunt_id` join'i üzerinden) — gerçekten
+  kurala dönüşen oran.
+- [x] **Toplam Hunt Süresi** — `Tamamlandı` durumundaki hunt'ların
+  `hunt_duration_hours` toplamı; kullanıcı bunu kendi "toplam analist
+  saati" kıyaslamasında dışarıda kullanacak.
+- **Ay filtresi kararı:** ilk ikisi bilinçli olarak tüm zamanların
+  toplamı (programın bugüne kadarki etkinliği sorusu, aylık akış değil,
+  Kullanıcı Aktivitesi sayfasıyla aynı gerekçe); sadece toplam hunt
+  süresi ay filtresine duyarlı.
+- [x] **Doğrulandı:** gerçek veri üzerinde elle hesaplanan beklenen
+  değerlerle (5 planlanan/4 gerçekleştirilen=%80, 2 öneri/1 dönüşüm=%50,
+  11 saat toplam) hem `/report` sayfası hem indirilen Excel'in "KPI
+  Özeti" sayfası birebir aynı sonucu verdi.
+- [ ] **Kapsam dışı bırakılan (kullanıcıya bildirildi, henüz istenmedi):**
+  "% Percentage of assets covered" (varlık envanteri/CMDB gerektirir,
+  sistemde hiç yok) — bu, gerçek bir yeni özellik gerektirir.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
