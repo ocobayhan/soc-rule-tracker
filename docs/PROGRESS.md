@@ -394,6 +394,52 @@ zararsız değişikliğin kesişimi asıl hatayı ortaya çıkardı.
   `.detail-grid` düzeni) ekran görüntüsüyle kontrol edildi — başka bir
   görsel bozukluk bulunmadı.
 
+### Faz H — Ad Soyad, Kişi Bazlı İstatistikler, XSOAR Talep Eden (2026-07-19/20)
+
+Kullanıcı kararları: XSOAR eşleşmezse istek reddedilmez, genel etikete
+düşülür; istatistikler hem Excel'e hem canlı bir panele eklensin.
+
+- [x] **`users.full_name`** (opsiyonel) — DB'de eşleştirme/webhook/audit
+  hep **kullanıcı adı** üzerinden çalışmaya devam ediyor, bu sadece
+  gösterim katmanı. `static/app.js`'te `displayName(username)` helper'ı
+  `/api/analysts`'tan (artık `full_name` de dönüyor, herkese açık —
+  `/api/users` settings/admin'e özel kaldığı için buna dokunulmadı)
+  gelen eşlemeyi kullanır, yoksa kullanıcı adına düşer.
+  - Uygulandığı yerler: Tune/UC/Hunt ana tabloları, dashboard mini-
+    tabloları, üç detay modalinin tüm kişi alanları (raporlayan, analist,
+    ön onay veren, son onaylayan vb.), analist seçim dropdown'ları
+    (`value` kullanıcı adı, görünen metin Ad Soyad), sidebar'daki oturum
+    sahibi ismi.
+  - **Bilinçli dokunulmayan yer:** Audit Log'daki `username` kolonu —
+    bu adli/kanıt niteliğinde bir iz, ham sistem kimliğinin (kullanıcı
+    adı) görünmesi burada daha doğru.
+  - Ayarlar > Kullanıcılar formuna (ekle + düzenle) "Ad Soyad" alanı
+    eklendi, opsiyonel.
+- [x] **XSOAR webhook'ta `requested_by`** (opsiyonel) — gönderilen
+  kullanıcı adı tracker'da varsa `reporter` o kişi olur; yoksa (kullanıcı
+  seçimi gereği) istek yine kabul edilir, genel `"XSOAR Entegrasyonu"`
+  etiketine düşülür. Bkz. `docs/xsoar_integration.md`.
+- [x] **Kişi bazlı istatistikler** — `get_user_activity_stats()` tek bir
+  yerden hem `/api/stats/users` (admin/settings, canlı panel) hem Excel
+  "Kullanıcı Aktivitesi" sayfasını besliyor (Faz B'nin dersi: tek
+  kaynak, iki yerde asla sapmaz). Kullanıcı başına: Tune/UC ayrı ayrı
+  girdiği, bitirdiği (terminal durum: Tune Başarılı/Edilmedi,
+  Prod'da Aktif/Yazılamaz), ön onayladığı (`validated_by`), son
+  onayladığı (`approved_by` / `test_approved_by`) sayıları. **Tüm
+  zamanların toplamı** — ay filtresinden bağımsız (KPI Özeti'nin aksine),
+  çünkü "kaç talep girmiş" sorusu doğası gereği kariyer toplamı.
+  - Ayarlar sayfasına canlı bir panel eklendi (kullanıcı seçtiği ikinci
+    yer — Excel'e ek olarak).
+- [x] **Uçtan uca doğrulandı:** `displayName()` üç ana tabloda, üç detay
+  modalinde, dropdown'larda ve sidebar'da test edildi; XSOAR webhook'u
+  hem eşleşen hem eşleşmeyen `requested_by` ile denendi (ikisi de 201,
+  ikincisi genel etikete düştü); kişi bazlı istatistik sayıları hem
+  canlı panelde hem indirilen Excel'de birebir aynı çıktı; toplamların
+  (XSOAR genel etiketli kayıtlar hariç) gerçek toplam kayıt sayısına
+  eşit olduğu doğrulandı. Test için oluşturulan geçici hesap ve test
+  amaçlı atanan Ad Soyad değerleri temizlendi, tüm tablo satır sayıları
+  test öncesiyle uyumlu.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

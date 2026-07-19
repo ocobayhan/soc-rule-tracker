@@ -285,6 +285,10 @@ def init_db():
     for col, default in [("last_login", "NULL"), ("active", "'Evet'")]:
         if not _col_exists(db, "users", col):
             db.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT {default}")
+    # Ad Soyad — kullanıcı adı DB/eşleştirme/webhook'ta değişmeden kalır,
+    # bu sadece arayüzde gösterim için opsiyonel bir alan (bkz. docs/rbac.md).
+    if not _col_exists(db, "users", "full_name"):
+        db.execute("ALTER TABLE users ADD COLUMN full_name TEXT")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -338,6 +342,46 @@ def _parse_date(val):
         return val
     except ValueError:
         return None
+
+def get_user_activity_stats():
+    """Kişi başına Tuning/Use-Case aktivite dökümü — kim kaç talep girmiş,
+    kaç tanesini (analist olarak) sonuçlandırmış, kaç tanesinde ön onay ve
+    kaç tanesinde son onay vermiş. Hem /api/stats/users hem Excel export
+    "Kullanıcı Aktivitesi" sayfası bu fonksiyonu paylaşır — tek yerden
+    doğru, iki yerde asla birbirinden sapmaz (bkz. Faz B'deki ders)."""
+    db = get_db()
+    users = db.execute(
+        "SELECT username, full_name FROM users WHERE role != 'settings' ORDER BY username"
+    ).fetchall()
+
+    def count_eq(table, col, val):
+        return db.execute(f"SELECT COUNT(*) c FROM {table} WHERE {col}=?", (val,)).fetchone()["c"]
+
+    def count_in(table, col, val, statuses):
+        placeholders = ",".join("?" for _ in statuses)
+        return db.execute(
+            f"SELECT COUNT(*) c FROM {table} WHERE {col}=? AND status IN ({placeholders})",
+            (val, *statuses),
+        ).fetchone()["c"]
+
+    stats = []
+    for u in users:
+        uname = u["username"]
+        stats.append({
+            "username":  uname,
+            "full_name": u["full_name"] or uname,
+            "tune_reported":  count_eq("tune_requests", "reporter", uname),
+            "tune_completed": count_in("tune_requests", "tuning_analyst", uname,
+                                       ["Tune Başarılı", "Tune Edilmedi"]),
+            "tune_validated": count_eq("tune_requests", "validated_by", uname),
+            "tune_approved":  count_eq("tune_requests", "approved_by", uname),
+            "uc_reported":    count_eq("usecase_requests", "requester", uname),
+            "uc_completed":   count_in("usecase_requests", "rule_author", uname,
+                                       ["Prod'da Aktif", "Yazılamaz"]),
+            "uc_validated":   count_eq("usecase_requests", "validated_by", uname),
+            "uc_approved":    count_eq("usecase_requests", "test_approved_by", uname),
+        })
+    return stats
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -524,10 +568,16 @@ def delete_environment(env_id):
 def list_analysts():
     db   = get_db()
     rows = db.execute(
-        "SELECT id, username AS name, role FROM users "
+        "SELECT id, username AS name, full_name, role FROM users "
         "WHERE role != 'settings' ORDER BY username"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+@app.route("/api/stats/users", methods=["GET"])
+@login_required
+@settings_required
+def api_user_stats():
+    return jsonify(get_user_activity_stats())
 
 # ---------------------------------------------------------------------------
 # MITRE ATT&CK cache
@@ -766,6 +816,19 @@ def xsoar_create_tune():
         return jsonify({"error": f"Eksik alan(lar): {', '.join(missing)}"}), 400
 
     db  = get_db()
+    # Talep eden analisti tracker kullanıcı adıyla eşleştirmeyi dene — XSOAR
+    # tarafında bu isim yanlış/eksikse (yazım hatası, tracker'da olmayan biri
+    # vb.) istek yine kabul edilir, sadece genel entegrasyon etiketine düşülür
+    # (bkz. docs/xsoar_integration.md).
+    requested_by = str(data.get("requested_by", "")).strip()
+    reporter = XSOAR_REPORTER_NAME
+    if requested_by:
+        match = db.execute(
+            "SELECT username FROM users WHERE username=? AND role!='settings'", (requested_by,)
+        ).fetchone()
+        if match:
+            reporter = match["username"]
+
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_id = next_available_id(db, "tune_requests")
     cur = db.execute("""
@@ -775,7 +838,7 @@ def xsoar_create_tune():
            created_at,completed_at,updated_at,xsoar_case_id,xsoar_url)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
-        new_id, XSOAR_REPORTER_NAME,
+        new_id, reporter,
         str(data["environment"]).strip(), str(data["rule_name"]).strip(),
         str(data["analyst_comment"]).strip(),
         "", "", "", STATUS_PENDING_VALIDATION, None, None,
@@ -784,8 +847,10 @@ def xsoar_create_tune():
     ))
     db.commit()
     new_row = db.execute("SELECT * FROM tune_requests WHERE id=?", (cur.lastrowid,)).fetchone()
-    write_audit("CREATE_TUNE_XSOAR", "tune", new_row["id"],
-                f"Kural: {new_row['rule_name']} | XSOAR Case: {new_row['xsoar_case_id']}")
+    detail = f"Kural: {new_row['rule_name']} | XSOAR Case: {new_row['xsoar_case_id']}"
+    if requested_by:
+        detail += f" | Talep Eden (XSOAR): {requested_by}" + ("" if reporter == requested_by else " (eşleşmedi, genel etikete düşüldü)")
+    write_audit("CREATE_TUNE_XSOAR", "tune", new_row["id"], detail)
     return jsonify(dict(new_row)), 201
 
 @app.route("/api/tune/<int:item_id>", methods=["PUT"])
@@ -1717,7 +1782,7 @@ def start_hunt(item_id):
 def list_users():
     db = get_db()
     rows = db.execute(
-        "SELECT id, username, role, tier, created_at, last_login, active FROM users "
+        "SELECT id, username, full_name, role, tier, created_at, last_login, active FROM users "
         "WHERE role != 'settings' ORDER BY username"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -1726,11 +1791,12 @@ def list_users():
 @login_required
 @settings_required
 def create_user():
-    data     = request.json or {}
-    username = data.get("username", "").strip()
-    password = data.get("password", "").strip()
-    role     = data.get("role", "analyst")
-    tier     = data.get("tier", TIER_ANALIST)
+    data      = request.json or {}
+    username  = data.get("username", "").strip()
+    password  = data.get("password", "").strip()
+    full_name = data.get("full_name", "").strip() or None
+    role      = data.get("role", "analyst")
+    tier      = data.get("tier", TIER_ANALIST)
     if not username or not password:
         return jsonify({"error": "Kullanıcı adı ve şifre zorunludur"}), 400
     if role not in ("admin", "analyst"):
@@ -1742,14 +1808,14 @@ def create_user():
     db = get_db()
     try:
         db.execute(
-            "INSERT INTO users (username,password_hash,role,tier) VALUES (?,?,?,?)",
-            (username, generate_password_hash(password), role, tier)
+            "INSERT INTO users (username,password_hash,full_name,role,tier) VALUES (?,?,?,?,?)",
+            (username, generate_password_hash(password), full_name, role, tier)
         )
         db.commit()
     except Exception:
         return jsonify({"error": "Bu kullanıcı adı zaten mevcut"}), 409
     user = db.execute(
-        "SELECT id,username,role,tier,created_at FROM users WHERE username=?", (username,)
+        "SELECT id,username,full_name,role,tier,created_at FROM users WHERE username=?", (username,)
     ).fetchone()
     write_audit("CREATE_USER", "user", user["id"],
                 f"Kullanıcı: {username} | Rol: {role} | Onay Seviyesi: {tier}")
@@ -1790,17 +1856,21 @@ def update_user(user_id):
     if is_self and new_active == "Hayır":
         return jsonify({"error": "Kendi hesabınızı devre dışı bırakamazsınız."}), 400
 
+    cur_full_name = user["full_name"] if "full_name" in user.keys() else None
+    new_full_name = data.get("full_name", cur_full_name)
+    new_full_name = (new_full_name or "").strip() or None
+
     new_password = data.get("password", "").strip()
     if new_password:
         if len(new_password) < 6:
             return jsonify({"error": "Şifre en az 6 karakter olmalıdır"}), 400
         db.execute(
-            "UPDATE users SET role=?, tier=?, active=?, password_hash=? WHERE id=?",
-            (new_role, new_tier, new_active, generate_password_hash(new_password), user_id)
+            "UPDATE users SET role=?, tier=?, active=?, full_name=?, password_hash=? WHERE id=?",
+            (new_role, new_tier, new_active, new_full_name, generate_password_hash(new_password), user_id)
         )
     else:
-        db.execute("UPDATE users SET role=?, tier=?, active=? WHERE id=?",
-                   (new_role, new_tier, new_active, user_id))
+        db.execute("UPDATE users SET role=?, tier=?, active=?, full_name=? WHERE id=?",
+                   (new_role, new_tier, new_active, new_full_name, user_id))
     db.commit()
 
     audit_parts = []
@@ -1810,12 +1880,14 @@ def update_user(user_id):
         audit_parts.append(f"Onay Seviyesi: {user['tier']} → {new_tier}")
     if new_active != cur_active:
         audit_parts.append(f"Durum: {cur_active} → {new_active}")
+    if new_full_name != cur_full_name:
+        audit_parts.append(f"Ad Soyad: {cur_full_name or '—'} → {new_full_name or '—'}")
     if new_password:
         audit_parts.append("Şifre değiştirildi")
     write_audit("EDIT_USER", "user", user_id,
                 f"Kullanıcı: {user['username']} | " + " | ".join(audit_parts))
     updated = db.execute(
-        "SELECT id,username,role,tier,created_at,last_login,active FROM users WHERE id=?", (user_id,)
+        "SELECT id,username,full_name,role,tier,created_at,last_login,active FROM users WHERE id=?", (user_id,)
     ).fetchone()
     return jsonify(dict(updated))
 
@@ -2139,6 +2211,25 @@ def export_data():
         ws4.append([label, val])
 
     auto_width(ws4)
+
+    # ── Sheet 5 : Kullanıcı Aktivitesi ──────────────────────────────────────
+    # Not: bu sayfa ay filtresinden bağımsız, tüm zamanların toplamını
+    # gösterir — "kaç talep girmiş/bitirmiş/onaylamış" kişinin genel
+    # aktivite dökümü olduğu için ay bazlı KPI'lardan ayrı tutuldu.
+    ws5 = wb.create_sheet("Kullanıcı Aktivitesi")
+    user_cols = ["Kullanıcı Adı", "Ad Soyad",
+                 "Tune: Girdiği", "Tune: Bitirdiği", "Tune: Ön Onayladığı", "Tune: Son Onayladığı",
+                 "UC: Girdiği", "UC: Bitirdiği", "UC: Ön Onayladığı", "UC: Son Onayladığı"]
+    write_headers(ws5, user_cols)
+    for u in get_user_activity_stats():
+        ws5.append([
+            u["username"], u["full_name"],
+            u["tune_reported"], u["tune_completed"], u["tune_validated"], u["tune_approved"],
+            u["uc_reported"], u["uc_completed"], u["uc_validated"], u["uc_approved"],
+        ])
+        for ci in range(1, len(user_cols) + 1):
+            ws5.cell(row=ws5.max_row, column=ci).alignment = CELL_ALIGN
+    auto_width(ws5)
 
     # ── Serve ──────────────────────────────────────────────────────────────
     buf = BytesIO()

@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v23
+   SOC Tracker — Frontend  v24
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -196,6 +196,14 @@ async function loadDropdownData() {
   ]);
   populateEnvDropdowns();
   populateAnalystDropdowns();
+  // Sidebar'daki oturum sahibi ismi de kullanıcı adından Ad Soyad'a çevrilir
+  const nameEl = document.getElementById("sidebar-user-name");
+  if (nameEl && typeof CURRENT_USER !== "undefined") {
+    const shown = displayName(CURRENT_USER);
+    nameEl.textContent = shown;
+    const avatarEl = document.getElementById("sidebar-user-avatar");
+    if (avatarEl && shown) avatarEl.textContent = shown[0].toUpperCase();
+  }
 }
 
 function envOpts(cur = "") {
@@ -206,8 +214,17 @@ function envOpts(cur = "") {
 function analystOpts(cur = "", allowEmpty = true) {
   const empty = allowEmpty ? `<option value="">— Seçin —</option>` : "";
   return empty + _analysts.map(a =>
-    `<option value="${esc(a.name)}"${a.name===cur?" selected":""}>${esc(a.name)}</option>`
+    `<option value="${esc(a.name)}"${a.name===cur?" selected":""}>${esc(a.full_name || a.name)}</option>`
   ).join("");
+}
+
+/** Kullanıcı adını arayüzde göstermek için Ad Soyad'a çevirir (yoksa
+ * kullanıcı adına düşer). DB/eşleştirme/webhook her zaman kullanıcı
+ * adı üzerinden çalışmaya devam eder — bu sadece gösterim katmanı. */
+function displayName(username) {
+  if (!username) return username;
+  const a = _analysts.find(x => x.name === username);
+  return (a && a.full_name) || username;
 }
 
 function populateEnvDropdowns() {
@@ -300,7 +317,7 @@ async function loadDashboardTables() {
       ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,TUNE_CLS)}</td>
           <td class="td-truncate" title="${esc(r.rule_name)}">${esc(r.rule_name)}</td>
-          <td class="text-muted" title="${esc(r.tuning_analyst || r.reporter)}">${esc(r.tuning_analyst || r.reporter)}</td>
+          <td class="text-muted" title="${esc(r.tuning_analyst || r.reporter)}">${esc(displayName(r.tuning_analyst || r.reporter))}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
       : empty(4);
@@ -313,7 +330,7 @@ async function loadDashboardTables() {
       ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,UC_CLS)}</td>
           <td class="td-truncate" title="${esc(r.usecase_description)}">${esc(r.usecase_description)}</td>
-          <td class="text-muted" title="${esc(r.rule_author || r.requester)}">${esc(r.rule_author || r.requester)}</td>
+          <td class="text-muted" title="${esc(r.rule_author || r.requester)}">${esc(displayName(r.rule_author || r.requester))}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
       : empty(4);
@@ -327,7 +344,7 @@ async function loadDashboardTables() {
       ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,HUNT_CLS)}</td>
           <td class="td-truncate" title="${esc(r.hunt_subject)}">${esc(r.hunt_subject)}</td>
-          <td class="text-muted" title="${esc(r.assigned_analyst || r.requester)}">${esc(r.assigned_analyst || r.requester)}</td>
+          <td class="text-muted" title="${esc(r.assigned_analyst || r.requester)}">${esc(displayName(r.assigned_analyst || r.requester))}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
       : empty(4);
@@ -420,7 +437,7 @@ function openTuneDetail(id) {
   const fmt = v => v ? v.slice(0,10) : "";
   document.getElementById("tune-detail-title").textContent = r.rule_name;
   document.getElementById("tune-detail-body").innerHTML = `<div class="detail-grid">
-    ${detailRow("Raporlayan",        r.reporter)}
+    ${detailRow("Raporlayan",        displayName(r.reporter))}
     ${r.xsoar_case_id ? `<div class="detail-row">
         <span class="detail-label">${r.xsoar_case_missing === "Evet" ? "Case No (SOAR'da yok, manuel)" : "SOAR Case"}</span>
         <span class="detail-value">${r.xsoar_url
@@ -429,17 +446,17 @@ function openTuneDetail(id) {
       </div>` : ""}
     ${detailRow("Ortam",             r.environment)}
     ${detailRow("Durum",             r.status)}
-    ${r.validated_by ? detailRow("Ön Onay Veren",   r.validated_by)      : ""}
+    ${r.validated_by ? detailRow("Ön Onay Veren",   displayName(r.validated_by)) : ""}
     ${r.validated_at ? detailRow("Ön Onay Tarihi",  fmt(r.validated_at)) : ""}
     ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note)   : ""}
     ${detailRow("Tetiklenme",        r.trigger_frequency)}
     ${detailRow("Tune Nedeni",       r.tune_reason)}
     ${detailImgRow("Kanıt Görseli",  [r.evidence_image])}
-    ${detailRow("Tune Eden",         r.tuning_analyst)}
+    ${detailRow("Tune Eden",         r.tuning_analyst ? displayName(r.tuning_analyst) : "")}
     ${detailRow("Nasıl Tune Edildi", r.how_tuned)}
     ${detailImgRow("Çözüm Görseli",  [r.resolution_image])}
     ${r.tuned_at     ? detailRow("Tune Tarihi",  fmt(r.tuned_at))     : ""}
-    ${r.approved_by  ? detailRow("Onaylayan",    r.approved_by)       : ""}
+    ${r.approved_by  ? detailRow("Onaylayan",    displayName(r.approved_by)) : ""}
     ${r.approved_at  ? detailRow("Onay Tarihi",  fmt(r.approved_at))  : ""}
     ${r.approval_note ? detailRow("Onay Notu",   r.approval_note)     : ""}
     ${r.qa_test_ok ? detailRow("Test Ortamında Sorunsuz", r.qa_test_ok) : ""}
@@ -455,18 +472,18 @@ function openUCDetail(id) {
   const fmt = v => v ? v.slice(0,10) : "";
   document.getElementById("uc-detail-title").textContent = r.usecase_description.slice(0, 60) + (r.usecase_description.length > 60 ? "…" : "");
   document.getElementById("uc-detail-body").innerHTML = `<div class="detail-grid">
-    ${detailRow("Talep Eden",       r.requester)}
+    ${detailRow("Talep Eden",       displayName(r.requester))}
     ${detailRow("Ortam",            parseEnvStr(r.environment).join(", ") || r.environment)}
     ${detailRow("Durum",            r.status)}
-    ${r.validated_by ? detailRow("Ön Onay Veren",   r.validated_by)      : ""}
+    ${r.validated_by ? detailRow("Ön Onay Veren",   displayName(r.validated_by)) : ""}
     ${r.validated_at ? detailRow("Ön Onay Tarihi",  fmt(r.validated_at)) : ""}
     ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note)   : ""}
     ${detailRow("Use-Case",         r.usecase_description)}
-    ${detailRow("Analist",          r.rule_author)}
+    ${detailRow("Analist",          r.rule_author ? displayName(r.rule_author) : "")}
     ${detailRow("Yazılan Kural",    r.rule_name)}
     ${detailRow("Notlar",           r.notes)}
     ${r.test_started_at  ? detailRow("Test Başlama",     fmt(r.test_started_at))  : ""}
-    ${r.test_approved_by ? detailRow("Prod Onaylayan",   r.test_approved_by)      : ""}
+    ${r.test_approved_by ? detailRow("Prod Onaylayan",   displayName(r.test_approved_by)) : ""}
     ${r.test_approved_at ? detailRow("Prod Onay Tarihi", fmt(r.test_approved_at)) : ""}
     ${r.test_notes       ? detailRow("Test Notları",     r.test_notes)            : ""}
     ${r.qa_test_ok ? detailRow("Test Ortamında Sorunsuz", r.qa_test_ok) : ""}
@@ -597,10 +614,10 @@ function renderTuneRows() {
       <span class="cell-link" onclick="openTuneDetail(${r.id})" style="cursor:pointer">${esc(r.rule_name)}</span>
     </td>
     <td class="td-truncate" title="${esc(r.environment)}">${esc(r.environment)}</td>
-    <td class="td-truncate" title="${esc(r.reporter)}">${esc(r.reporter)}</td>
+    <td class="td-truncate" title="${esc(r.reporter)}">${esc(displayName(r.reporter))}</td>
     <td class="td-truncate" title="${esc(r.tune_reason)}">${esc(r.tune_reason)}</td>
     <td>${freqBadge(r.trigger_frequency)}</td>
-    <td class="td-truncate" title="${esc(r.tuning_analyst||'')}">${esc(r.tuning_analyst)||'<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(r.tuning_analyst||'')}">${r.tuning_analyst ? esc(displayName(r.tuning_analyst)) : '<span class="text-muted">—</span>'}</td>
     <td>${badge(r.status, TUNE_CLS)}</td>
     <td class="text-muted">${fmtDate(r.created_at)}</td>
     <td class="text-muted">${fmtDate(r.completed_at)}</td>
@@ -1065,9 +1082,9 @@ function renderUCRows() {
       ${r.source_hunt_id ? `<span class="badge" style="font-size:10px;padding:1px 5px;margin-left:4px;background:rgba(94,106,210,.15);color:var(--accent-blue)">Hunt #${r.source_hunt_id}</span>` : ""}
     </td>
     <td class="td-truncate" title="${esc(parseEnvStr(r.environment).join(', ') || r.environment)}">${esc(parseEnvStr(r.environment).join(", ") || r.environment)}</td>
-    <td class="td-truncate" title="${esc(r.requester)}">${esc(r.requester)}</td>
+    <td class="td-truncate" title="${esc(r.requester)}">${esc(displayName(r.requester))}</td>
     <td class="td-truncate" title="${esc(r.rule_name||'')}">${esc(r.rule_name)||'<span class="text-muted">—</span>'}</td>
-    <td class="td-truncate" title="${esc(r.rule_author||'')}">${esc(r.rule_author)||'<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(r.rule_author||'')}">${r.rule_author ? esc(displayName(r.rule_author)) : '<span class="text-muted">—</span>'}</td>
     <td>${badge(r.status, UC_CLS)}</td>
     <td class="text-muted">${fmtDate(r.created_at)}</td>
     <td class="text-muted">${fmtDate(r.completed_at)}</td>
@@ -1492,6 +1509,22 @@ async function loadSettings() {
   }
   await loadUsersList();
   loadBackupList();
+  loadUserStats();
+}
+
+async function loadUserStats() {
+  const tbody = document.getElementById("user-stats-tbody");
+  if (!tbody) return;
+  try {
+    const stats = await apiFetch("/api/stats/users");
+    tbody.innerHTML = stats.length
+      ? stats.map(s => `<tr>
+          <td>${esc(s.full_name)}${s.full_name !== s.username ? ` <span class="text-muted" style="font-size:11px">(${esc(s.username)})</span>` : ""}</td>
+          <td>${s.tune_reported}</td><td>${s.tune_completed}</td><td>${s.tune_validated}</td><td>${s.tune_approved}</td>
+          <td>${s.uc_reported}</td><td>${s.uc_completed}</td><td>${s.uc_validated}</td><td>${s.uc_approved}</td>
+        </tr>`).join("")
+      : `<tr><td colspan="9" class="text-muted" style="padding:16px;text-align:center">Henüz kullanıcı yok.</td></tr>`;
+  } catch (e) { console.error(e); }
 }
 
 const ROLE_LABEL = { admin: "Admin", analyst: "Analist" };
@@ -1512,9 +1545,12 @@ async function loadUsersList() {
           const isSelf   = u.username === CURRENT_USER;
           const active   = (u.active || "Evet") !== "Hayır";
           const rowStyle = active ? "" : "opacity:0.55";
+          const nameLine = u.full_name
+            ? `${esc(u.full_name)} <span class="text-muted" style="font-size:11px">(${esc(u.username)})</span>`
+            : esc(u.username);
           return `<li style="${rowStyle}">
           <span>
-            ${esc(u.username)}${isSelf ? ' <span class="text-muted" style="font-size:11px">(siz)</span>' : ""}
+            ${nameLine}${isSelf ? ' <span class="text-muted" style="font-size:11px">(siz)</span>' : ""}
             <span class="user-role-badge role-${u.role}">${ROLE_LABEL[u.role] || u.role}</span>
             <span class="user-role-badge ${TIER_CLS[u.tier] || ""}">${esc(u.tier || "Analist")}</span>
             ${active ? "" : '<span class="user-role-badge" style="background:var(--red-subtle);color:var(--red)">Devre Dışı</span>'}
@@ -1522,7 +1558,7 @@ async function loadUsersList() {
           </span>
           <span style="display:flex;gap:4px">
             <button class="btn-icon" title="Düzenle"
-              onclick="openEditUserModal(${u.id},'${esc(u.username)}','${u.role}','${esc(u.tier || "Analist")}')">&#9998;</button>
+              onclick="openEditUserModal(${u.id},'${esc(u.username)}','${u.role}','${esc(u.tier || "Analist")}','${esc(u.full_name || "")}')">&#9998;</button>
             <button class="btn-icon" title="${isSelf ? 'Kendi hesabınızı devre dışı bırakamazsınız' : (active ? 'Devre Dışı Bırak' : 'Yeniden Aktifleştir')}"
               ${isSelf ? "disabled" : ""}
               onclick="toggleUserActive(${u.id},'${esc(u.username)}','${active ? "Evet" : "Hayır"}')">${active ? "&#9208;" : "&#9654;"}</button>
@@ -1547,6 +1583,7 @@ async function toggleUserActive(id, username, currentActive) {
 
 async function addUser() {
   const username = document.getElementById("new-user-username").value.trim();
+  const fullName = document.getElementById("new-user-fullname").value.trim();
   const password = document.getElementById("new-user-password").value.trim();
   const role     = document.getElementById("new-user-role").value;
   const tier     = document.getElementById("new-user-tier").value;
@@ -1557,10 +1594,12 @@ async function addUser() {
     errEl.style.display = "block"; return;
   }
   try {
-    await apiFetch("/api/users", { method: "POST", body: JSON.stringify({ username, password, role, tier }) });
+    await apiFetch("/api/users", { method: "POST", body: JSON.stringify({ username, full_name: fullName, password, role, tier }) });
     document.getElementById("new-user-username").value = "";
+    document.getElementById("new-user-fullname").value = "";
     document.getElementById("new-user-password").value = "";
     loadUsersList();
+    loadDropdownData();
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
 }
 
@@ -1573,11 +1612,12 @@ async function deleteUser(id, name) {
 // ---------------------------------------------------------------------------
 // User edit modal
 // ---------------------------------------------------------------------------
-function openEditUserModal(id, username, role, tier) {
+function openEditUserModal(id, username, role, tier, fullName) {
   const isSelf = username === CURRENT_USER;
   document.getElementById("edit-user-id").value           = id;
   document.getElementById("edit-user-modal-title").textContent = `Kullanıcı Düzenle — ${username}`;
   document.getElementById("edit-user-name-display").value = username;
+  document.getElementById("edit-user-fullname").value     = fullName || "";
   document.getElementById("edit-user-role").value         = role;
   document.getElementById("edit-user-role").disabled       = isSelf;
   document.getElementById("edit-user-tier").value         = tier || "Analist";
@@ -1592,12 +1632,13 @@ function closeEditUserModal() {
 }
 
 async function saveEditUser() {
-  const id      = document.getElementById("edit-user-id").value;
-  const role    = document.getElementById("edit-user-role").value;
-  const tier    = document.getElementById("edit-user-tier").value;
-  const pw1     = document.getElementById("edit-user-password").value;
-  const pw2     = document.getElementById("edit-user-password2").value;
-  const errEl   = document.getElementById("edit-user-error");
+  const id       = document.getElementById("edit-user-id").value;
+  const role     = document.getElementById("edit-user-role").value;
+  const tier     = document.getElementById("edit-user-tier").value;
+  const fullName = document.getElementById("edit-user-fullname").value.trim();
+  const pw1      = document.getElementById("edit-user-password").value;
+  const pw2      = document.getElementById("edit-user-password2").value;
+  const errEl    = document.getElementById("edit-user-error");
   errEl.style.display = "none";
 
   if (pw1 && pw1 !== pw2) {
@@ -1609,13 +1650,14 @@ async function saveEditUser() {
     errEl.style.display = "block"; return;
   }
 
-  const payload = { role, tier };
+  const payload = { role, tier, full_name: fullName };
   if (pw1) payload.password = pw1;
 
   try {
     await apiFetch(`/api/users/${id}`, { method: "PUT", body: JSON.stringify(payload) });
     closeEditUserModal();
     loadUsersList();
+    loadDropdownData(); // Ad Soyad değişmiş olabilir — displayName() eşlemesini tazele
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
 }
 
@@ -1824,8 +1866,8 @@ function renderHuntRows() {
     <td class="td-truncate" title="${esc(r.hunt_subject)}">
       <span class="cell-link" onclick="openHuntDetail(${r.id})" style="cursor:pointer">${esc(r.hunt_subject)}</span>
     </td>
-    <td class="td-truncate" title="${esc(r.requester)}">${esc(r.requester)}</td>
-    <td class="td-truncate" title="${esc(r.assigned_analyst||'')}">${esc(r.assigned_analyst)||'<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(r.requester)}">${esc(displayName(r.requester))}</td>
+    <td class="td-truncate" title="${esc(r.assigned_analyst||'')}">${r.assigned_analyst ? esc(displayName(r.assigned_analyst)) : '<span class="text-muted">—</span>'}</td>
     <td>${badge(r.status, HUNT_CLS)}</td>
     <td class="text-muted">${fmtDate(r.created_at)}</td>
     <td class="text-muted">${fmtDate(r.completed_at)}</td>
@@ -2453,14 +2495,14 @@ async function openHuntDetail(id) {
     let body = `
       <div class="detail-section">
         ${detailRow("Durum", r.status)}
-        ${r.validated_by ? detailRow("Ön Onay Veren", r.validated_by) : ""}
+        ${r.validated_by ? detailRow("Ön Onay Veren", displayName(r.validated_by)) : ""}
         ${r.validated_at ? detailRow("Ön Onay Tarihi", fmtDate(r.validated_at)) : ""}
         ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note) : ""}
-        ${r.result_approved_by ? detailRow("Sonucu Onaylayan", r.result_approved_by) : ""}
+        ${r.result_approved_by ? detailRow("Sonucu Onaylayan", displayName(r.result_approved_by)) : ""}
         ${r.result_approved_at ? detailRow("Sonuç Onay Tarihi", fmtDate(r.result_approved_at)) : ""}
         ${r.result_approval_note ? detailRow("Sonuç Onay Notu", r.result_approval_note) : ""}
-        ${detailRow("Talep Eden", r.requester)}
-        ${detailRow("Atanan Analist", r.assigned_analyst)}
+        ${detailRow("Talep Eden", displayName(r.requester))}
+        ${detailRow("Atanan Analist", r.assigned_analyst ? displayName(r.assigned_analyst) : "")}
         ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${envBadges}</span></div>` : ""}
         ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
         ${r.started_at ? detailRow("Hunt Başlangıcı", fmtDate(r.started_at)) : ""}

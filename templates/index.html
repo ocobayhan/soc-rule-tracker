@@ -52,8 +52,8 @@
   <div class="sidebar-bottom">
     <div class="sidebar-divider"></div>
     <div class="sidebar-user">
-      <div class="sidebar-user-avatar">{{ username[0]|upper if username else "?" }}</div>
-      <span>{{ username }}</span>
+      <div class="sidebar-user-avatar" id="sidebar-user-avatar">{{ username[0]|upper if username else "?" }}</div>
+      <span id="sidebar-user-name">{{ username }}</span>
     </div>
     <a href="/logout" class="nav-btn" style="color:var(--text-2)">
       <span>&#8617;</span> Çıkış
@@ -399,6 +399,7 @@
         <span class="settings-panel-title">Kullanıcılar</span>
         <div class="settings-add-row">
           <input type="text"     id="new-user-username" class="form-input input-sm" placeholder="Kullanıcı adı"/>
+          <input type="text"     id="new-user-fullname" class="form-input input-sm" placeholder="Ad Soyad (opsiyonel)"/>
           <input type="password" id="new-user-password" class="form-input input-sm" placeholder="Şifre (min 6)"/>
           <select id="new-user-role" class="form-input input-sm">
             <option value="analyst">Analist</option>
@@ -485,6 +486,31 @@
         </p>
       </div>
     </div>
+
+    <!-- Kullanıcı Aktivitesi — admin only -->
+    <div class="settings-panel" style="margin-top:20px;max-width:1100px">
+      <div class="settings-panel-header">
+        <span class="settings-panel-title">Kullanıcı Aktivitesi</span>
+      </div>
+      <p style="font-size:11px;color:var(--text-3);margin:0;padding:0 20px 12px">
+        Kişi başına tüm zamanların toplamı (ay filtresi uygulanmaz) — aynı
+        döküm Excel raporunun "Kullanıcı Aktivitesi" sayfasında da var.
+      </p>
+      <div class="table-wrapper" style="padding:0 20px 16px">
+        <table class="table table-fixed" id="user-stats-table">
+          <thead>
+            <tr>
+              <th>Kullanıcı</th>
+              <th>Tune: Girdiği</th><th>Tune: Bitirdiği</th><th>Tune: Ön Onay</th><th>Tune: Son Onay</th>
+              <th>UC: Girdiği</th><th>UC: Bitirdiği</th><th>UC: Ön Onay</th><th>UC: Son Onay</th>
+            </tr>
+          </thead>
+          <tbody id="user-stats-tbody">
+            <tr><td colspan="9" class="text-muted" style="padding:16px;text-align:center">Yükleniyor…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   {% endif %}
 
   </section>
@@ -505,6 +531,10 @@
         <div class="form-group form-col-2">
           <label class="form-label">Kullanıcı Adı</label>
           <input class="form-input" id="edit-user-name-display" type="text" disabled/>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Ad Soyad</label>
+          <input class="form-input" id="edit-user-fullname" type="text" placeholder="opsiyonel"/>
         </div>
         <div class="form-group form-col-2">
           <label class="form-label">Rol</label>
@@ -1451,6 +1481,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=23"></script>
+<script src="/static/app.js?v=24"></script>
 </body>
 </html>

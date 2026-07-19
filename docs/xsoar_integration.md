@@ -35,6 +35,7 @@ Anahtar eksik/yanlışsa `401` döner.
 | `environment` | ✅ | Ortam (örn. `PROD`, `DEV`) — mevcut ortamlar listesindeki bir isimle eşleşmeli. |
 | `analyst_comment` | ✅ | Playbook'u ilerleten analistin tune gerekçesi. `tune_reason` alanına yazılır. |
 | `xsoar_url` | opsiyonel | Incident'a doğrudan tıklanabilir link. Verilirse detay ekranında case ID bir link olarak gösterilir. |
+| `requested_by` | opsiyonel | Talebi XSOAR tarafında ilerleten analistin **SOC Tracker'daki kullanıcı adı** (Ad Soyad değil). Eşleşen bir kullanıcı bulunursa `reporter` o kullanıcı olur — kişi bazlı istatistiklerde (`/api/stats/users`, Excel "Kullanıcı Aktivitesi" sayfası) bu talep artık doğru analiste sayılır. Eşleşmezse (yazım hatası, tracker'da olmayan biri) istek yine kabul edilir, `reporter` genel `"XSOAR Entegrasyonu"` etiketine düşer — hiçbir istek bu yüzden reddedilmez. |
 
 Eksik zorunlu alan varsa `400` ve hangi alan(lar)ın eksik olduğunu belirten
 bir hata döner.
@@ -60,7 +61,8 @@ curl -X POST https://<sunucu>:9897/api/integrations/xsoar/tune \
     "xsoar_url": "https://xsoar.example.com/#/Details/12345",
     "rule_name": "Suspicious PowerShell Execution",
     "environment": "PROD",
-    "analyst_comment": "Kural çok fazla yanlış pozitif üretiyor, whitelist gerekiyor."
+    "analyst_comment": "Kural çok fazla yanlış pozitif üretiyor, whitelist gerekiyor.",
+    "requested_by": "analist1"
   }'
 ```
 
