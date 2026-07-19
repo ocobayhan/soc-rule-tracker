@@ -1991,6 +1991,84 @@ def monthly_report():
     )
 
 # ---------------------------------------------------------------------------
+# Hunt raporu PDF export (Faz 6)
+# ---------------------------------------------------------------------------
+def _hunt_pdf_image_uri(filename):
+    """Yüklenen bir görsel dosya adını WeasyPrint'in doğrudan diskten okuyabileceği
+    file:// URI'sine çevirir. Dosya yoksa None döner (şablon görseli atlar)."""
+    if not filename:
+        return None
+    path = os.path.join(UPLOAD_FOLDER, filename)
+    if not os.path.exists(path):
+        return None
+    return "file:///" + os.path.abspath(path).replace(os.sep, "/")
+
+@app.route("/hunt/<int:item_id>/report/pdf")
+@login_required
+def hunt_report_pdf(item_id):
+    """Tamamlanmış (Kıdemli Analist/Müdür onaylı) bir hunt'ın raporunu PDF olarak
+    üretir. Sadece status == 'Tamamlandı' için — bkz. docs/PROGRESS.md Faz 6."""
+    db  = get_db()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != "Tamamlandı":
+        return jsonify({"error": "Sadece 'Tamamlandı' durumundaki hunt'lar için PDF alınabilir."}), 400
+
+    import json as _j
+
+    def _parse_list(key):
+        try:
+            v = _j.loads(row[key] or "[]")
+            return v if isinstance(v, list) else []
+        except Exception:
+            return []
+
+    mitre_entries = [e for e in _parse_list("mitre_techniques") if isinstance(e, dict)]
+    ioc_list      = [v for v in _parse_list("ioc_list") if str(v).strip()]
+    env_list      = [v.strip() for v in (row["hunt_environment"] or "").split(",") if v.strip()]
+    recommendations = [v for v in _parse_list("recommendations") if str(v).strip()]
+    vulnerabilities = [v for v in _parse_list("discovered_vulnerabilities") if str(v).strip()]
+
+    def _fmt(v):
+        return v[:10] if v else ""
+
+    linked_uc = db.execute("SELECT id FROM usecase_requests WHERE source_hunt_id=?", (item_id,)).fetchone()
+
+    html = render_template(
+        "hunt_report_print.html",
+        r=row,
+        mitre_entries=mitre_entries,
+        ioc_list=ioc_list,
+        env_list=env_list,
+        recommendations=recommendations,
+        vulnerabilities=vulnerabilities,
+        linked_uc_id=linked_uc["id"] if linked_uc else None,
+        scope_image_uri=_hunt_pdf_image_uri(row["scope_image"]),
+        findings_image_uri=_hunt_pdf_image_uri(row["findings_image"]),
+        affected_assets_image_uri=_hunt_pdf_image_uri(row["affected_assets_image"]),
+        detection_detail_image_uri=_hunt_pdf_image_uri(row["detection_detail_image"]),
+        recommendations_image_uri=_hunt_pdf_image_uri(row["recommendations_image"]),
+        fmt=_fmt,
+        generated=datetime.now().strftime("%d.%m.%Y %H:%M"),
+    )
+
+    try:
+        from weasyprint import HTML
+    except (ImportError, OSError) as e:
+        app.logger.error(f"[hunt-pdf] WeasyPrint yüklenemedi: {e}")
+        return jsonify({"error": "PDF oluşturma sunucuda kullanılamıyor (WeasyPrint kurulu değil/yüklenemedi)."}), 500
+
+    pdf_bytes = HTML(string=html).write_pdf()
+    write_audit("EXPORT_HUNT_PDF", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"hunt_{item_id}_raporu.pdf",
+    )
+
+# ---------------------------------------------------------------------------
 # Backup
 # ---------------------------------------------------------------------------
 def _do_backup(keep: int = 30):

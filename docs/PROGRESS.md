@@ -186,6 +186,15 @@
 - [ ] Ubuntu test sunucusunda henüz denenmedi — deploy günü doğrulanacak
 - [ ] KPI/Excel/rapor bu modülde de yeni durumları henüz yansıtmıyor (Faz 4'teki notla aynı kapsam dışı bırakma)
 
+### Faz 6 — Threat Hunt Raporu: UI + PDF Export (2026-07-19)
+- [x] `templates/hunt_report_print.html` — tamamlanmış bir hunt için tek sayfalık, temiz, yazdırılabilir rapor şablonu (talep bilgileri, onay/hesap verebilirlik bilgileri, kapsam, MITRE tablosu, bulgular, IOC'ler, detection önerisi, öneriler, keşfedilen zafiyetler, sonuç)
+- [x] `requirements.txt`'e `weasyprint` eklendi; `Dockerfile`'a Pango/Cairo/gdk-pixbuf + DejaVu font sistem paketleri eklendi
+- [x] `GET /hunt/<id>/report/pdf` — sadece `status == 'Tamamlandı'` (Faz 5'in onayladığı, nihai) hunt'lar için; görseller diskteki dosyadan `file://` URI ile WeasyPrint'e veriliyor (ağ round-trip'i yok)
+- [x] Hunt satırlarında ve detay panelinde "PDF İndir" butonu (sadece Tamamlandı hunt'larda görünür)
+- [x] Audit: `EXPORT_HUNT_PDF` aksiyonu
+- [x] **Doğrulandı (yerelde, kısmi):** route'un durum kontrolü (`Tamamlandı` değilse 400) ve WeasyPrint yüklenemediğinde temiz bir JSON hatası dönmesi (çökme yerine) test edildi; Jinja2 şablonu temsili verilerle ayrıca doğrudan render edilip hatasız çalıştığı doğrulandı
+- [ ] ⚠️ **Gerçek PDF üretimi (WeasyPrint'in Pango/Cairo native kütüphaneleri) bu Windows geliştirme makinesinde test edilemedi** — WeasyPrint bu ortamda `libgobject-2.0` gibi native kütüphaneleri bulamıyor (beklenen; bunlar sadece Linux'ta apt ile kurulabiliyor). Gerçek PDF çıktısının doğru göründüğü (görseller, Türkçe karakterler, sayfa kırılmaları) **mutlaka Ubuntu test sunucusunda** doğrulanmalı — deploy günü yapılacak.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
@@ -206,7 +215,7 @@
 - [x] ~~Rol yapısı genişletilecek~~ — Faz 3'te `tier` alanı (Müdür/Kıdemli Analist/Analist) eklendi (koddan doğrulandı); onay uçlarını fiilen buna bağlamak **Faz 4/5**'te
 - [x] ~~Tuning & UC otomatik prod geçişi~~ — Faz 4'te ön onay + Q&A'lı son onay ile giderildi (koddan doğrulandı); **canlıda henüz doğrulanmadı**
 - [x] ~~Threat Hunt ön onay yok~~ — Faz 5'te tuning/UC ile aynı iki kapılı desen eklendi (koddan doğrulandı); **canlıda henüz doğrulanmadı**
-- [ ] Threat Hunt raporları için PDF export yok — **Faz 6**
+- [x] ~~Threat Hunt PDF export yok~~ — Faz 6'da eklendi (koddan/şablondan doğrulandı); **gerçek PDF üretimi Ubuntu'da henüz doğrulanmadı** (Windows'ta WeasyPrint native kütüphaneleri yok)
 - [ ] XSOAR entegrasyonu yok (Needs Tuning → otomatik tuning talebi) — **Faz 7**
 
 > Not: 2026-07-19'da konuşulan 8 fazlı (Faz 0-7) güvenilirlik/hesap verebilirlik yol haritası onaylandı —

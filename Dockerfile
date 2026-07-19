@@ -4,6 +4,12 @@ FROM python:3.11-slim
 ENV TZ=Europe/Istanbul
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
+# WeasyPrint (Hunt raporu PDF export) için sistem paketleri
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
+      libgdk-pixbuf2.0-0 libcairo2 fonts-dejavu-core shared-mime-info \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Bağımlılıkları önce kopyala (layer cache için)

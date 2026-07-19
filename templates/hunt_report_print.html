@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<title>Hunt #{{ r.id }} — {{ r.hunt_subject }}</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #FFFFFF;
+  --surface: #F7F8FA;
+  --border: #E5E7EB;
+  --text-1: #111827;
+  --text-2: #6B7280;
+  --text-3: #9CA3AF;
+  --accent: #5E6AD2;
+  --green:  #2DB27D;
+  --amber:  #F59E0B;
+  --red:    #EF4444;
+  --purple: #8B5CF6;
+}
+html { font-size: 12px; }
+body {
+  font-family: "DejaVu Sans", Arial, sans-serif;
+  color: var(--text-1);
+  line-height: 1.5;
+}
+@page {
+  margin: 18mm 14mm;
+  @bottom-center {
+    content: "Sayfa " counter(page) " / " counter(pages);
+    font-size: 9px;
+    color: #9CA3AF;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--accent);
+}
+.header-title { font-size: 18px; font-weight: 700; color: var(--text-1); }
+.header-subject { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.header-meta { text-align: right; font-size: 10px; color: var(--text-3); }
+.header-meta strong { color: var(--text-2); }
+
+.badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 600;
+  padding: 3px 10px; border-radius: 10px;
+  margin-left: 6px;
+}
+.badge-done   { background: rgba(45,178,125,0.14); color: var(--green); }
+.badge-cancel { background: rgba(85,85,85,0.15);   color: var(--text-2); }
+
+.section { margin-bottom: 22px; break-inside: avoid; }
+.section-title {
+  font-size: 12px; font-weight: 700; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.03em;
+  margin-bottom: 8px; padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+.row { display: flex; padding: 4px 0; font-size: 11px; }
+.row-label { width: 160px; flex-shrink: 0; color: var(--text-2); font-weight: 500; }
+.row-value { color: var(--text-1); white-space: pre-wrap; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+
+.text-block {
+  font-size: 11px; white-space: pre-wrap;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 12px; margin-top: 4px;
+}
+.tag {
+  display: inline-block; font-size: 10px;
+  background: rgba(94,106,210,0.12); color: var(--accent);
+  border-radius: 8px; padding: 2px 8px; margin: 2px 4px 2px 0;
+}
+.report-img { max-width: 100%; max-height: 260px; margin-top: 6px; border: 1px solid var(--border); border-radius: 4px; }
+
+table.mitre-table { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-top: 4px; }
+table.mitre-table th, table.mitre-table td {
+  border: 1px solid var(--border); padding: 5px 8px; text-align: left; vertical-align: top;
+}
+table.mitre-table th { background: var(--surface); color: var(--text-2); font-weight: 600; }
+
+ol.list-block { margin-left: 18px; font-size: 11px; }
+ol.list-block li { padding: 2px 0; }
+
+.footer {
+  margin-top: 30px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 9px; color: var(--text-3);
+}
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div class="header-title">Threat Hunt Raporu — #{{ r.id }}</div>
+      <div class="header-subject">{{ r.hunt_subject }}</div>
+    </div>
+    <div class="header-meta">
+      <div><strong>Durum:</strong>
+        <span class="badge {{ 'badge-cancel' if r.status == 'İptal' else 'badge-done' }}">{{ r.status }}</span>
+      </div>
+      <div style="margin-top:4px">Oluşturulma: {{ generated }}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Talep Bilgileri</div>
+    <div class="grid-2">
+      <div>
+        <div class="row"><span class="row-label">Talep Eden</span><span class="row-value">{{ r.requester }}</span></div>
+        <div class="row"><span class="row-label">Atanan Analist</span><span class="row-value">{{ r.assigned_analyst or "—" }}</span></div>
+        <div class="row"><span class="row-label">Ortamlar</span><span class="row-value">{% for e in env_list %}<span class="tag">{{ e }}</span>{% else %}—{% endfor %}</span></div>
+      </div>
+      <div>
+        <div class="row"><span class="row-label">Talep Tarihi</span><span class="row-value">{{ fmt(r.created_at) }}</span></div>
+        <div class="row"><span class="row-label">Hunt Başlangıcı</span><span class="row-value">{{ fmt(r.started_at) if r.started_at else "—" }}</span></div>
+        <div class="row"><span class="row-label">Tamamlanma Tarihi</span><span class="row-value">{{ fmt(r.completed_at) if r.completed_at else "—" }}</span></div>
+        {% if r.hunt_duration_hours is not none %}
+        <div class="row"><span class="row-label">Hunt Süresi</span><span class="row-value">{{ r.hunt_duration_hours }} saat</span></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Onay Bilgileri (Hesap Verebilirlik)</div>
+    <div class="grid-2">
+      <div>
+        <div class="row"><span class="row-label">Ön Onayı Veren</span><span class="row-value">{{ r.validated_by or "—" }}</span></div>
+        <div class="row"><span class="row-label">Ön Onay Tarihi</span><span class="row-value">{{ fmt(r.validated_at) if r.validated_at else "—" }}</span></div>
+        {% if r.validation_note %}<div class="row"><span class="row-label">Ön Onay Notu</span><span class="row-value">{{ r.validation_note }}</span></div>{% endif %}
+      </div>
+      <div>
+        <div class="row"><span class="row-label">Sonucu Onaylayan</span><span class="row-value">{{ r.result_approved_by or "—" }}</span></div>
+        <div class="row"><span class="row-label">Sonuç Onay Tarihi</span><span class="row-value">{{ fmt(r.result_approved_at) if r.result_approved_at else "—" }}</span></div>
+        {% if r.result_approval_note %}<div class="row"><span class="row-label">Sonuç Onay Notu</span><span class="row-value">{{ r.result_approval_note }}</span></div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if r.scope %}
+  <div class="section">
+    <div class="section-title">Hedef &amp; Kapsam</div>
+    <div class="text-block">{{ r.scope }}</div>
+    {% if scope_image_uri %}<img class="report-img" src="{{ scope_image_uri }}"/>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if mitre_entries %}
+  <div class="section">
+    <div class="section-title">MITRE ATT&amp;CK Teknikleri</div>
+    <table class="mitre-table">
+      <thead><tr><th style="width:70px">ID</th><th style="width:130px">Teknik</th><th style="width:110px">Taktik</th><th>Yöntem Notu</th></tr></thead>
+      <tbody>
+        {% for e in mitre_entries %}
+        <tr>
+          <td>{{ e.id }}</td>
+          <td>{{ e.name }}</td>
+          <td>{{ e.tactic }}</td>
+          <td>{{ e.method or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="section">
+    <div class="section-title">Bulgular</div>
+    <div class="row"><span class="row-label">Bulgu Var Mı?</span><span class="row-value">{{ r.has_findings }}</span></div>
+    {% if r.has_findings == "Evet" %}
+      {% if r.findings %}<div class="text-block">{{ r.findings }}</div>{% endif %}
+      {% if findings_image_uri %}<img class="report-img" src="{{ findings_image_uri }}"/>{% endif %}
+      <div class="row" style="margin-top:6px"><span class="row-label">Şiddet</span><span class="row-value">{{ r.severity or "—" }}</span></div>
+      {% if ioc_list %}
+      <div class="row"><span class="row-label">IOC Listesi</span><span class="row-value">{% for ioc in ioc_list %}<span class="tag">{{ ioc }}</span>{% endfor %}</span></div>
+      {% endif %}
+      {% if r.affected_assets %}
+      <div class="row"><span class="row-label">Etkilenen Varlıklar</span><span class="row-value">{{ r.affected_assets }}</span></div>
+      {% endif %}
+      {% if affected_assets_image_uri %}<img class="report-img" src="{{ affected_assets_image_uri }}"/>{% endif %}
+    {% endif %}
+  </div>
+
+  <div class="section">
+    <div class="section-title">Detection Önerisi</div>
+    <div class="row"><span class="row-label">Öneriliyor mu?</span><span class="row-value">{{ r.detection_suggestion }}</span></div>
+    {% if r.detection_suggestion == "Evet" %}
+      {% if r.detection_detail %}<div class="text-block">{{ r.detection_detail }}</div>{% endif %}
+      {% if detection_detail_image_uri %}<img class="report-img" src="{{ detection_detail_image_uri }}"/>{% endif %}
+      {% if linked_uc_id %}<div class="row" style="margin-top:6px"><span class="row-label">İlişkili Use-Case</span><span class="row-value">#{{ linked_uc_id }}</span></div>{% endif %}
+    {% endif %}
+  </div>
+
+  {% if recommendations %}
+  <div class="section">
+    <div class="section-title">Öneriler</div>
+    <ol class="list-block">
+      {% for rec in recommendations %}<li>{{ rec }}</li>{% endfor %}
+    </ol>
+    {% if recommendations_image_uri %}<img class="report-img" src="{{ recommendations_image_uri }}"/>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if vulnerabilities %}
+  <div class="section">
+    <div class="section-title">Keşfedilen Zafiyetler</div>
+    <ol class="list-block">
+      {% for v in vulnerabilities %}<li>{{ v }}</li>{% endfor %}
+    </ol>
+  </div>
+  {% endif %}
+
+  <div class="section">
+    <div class="section-title">Sonuç</div>
+    <div class="row"><span class="row-label">Hunt Sonucu</span><span class="row-value">{{ r.hunt_result or "—" }}</span></div>
+  </div>
+
+  <div class="footer">
+    SOC Tracker — Bu rapor {{ generated }} tarihinde otomatik üretilmiştir. Hunt #{{ r.id }}.
+  </div>
+
+</body>
+</html>

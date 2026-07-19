@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v18
+   SOC Tracker — Frontend  v19
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1362,6 +1362,7 @@ const ACTION_TR = {
   "REJECT_VALIDATION_HUNT": "Hunt talebi reddedildi (ön onay)",
   "APPROVE_HUNT_RESULT":    "Hunt sonucu onaylandı",
   "REJECT_HUNT_RESULT":     "Hunt sonucu revizyona gönderildi",
+  "EXPORT_HUNT_PDF":        "Hunt raporu PDF olarak indirildi",
 };
 const ACTION_CLS = {
   "LOGIN": "audit-login",
@@ -1374,6 +1375,7 @@ const ACTION_CLS = {
   "VALIDATE_TUNE": "audit-claim", "VALIDATE_UC": "audit-claim", "VALIDATE_HUNT": "audit-claim",
   "REJECT_VALIDATION_TUNE": "audit-delete", "REJECT_VALIDATION_UC": "audit-delete", "REJECT_VALIDATION_HUNT": "audit-delete",
   "APPROVE_HUNT_RESULT": "audit-close", "REJECT_HUNT_RESULT": "audit-delete",
+  "EXPORT_HUNT_PDF": "audit-edit",
 };
 
 async function verifyAuditChain() {
@@ -1707,6 +1709,10 @@ function huntActionBtns(r) {
   }
   if (r.status === STATUS_HUNT_RESULT_PENDING && IS_SENIOR)
     return `<button class="btn-action-close" onclick="openHuntResultModal(${r.id})">Sonucu Onayla</button> ${edit}${del}`;
+  if (r.status === "Tamamlandı") {
+    const pdf = `<a class="btn-icon" title="PDF İndir" href="/hunt/${r.id}/report/pdf" target="_blank" style="color:var(--red)">&#128196;</a>`;
+    return `${pdf}${edit}${del}`;
+  }
   return `${edit}${del}`;
 }
 
@@ -2388,6 +2394,13 @@ async function openHuntDetail(id) {
         ${recHtml  ? `<div class="detail-section-title" style="margin-top:12px">Güvenlik Önerileri</div><div style="font-size:13px;line-height:1.6">${recHtml}</div>` : ""}
       </div>`;
     document.getElementById("hunt-detail-body").innerHTML = body;
+    const pdfLink = document.getElementById("hunt-detail-pdf-link");
+    if (r.status === "Tamamlandı") {
+      pdfLink.href = `/hunt/${r.id}/report/pdf`;
+      pdfLink.style.display = "";
+    } else {
+      pdfLink.style.display = "none";
+    }
     document.getElementById("hunt-detail-modal").style.display = "flex";
   } catch (e) { console.error(e); }
 }
