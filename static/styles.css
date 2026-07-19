@@ -939,9 +939,17 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 
 /* Detail panel inner layout */
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.detail-row  { display: flex; flex-direction: column; gap: 2px; }
-.detail-label { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
-.detail-value { font-size: 12px; color: var(--text-1); }
+/* min-width:0 olmadan flex kolonu, boşluksuz uzun bir token (hostname, hash,
+   IOC vb.) geldiğinde küçülmeyi reddediyor ve .modal-body'nin overflow-x'i
+   olmadığı için metin modal dışına taşıp diğer satırlarla görsel olarak
+   üst üste biniyordu — canlı ölçümde 40-60px taşma doğrulandı. */
+.detail-row  { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.detail-label { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; font-weight: 500; overflow-wrap: break-word; }
+.detail-value {
+  font-size: 12px; color: var(--text-1);
+  overflow-wrap: break-word; word-break: break-word;
+  white-space: pre-wrap;
+}
 .detail-value.muted { color: var(--text-2); }
 .detail-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .detail-img {
