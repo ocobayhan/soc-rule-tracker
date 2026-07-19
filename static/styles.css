@@ -929,6 +929,11 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 .role-analyst  { background: var(--accent-subtle); color: var(--accent); }
 .role-settings { background: var(--purple-subtle); color: var(--purple); }
 
+/* Onay seviyesi (tier) rozeti — role'den bağımsız, bkz. docs/rbac.md */
+.tier-analist  { background: var(--border);        color: var(--text-2); }
+.tier-kidemli  { background: var(--teal-subtle);   color: var(--teal); }
+.tier-mudur    { background: var(--green-subtle);  color: var(--green); }
+
 /* Filter row (dashboard) */
 .filter-row { display: flex; align-items: center; gap: 8px; }
 

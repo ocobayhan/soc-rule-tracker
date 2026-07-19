@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v15
+   SOC Tracker — Frontend  v16
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1280,6 +1280,7 @@ async function loadSettings() {
 }
 
 const ROLE_LABEL = { admin: "Admin", analyst: "Analist" };
+const TIER_CLS   = { "Analist": "tier-analist", "Kıdemli Analist": "tier-kidemli", "Müdür": "tier-mudur" };
 
 async function loadUsersList() {
   const list = document.getElementById("user-settings-list");
@@ -1290,10 +1291,11 @@ async function loadUsersList() {
       ? users.map(u => `<li>
           <span>${esc(u.username)}
             <span class="user-role-badge role-${u.role}">${ROLE_LABEL[u.role] || u.role}</span>
+            <span class="user-role-badge ${TIER_CLS[u.tier] || ""}">${esc(u.tier || "Analist")}</span>
           </span>
           <span style="display:flex;gap:4px">
             <button class="btn-icon" title="Düzenle"
-              onclick="openEditUserModal(${u.id},'${esc(u.username)}','${u.role}')">&#9998;</button>
+              onclick="openEditUserModal(${u.id},'${esc(u.username)}','${u.role}','${esc(u.tier || "Analist")}')">&#9998;</button>
             <button class="btn-icon danger" title="Sil"
               onclick="deleteUser(${u.id},'${esc(u.username)}')">&#x1F5D1;</button>
           </span>
@@ -1306,6 +1308,7 @@ async function addUser() {
   const username = document.getElementById("new-user-username").value.trim();
   const password = document.getElementById("new-user-password").value.trim();
   const role     = document.getElementById("new-user-role").value;
+  const tier     = document.getElementById("new-user-tier").value;
   const errEl    = document.getElementById("user-form-error");
   errEl.style.display = "none";
   if (!username || !password) {
@@ -1313,7 +1316,7 @@ async function addUser() {
     errEl.style.display = "block"; return;
   }
   try {
-    await apiFetch("/api/users", { method: "POST", body: JSON.stringify({ username, password, role }) });
+    await apiFetch("/api/users", { method: "POST", body: JSON.stringify({ username, password, role, tier }) });
     document.getElementById("new-user-username").value = "";
     document.getElementById("new-user-password").value = "";
     loadUsersList();
@@ -1329,11 +1332,12 @@ async function deleteUser(id, name) {
 // ---------------------------------------------------------------------------
 // User edit modal
 // ---------------------------------------------------------------------------
-function openEditUserModal(id, username, role) {
+function openEditUserModal(id, username, role, tier) {
   document.getElementById("edit-user-id").value           = id;
   document.getElementById("edit-user-modal-title").textContent = `Kullanıcı Düzenle — ${username}`;
   document.getElementById("edit-user-name-display").value = username;
   document.getElementById("edit-user-role").value         = role;
+  document.getElementById("edit-user-tier").value         = tier || "Analist";
   document.getElementById("edit-user-password").value     = "";
   document.getElementById("edit-user-password2").value    = "";
   document.getElementById("edit-user-error").style.display = "none";
@@ -1346,6 +1350,7 @@ function closeEditUserModal() {
 async function saveEditUser() {
   const id      = document.getElementById("edit-user-id").value;
   const role    = document.getElementById("edit-user-role").value;
+  const tier    = document.getElementById("edit-user-tier").value;
   const pw1     = document.getElementById("edit-user-password").value;
   const pw2     = document.getElementById("edit-user-password2").value;
   const errEl   = document.getElementById("edit-user-error");
@@ -1360,7 +1365,7 @@ async function saveEditUser() {
     errEl.style.display = "block"; return;
   }
 
-  const payload = { role };
+  const payload = { role, tier };
   if (pw1) payload.password = pw1;
 
   try {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
-  <link rel="stylesheet" href="/static/styles.css?v=11.2"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.3"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -386,6 +386,11 @@
             <option value="analyst">Analist</option>
             <option value="admin">Admin</option>
           </select>
+          <select id="new-user-tier" class="form-input input-sm" title="Onay Seviyesi">
+            <option value="Analist">Analist</option>
+            <option value="Kıdemli Analist">Kıdemli Analist</option>
+            <option value="Müdür">Müdür</option>
+          </select>
           <button class="btn btn-primary" onclick="addUser()">Ekle</button>
         </div>
       </div>
@@ -438,6 +443,14 @@
           <select class="form-input" id="edit-user-role">
             <option value="analyst">Analist</option>
             <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Onay Seviyesi</label>
+          <select class="form-input" id="edit-user-tier">
+            <option value="Analist">Analist</option>
+            <option value="Kıdemli Analist">Kıdemli Analist</option>
+            <option value="Müdür">Müdür</option>
           </select>
         </div>
         <div class="form-group form-col-2">
@@ -1266,7 +1279,9 @@
 <script>
   const USER_ROLE    = "{{ user_role }}";
   const CURRENT_USER = "{{ username }}";
+  const USER_TIER    = "{{ user_tier }}";
+  const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=15"></script>
+<script src="/static/app.js?v=16"></script>
 </body>
 </html>

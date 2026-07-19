@@ -20,6 +20,15 @@ UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(_BASE, "static", "u
 BACKUP_DIR    = os.environ.get("BACKUP_DIR",    os.path.join(_BASE, "backups"))
 ALLOWED_EXT  = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
+# Onay seviyesi (tier) — role'den (admin/analyst/settings) bağımsız ikinci bir
+# RBAC boyutu. Onay gerektiren işlemler (tune/UC/hunt approve) role'e değil
+# tier'a bakar. Bkz. docs/rbac.md.
+TIER_ANALIST = "Analist"
+TIER_KIDEMLI = "Kıdemli Analist"
+TIER_MUDUR   = "Müdür"
+TIERS = (TIER_ANALIST, TIER_KIDEMLI, TIER_MUDUR)
+SENIOR_TIERS = (TIER_KIDEMLI, TIER_MUDUR)
+
 # ---------------------------------------------------------------------------
 # DB
 # ---------------------------------------------------------------------------
@@ -204,6 +213,14 @@ def init_db():
     for col in ["prev_hash", "record_hash"]:
         if not _col_exists(db, "audit_log", col):
             db.execute(f"ALTER TABLE audit_log ADD COLUMN {col} TEXT")
+    # Onay seviyesi (tier) — role'den BAĞIMSIZ ikinci bir boyut (bkz. docs/rbac.md).
+    # Sadece kolon ilk eklendiğinde mevcut role'e göre bir kerelik varsayılan atanır;
+    # sonrasında settings ekranından bağımsız olarak yönetilir, role'e göre üzerine
+    # yazılmaz.
+    if not _col_exists(db, "users", "tier"):
+        db.execute(f"ALTER TABLE users ADD COLUMN tier TEXT NOT NULL DEFAULT '{TIER_ANALIST}'")
+        db.execute(f"UPDATE users SET tier='{TIER_MUDUR}' WHERE role='admin'")
+        db.execute(f"UPDATE users SET tier='{TIER_ANALIST}' WHERE role='analyst'")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -316,6 +333,12 @@ def settings_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def is_senior():
+    """Onay işlemleri (tune/UC/hunt approve) için: Kıdemli Analist veya Müdür
+    onay seviyesindeki kullanıcılar yetkilidir. `role`den (admin/analyst/
+    settings) bağımsızdır — bkz. docs/rbac.md."""
+    return session.get("tier") in SENIOR_TIERS
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
@@ -328,6 +351,7 @@ def login():
             session["user_id"]  = user["id"]
             session["username"] = user["username"]
             session["role"]     = user["role"]   # always fresh from DB
+            session["tier"]     = user["tier"] if "tier" in user.keys() else TIER_ANALIST
             return redirect(url_for("index"))
         error = "Kullanıcı adı veya şifre hatalı."
     return render_template("login.html", error=error)
@@ -345,7 +369,9 @@ def index():
     return render_template("index.html",
                            username=session.get("username"),
                            user_role=role,
-                           is_settings=is_settings)
+                           is_settings=is_settings,
+                           user_tier=session.get("tier", TIER_ANALIST),
+                           is_senior=is_senior())
 
 # ---------------------------------------------------------------------------
 # File upload
@@ -1273,7 +1299,7 @@ def start_hunt(item_id):
 def list_users():
     db = get_db()
     rows = db.execute(
-        "SELECT id, username, role, created_at FROM users "
+        "SELECT id, username, role, tier, created_at FROM users "
         "WHERE role != 'settings' ORDER BY username"
     ).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -1286,25 +1312,29 @@ def create_user():
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
     role     = data.get("role", "analyst")
+    tier     = data.get("tier", TIER_ANALIST)
     if not username or not password:
         return jsonify({"error": "Kullanıcı adı ve şifre zorunludur"}), 400
     if role not in ("admin", "analyst"):
         return jsonify({"error": "Geçersiz rol (admin veya analyst olmalı)"}), 400
+    if tier not in TIERS:
+        return jsonify({"error": f"Geçersiz onay seviyesi ({', '.join(TIERS)} olmalı)"}), 400
     if len(password) < 6:
         return jsonify({"error": "Şifre en az 6 karakter olmalıdır"}), 400
     db = get_db()
     try:
         db.execute(
-            "INSERT INTO users (username,password_hash,role) VALUES (?,?,?)",
-            (username, generate_password_hash(password), role)
+            "INSERT INTO users (username,password_hash,role,tier) VALUES (?,?,?,?)",
+            (username, generate_password_hash(password), role, tier)
         )
         db.commit()
     except Exception:
         return jsonify({"error": "Bu kullanıcı adı zaten mevcut"}), 409
     user = db.execute(
-        "SELECT id,username,role,created_at FROM users WHERE username=?", (username,)
+        "SELECT id,username,role,tier,created_at FROM users WHERE username=?", (username,)
     ).fetchone()
-    write_audit("CREATE_USER", "user", user["id"], f"Kullanıcı: {username} | Rol: {role}")
+    write_audit("CREATE_USER", "user", user["id"],
+                f"Kullanıcı: {username} | Rol: {role} | Onay Seviyesi: {tier}")
     return jsonify(dict(user)), 201
 
 @app.route("/api/users/<int:user_id>", methods=["PUT"])
@@ -1322,27 +1352,32 @@ def update_user(user_id):
     new_role = data.get("role", user["role"])
     if new_role not in ("admin", "analyst"):
         return jsonify({"error": "Geçersiz rol (admin veya analyst olmalı)"}), 400
+    new_tier = data.get("tier", user["tier"] if "tier" in user.keys() else TIER_ANALIST)
+    if new_tier not in TIERS:
+        return jsonify({"error": f"Geçersiz onay seviyesi ({', '.join(TIERS)} olmalı)"}), 400
 
     new_password = data.get("password", "").strip()
     if new_password:
         if len(new_password) < 6:
             return jsonify({"error": "Şifre en az 6 karakter olmalıdır"}), 400
         db.execute(
-            "UPDATE users SET role=?, password_hash=? WHERE id=?",
-            (new_role, generate_password_hash(new_password), user_id)
+            "UPDATE users SET role=?, tier=?, password_hash=? WHERE id=?",
+            (new_role, new_tier, generate_password_hash(new_password), user_id)
         )
     else:
-        db.execute("UPDATE users SET role=? WHERE id=?", (new_role, user_id))
+        db.execute("UPDATE users SET role=?, tier=? WHERE id=?", (new_role, new_tier, user_id))
     db.commit()
 
     audit_parts = []
     if new_role != user["role"]:
         audit_parts.append(f"Rol: {user['role']} → {new_role}")
+    if new_tier != (user["tier"] if "tier" in user.keys() else TIER_ANALIST):
+        audit_parts.append(f"Onay Seviyesi: {user['tier']} → {new_tier}")
     if new_password:
         audit_parts.append("Şifre değiştirildi")
     write_audit("EDIT_USER", "user", user_id,
                 f"Kullanıcı: {user['username']} | " + " | ".join(audit_parts))
-    updated = db.execute("SELECT id,username,role,created_at FROM users WHERE id=?", (user_id,)).fetchone()
+    updated = db.execute("SELECT id,username,role,tier,created_at FROM users WHERE id=?", (user_id,)).fetchone()
     return jsonify(dict(updated))
 
 @app.route("/api/users/<int:user_id>", methods=["DELETE"])

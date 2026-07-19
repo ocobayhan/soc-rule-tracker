@@ -15,6 +15,10 @@ Flask + SQLite backend, vanilla JS SPA frontend (Jinja2 server-side render, clie
 | `analyst` | Kendi taleplerini açar, atanan taleplerin raporunu doldurur |
 | `settings` | Sadece Ayarlar sayfasına erişir, kullanıcı yönetimi yapar |
 
+Ayrıca her kullanıcının `role`den bağımsız bir **onay seviyesi** (`tier`)
+vardır: `Analist` / `Kıdemli Analist` / `Müdür`. Onay gerektiren işlemler
+(tune/UC/hunt approve) bu alana bakar. Detay: `docs/rbac.md`.
+
 ---
 
 ## Modüller

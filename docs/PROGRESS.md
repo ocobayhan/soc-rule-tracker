@@ -147,6 +147,17 @@
 - [x] **Doğrulandı (preview/local):** hash-zincirleme migration hatasız çalıştı; "Zinciri Doğrula" butonu doğru sonuç veriyor; bir satır doğrudan SQL ile değiştirilip zincirin bunu yakaladığı (`record_hash uyuşmuyor`) canlı olarak test edildi ve satır geri alınınca zincir tekrar geçerli oldu; `verify_audit.py --db tracker.db` CLI de bağımsız çalışıyor
 - [ ] Ubuntu test sunucusunda (Gunicorn 2 worker, gerçek prod DB'ye dokunmadan bir kopya üzerinde) henüz denenmedi — deploy günü doğrulanacak
 
+### Faz 3 — RBAC Temeli: Onay Seviyesi (Tier) Alanı (2026-07-19)
+- [x] `users` tablosuna additive `tier` kolonu (`Analist`/`Kıdemli Analist`/`Müdür`, varsayılan `Analist`)
+- [x] Bir kerelik migration: mevcut `role='admin'` → `tier='Müdür'`, `role='analyst'` → `tier='Analist'` (davranış anında değişmedi, sadece altyapı)
+- [x] `is_senior()` helper (`app.py`) — `tier in (Kıdemli Analist, Müdür)`, Faz 4/5'teki onay uçları bunu kullanacak
+- [x] `session["tier"]` login'de DB'den taze okunuyor; `/` route'u `user_tier`/`is_senior`'ı template'e geçiyor (`USER_TIER`/`IS_SENIOR` JS sabitleri)
+- [x] `/api/users` GET/POST/PUT: `tier` alanı eklendi, doğrulanıyor, audit detail'inde rol/tier değişikliği ayrı ayrı raporlanıyor
+- [x] Settings → Kullanıcılar: rol dropdown'unun yanına ikinci bir "Onay Seviyesi" dropdown'u eklendi (yeni kullanıcı ekleme + düzenleme modalı), rozet olarak gösteriliyor (`tier-analist`/`tier-kidemli`/`tier-mudur` CSS sınıfları)
+- [x] `docs/rbac.md` yazıldı — iki boyutlu model (role=sistem/CRUD, tier=onay seviyesi), neden ayrı tutulduğu, migration mantığı
+- [x] **Doğrulandı (preview/local):** migration hatasız çalıştı (`admin→Müdür`, `analyst→Analist` doğru uygulandı); Settings ekranında bir kullanıcının onay seviyesi "Kıdemli Analist" olarak değiştirildi ve rozet güncellendi; o kullanıcı ile giriş yapılıp `IS_SENIOR=true` render edildiği doğrulandı (curl ile)
+- [ ] Ubuntu test sunucusunda henüz denenmedi — deploy günü doğrulanacak
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
@@ -164,7 +175,7 @@
 
 - [x] ~~Yedekleme dayanıklılığı~~ — Faz 1'de koddan giderildi (host bind-mount + scheduler); **canlıda henüz doğrulanmadı**
 - [x] ~~Audit log tamper-evidence~~ — Faz 2'de hash-zincirleme ile giderildi (koddan doğrulandı); **canlıda (Ubuntu/Gunicorn) henüz doğrulanmadı**
-- [ ] Rol yapısı genişletilecek: Müdür / Kıdemli Analist / Analist hiyerarşisi (mevcut admin/analyst/settings üzerine) — **Faz 3**
+- [x] ~~Rol yapısı genişletilecek~~ — Faz 3'te `tier` alanı (Müdür/Kıdemli Analist/Analist) eklendi (koddan doğrulandı); onay uçlarını fiilen buna bağlamak **Faz 4/5**'te
 - [ ] Tuning & UC: prod'a otomatik geçiş var, manuel onay + soru-cevap kapısı planlanıyor — **Faz 4**
 - [ ] Threat Hunt: talep açılır açılmaz "gerçek" hunt sayılıyor, ön onay (hipotez onayı) adımı yok — **Faz 5**
 - [ ] Threat Hunt raporları için PDF export yok — **Faz 6**
