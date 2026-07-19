@@ -440,6 +440,35 @@ düşülür; istatistikler hem Excel'e hem canlı bir panele eklensin.
   amaçlı atanan Ad Soyad değerleri temizlendi, tüm tablo satır sayıları
   test öncesiyle uyumlu.
 
+### Faz I — "Hunt'tan Use-Case Oluştur" Formundaki Serbest Alanlar (2026-07-20)
+
+Hunt Raporu modalindeki "Bu Hunt için Use-Case oluştur" mini-formu, uygulamanın
+geri kalanıyla tutarsız iki serbest alan içeriyordu:
+
+- [x] **Talep Eden** serbest metin (`<input placeholder="Analist adı…">`) idi
+  — herhangi bir isim elle yazılabiliyordu, mevcut analist listesiyle hiçbir
+  ilişkisi yoktu. Diğer tüm "talep eden/raporlayan" alanlarıyla aynı desene
+  (`<select>` + `analystOpts()`) çevrildi; boş bırakılırsa (backend zaten
+  destekliyordu) Hunt'ın kendi talep edeni kullanılıyor.
+- [x] **Ortam** bir `<select>` idi ama seçenekleri **sabit kodlanmış**
+  "Dev/Test/Prod" idi — gerçek Ortamlar listesiyle (Settings > Ortamlar)
+  hiç ilgisi yoktu, hem de tek seçimlikti. Diğer UC ortam alanlarıyla aynı
+  çoklu-etiket desenine (`_ucCreateFromHuntEnv` + seç/Ekle/etiket listesi)
+  çevrildi; form açıldığında Hunt'ın kendi ortam etiketleriyle önceden
+  dolduruluyor, analist isterse etiketleri kaldırıp gerçek ortamlar
+  listesinden başka(larını) ekleyebiliyor.
+- [x] **Yan bulgu:** UC otomatik oluşturulduktan sonra çağrılan
+  `loadUseCase()` fonksiyonu hiç tanımlı değildi (doğrusu `loadUC()`) —
+  her seferinde konsola sessiz bir hata düşüyor, Use-Case tablosu yeni
+  oluşan kaydı göstermek için sayfa yenilenene kadar bekliyordu. Düzeltildi.
+- [x] **Doğrulandı:** gerçek bir Hunt kaydı üzerinde (detection_suggestion
+  Evet yapılıp) form açıldı — Talep Eden alanı gerçek analist listesini,
+  Ortam alanı gerçek ortam listesini gösterdi; Hunt'ın kendi ortamıyla
+  ön-dolu geldi; ikinci bir gerçek ortam eklenip (`_TMP_TEST_ENV2`, sonradan
+  silindi) kaydedildi, oluşan Use-Case kaydında hem talep eden hem ortam
+  doğru şekilde göründü. Test kayıtları (UC, geçici ortam, hunt'ın test
+  amaçlı değiştirilen alanları) temizlendi.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

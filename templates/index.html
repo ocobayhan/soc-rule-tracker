@@ -1261,16 +1261,18 @@
             <div id="uc-create-fields" style="display:none">
               <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px">
                 <div>
-                  <label class="form-label" style="margin-bottom:4px">Talep Eden</label>
-                  <input type="text" class="form-input" id="uc-create-requester" placeholder="Analist adı…">
+                  <label class="form-label" style="margin-bottom:4px">Talep Eden <span class="text-muted" style="font-weight:400">(boş bırakılırsa Hunt'ın talep edeni kullanılır)</span></label>
+                  <select class="form-input" id="uc-create-requester"><option value="">— Seçin —</option></select>
                 </div>
                 <div>
-                  <label class="form-label" style="margin-bottom:4px">Ortam</label>
-                  <select class="form-input" id="uc-create-environment">
-                    <option value="Dev">Dev</option>
-                    <option value="Test">Test</option>
-                    <option value="Prod">Prod</option>
-                  </select>
+                  <label class="form-label" style="margin-bottom:4px">Ortam <span class="text-muted" style="font-weight:400">(boş bırakılırsa Hunt'ın ortamı kullanılır)</span></label>
+                  <div class="mitre-add-row" id="uc-create-env-add-row">
+                    <select class="form-input input-sm" id="uc-create-env-select">
+                      <option value="">— Ortam seçin —</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" onclick="addUCCreateFromHuntEnv()">+ Ekle</button>
+                  </div>
+                  <div id="uc-create-env-list" class="tag-list"></div>
                 </div>
               </div>
               <div style="margin-top:8px">
@@ -1481,6 +1483,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=24"></script>
+<script src="/static/app.js?v=25"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v24
+   SOC Tracker — Frontend  v25
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -236,7 +236,7 @@ function populateEnvDropdowns() {
   // UC + Hunt use tag-based selectors — populate their hidden selects
   const envOpsSimple = `<option value="">— Ortam seçin —</option>` +
     _envs.map(e => `<option value="${esc(e.name)}">${esc(e.name)}</option>`).join("");
-  ["uc-env-select","edit-uc-env-select","hunt-report-env-select"].forEach(id => {
+  ["uc-env-select","edit-uc-env-select","hunt-report-env-select","uc-create-env-select"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     el.innerHTML = envOpsSimple;
   });
@@ -252,7 +252,8 @@ function populateAnalystDropdowns() {
   ["tune-reporter","edit-tune-reporter","edit-tune-analyst",
    "claim-tune-analyst","uc-requester","edit-uc-requester",
    "edit-uc-rule-author","claim-uc-analyst",
-   "hunt-requester","edit-hunt-requester","claim-hunt-analyst"].forEach(id => {
+   "hunt-requester","edit-hunt-requester","claim-hunt-analyst",
+   "uc-create-requester"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value; el.innerHTML = analystOpts(cur);
   });
@@ -2149,6 +2150,29 @@ function renderUCEnvCreate() {
   ).join("");
 }
 
+// UC "Bu Hunt için Use-Case oluştur" mini-formundaki ortam etiketleri —
+// önceden Dev/Test/Prod diye sabit kodlanmış tek seçimlik bir dropdown'du,
+// gerçek Ortamlar listesiyle hiç ilgisi yoktu. Diğer UC ortam alanlarıyla
+// aynı çoklu-etiket desenine çevrildi.
+let _ucCreateFromHuntEnv = [];
+function addUCCreateFromHuntEnv() {
+  const sel = document.getElementById("uc-create-env-select");
+  const val = sel.value; if (!val) return;
+  if (!_ucCreateFromHuntEnv.includes(val)) { _ucCreateFromHuntEnv.push(val); renderUCCreateFromHuntEnv(); }
+  sel.value = "";
+}
+function removeUCCreateFromHuntEnv(val) {
+  _ucCreateFromHuntEnv = _ucCreateFromHuntEnv.filter(v => v !== val);
+  renderUCCreateFromHuntEnv();
+}
+function renderUCCreateFromHuntEnv() {
+  const c = document.getElementById("uc-create-env-list"); if (!c) return;
+  c.innerHTML = _ucCreateFromHuntEnv.map(v =>
+    `<span class="ioc-tag">${esc(v)}<button type="button" class="tag-remove"
+       onclick="removeUCCreateFromHuntEnv('${esc(v).replace(/'/g,"\\'")}')">&#x2715;</button></span>`
+  ).join("");
+}
+
 // UC Edit env tags
 let _ucEnvEdit = [];
 function addUCEnvEdit() {
@@ -2369,11 +2393,13 @@ async function openHuntReportModal(id) {
   const createUcCb = document.getElementById("report-create-uc");
   if (createUcCb) { createUcCb.checked = false; createUcCb.disabled = !!r.linked_uc_id; }
   const _ucReq  = document.getElementById("uc-create-requester");
-  const _ucEnv  = document.getElementById("uc-create-environment");
   const _ucDesc = document.getElementById("uc-create-description");
   if (_ucReq)  _ucReq.value  = r.requester || "";
-  if (_ucEnv)  _ucEnv.value  = "";
   if (_ucDesc) _ucDesc.value = "";
+  // Ortam etiketleri varsayılan olarak Hunt'ın kendi ortamıyla başlar —
+  // analist isterse etiketleri kaldırıp farklı ortam(lar) seçebilir.
+  _ucCreateFromHuntEnv = [..._huntEnvList];
+  renderUCCreateFromHuntEnv();
   toggleUcCreateFields();
   const ucForm = document.getElementById("uc-create-form");
   if (ucForm) {
@@ -2435,15 +2461,15 @@ async function saveHuntReport() {
     status:                   document.getElementById("report-hunt-status").value,
     create_uc:                !!(createUcCb?.checked && !createUcCb?.disabled && detectionSuggest === "Evet"),
     uc_description:           document.getElementById("uc-create-description").value.trim(),
-    uc_requester:             document.getElementById("uc-create-requester").value.trim(),
-    uc_environment:           document.getElementById("uc-create-environment").value,
+    uc_requester:             document.getElementById("uc-create-requester").value,
+    uc_environment:           _ucCreateFromHuntEnv.join(","),
   };
   try {
     const res = await apiFetch(`/api/hunt/${id}`, { method: "PUT", body: JSON.stringify(payload) });
     closeHuntReportModal(); loadHunt(); loadKPI();
     if (res?.uc_created_id) {
       setTimeout(() => alert(`Use-Case #${res.uc_created_id} başarıyla oluşturuldu (Hunt #${id} sonucu).`), 200);
-      loadUseCase();
+      loadUC();
     }
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
 }
