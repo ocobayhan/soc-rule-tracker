@@ -16,11 +16,16 @@ Kullanım:
     scheduler.register(ScheduledJob("db_backup", my_backup_func, interval_hours=6))
     scheduler.start()
 """
-import fcntl
 import os
 import threading
 import time
 from dataclasses import dataclass, field
+
+try:
+    import fcntl  # POSIX only — production runs in a Linux container
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
 from datetime import datetime
 from typing import Callable, List, Optional
 
@@ -54,9 +59,11 @@ class JobScheduler:
 
     def _acquire_singleton_lock(self) -> bool:
         """Sadece tek bir process döngüyü çalıştırsın diye dosya kilidi alır.
-        lock_path verilmemişse kilitlemeden her zaman True döner (tek worker'lı
-        dev ortamı için)."""
-        if not self.lock_path:
+        lock_path verilmemişse veya platform fcntl desteklemiyorsa (Windows —
+        yalnızca lokal geliştirme ortamı, tek process varsayılır) kilitlemeden
+        her zaman True döner. Production Linux konteynerinde her zaman
+        kilitlenir."""
+        if not self.lock_path or not _HAS_FCNTL:
             return True
         os.makedirs(os.path.dirname(self.lock_path), exist_ok=True)
         self._lock_fd = open(self.lock_path, "w")

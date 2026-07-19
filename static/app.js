@@ -1206,6 +1206,7 @@ const ACTION_TR = {
   "RETRY_TUNE":     "Yeniden tune istendi",
   "TEST_APPROVE_UC":"UC test onaylandı",
   "TEST_REJECT_UC": "UC test reddedildi",
+  "VERIFY_AUDIT_CHAIN": "Audit zinciri doğrulandı",
 };
 const ACTION_CLS = {
   "LOGIN": "audit-login",
@@ -1214,7 +1215,30 @@ const ACTION_CLS = {
   "CLOSE_TUNE":  "audit-close",  "CLOSE_UC":  "audit-close",  "CLOSE_HUNT":  "audit-close",
   "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",   "EDIT_HUNT":   "audit-edit",   "EDIT_USER":   "audit-edit",  "REPORT_HUNT": "audit-edit",
   "DELETE_TUNE": "audit-delete", "DELETE_UC": "audit-delete", "DELETE_USER": "audit-delete", "DELETE_HUNT": "audit-delete",
+  "VERIFY_AUDIT_CHAIN": "audit-edit",
 };
+
+async function verifyAuditChain() {
+  const box = document.getElementById("audit-verify-result");
+  box.style.display = "block";
+  box.innerHTML = `<div class="empty-state">Zincir doğrulanıyor…</div>`;
+  try {
+    const r = await apiFetch("/api/audit/verify", { method: "POST" });
+    if (r.valid) {
+      box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#4ade80;font-size:13px">
+        ✅ Zincir geçerli — ${r.chained}/${r.total} kayıt zincirli, hiçbiri değiştirilmemiş/silinmemiş.
+      </div>`;
+    } else {
+      box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#f87171;font-size:13px">
+        ⚠️ Zincirde ${r.problems.length} sorun bulundu (${r.chained}/${r.total} kayıt zincirli):<br>
+        ${r.problems.map(p => esc(p)).join("<br>")}
+      </div>`;
+    }
+    loadAuditLog();
+  } catch (e) {
+    box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#f87171;font-size:13px">Doğrulama başarısız: ${esc(e.message || String(e))}</div>`;
+  }
+}
 
 async function loadAuditLog() {
   try {

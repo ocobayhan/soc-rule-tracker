@@ -9,6 +9,8 @@ from flask import (Flask, g, jsonify, redirect, render_template, request,
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
+from verify_audit import audit_hash, AUDIT_GENESIS, verify_chain
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "soc-rule-tracker-dev-key-change-in-prod")
 
@@ -198,6 +200,10 @@ def init_db():
         db.execute("ALTER TABLE threat_hunt_requests ADD COLUMN detection_detail_image TEXT")
     if not _col_exists(db, "usecase_requests", "source_hunt_id"):
         db.execute("ALTER TABLE usecase_requests ADD COLUMN source_hunt_id INTEGER")
+    # Audit log hash-zincirleme kolonları (bkz. docs/audit_logging.md)
+    for col in ["prev_hash", "record_hash"]:
+        if not _col_exists(db, "audit_log", col):
+            db.execute(f"ALTER TABLE audit_log ADD COLUMN {col} TEXT")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -259,15 +265,31 @@ def _parse_date(val):
 # Audit log helper
 # ---------------------------------------------------------------------------
 def write_audit(action, record_type=None, record_id=None, detail=""):
-    """Write an audit entry for the currently authenticated session user."""
+    """Write an audit entry for the currently authenticated session user.
+
+    Kayıtlar hash-zincirlemesiyle korunur: her satır bir önceki satırın
+    hash'ini (`prev_hash`) taşır, kendi hash'i (`record_hash`) tüm alanlar +
+    prev_hash + gizli bir salt'tan hesaplanır (bkz. verify_audit.py,
+    docs/audit_logging.md). Bir kayıt silinir/değiştirilirse zincir kopar ve
+    `verify_audit.verify_chain()` bunu tespit eder.
+    """
     try:
         db = get_db()
+        last = db.execute(
+            "SELECT record_hash FROM audit_log ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        prev_hash = (last["record_hash"] if last else None) or AUDIT_GENESIS
+        user_id    = session.get("user_id")
+        username   = session.get("username", "?")
+        created_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        record_hash = audit_hash(prev_hash, user_id, username, action,
+                                  record_type, record_id, detail, created_at)
         db.execute(
-            "INSERT INTO audit_log (user_id,username,action,record_type,record_id,detail,created_at) "
-            "VALUES (?,?,?,?,?,?,?)",
-            (session.get("user_id"), session.get("username", "?"),
-             action, record_type, record_id, detail,
-             datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")),
+            "INSERT INTO audit_log "
+            "(user_id,username,action,record_type,record_id,detail,created_at,prev_hash,record_hash) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (user_id, username, action, record_type, record_id, detail,
+             created_at, prev_hash, record_hash),
         )
         db.commit()
     except Exception as e:
@@ -1353,6 +1375,20 @@ def get_audit():
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
+@app.route("/api/audit/verify", methods=["POST"])
+@login_required
+def api_verify_audit():
+    """Audit log hash-zincirinin bütünlüğünü doğrular (bkz. verify_audit.py)."""
+    if session.get("role") != "admin":
+        return jsonify({"error": "Forbidden"}), 403
+    result = verify_chain(DATABASE)
+    write_audit(
+        "VERIFY_AUDIT_CHAIN", "audit", None,
+        f"Sonuç: {'geçerli' if result['valid'] else 'BOZUK'} | "
+        f"{result['chained']}/{result['total']} zincirli kayıt"
+    )
+    return jsonify(result)
+
 # ---------------------------------------------------------------------------
 # Export (Excel)
 # ---------------------------------------------------------------------------
@@ -1757,6 +1793,36 @@ def _backup_if_due(keep: int = 12, max_age_days: int = 5) -> None:
             app.logger.info(f"[backup] Otomatik yedek oluşturuldu: {name}")
 
 
+def _export_audit_snapshot(keep: int = 30) -> None:
+    """audit_log'u JSON olarak BACKUP_DIR'e (DB'den bağımsız, dayanıklı konum)
+    dışa aktarır + zincir ucu hash'ini not eder. Sertifikasyon denetimi için
+    DB dışında ayrı bir kanıt izi oluşturur (bkz. docs/audit_logging.md)."""
+    import glob as _glob
+    import json as _json
+    db = get_db()
+    rows = db.execute("SELECT * FROM audit_log ORDER BY id").fetchall()
+    if not rows:
+        return
+    data = [dict(r) for r in rows]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    path = os.path.join(BACKUP_DIR, f"audit_export_{ts}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        _json.dump(
+            {"exported_at": ts, "chain_tip_hash": data[-1].get("record_hash"), "records": data},
+            f, ensure_ascii=False, indent=1,
+        )
+    exports = sorted(_glob.glob(os.path.join(BACKUP_DIR, "audit_export_*.json")))
+    for old in (exports[:-keep] if len(exports) > keep else []):
+        os.remove(old)
+    app.logger.info(f"[audit] Dışa aktarım: {os.path.basename(path)}")
+
+
+def _scheduled_audit_export() -> None:
+    with app.app_context():
+        _export_audit_snapshot()
+
+
 with app.app_context():
     init_db()
     _backup_if_due()
@@ -1768,6 +1834,7 @@ _scheduler = JobScheduler(
     lock_path=os.path.join(BACKUP_DIR, ".scheduler.lock"),
 )
 _scheduler.register(ScheduledJob("db_backup", _backup_if_due, interval_hours=6))
+_scheduler.register(ScheduledJob("audit_export", _scheduled_audit_export, interval_hours=24))
 _scheduler.start()
 
 if __name__ == "__main__":

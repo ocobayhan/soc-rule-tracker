@@ -136,6 +136,17 @@
 - [ ] **Doğrulanmadı:** Ubuntu test sunucusunda `docker volume rm` sonrası yedeklerin sağlam kaldığı ve restore adımlarının çalıştığı henüz canlıda denenmedi — kullanıcı ile birlikte deploy günü test edilecek
 - [ ] `backup.py` (standalone script) host crontab'ında gerçekten kullanılıyor mu henüz teyit edilmedi — SSH erişimi olduğunda kontrol edilecek
 
+### Faz 2 — Audit Log Sertleştirme / Hash-Zincirleme (2026-07-19)
+- [x] `audit_log` tablosuna additive `prev_hash`/`record_hash` kolonları eklendi
+- [x] `write_audit()` her satırı bir öncekine sha256 hash-zincirle bağlıyor (gizli salt: `AUDIT_CHAIN_SECRET`, ilk satır `GENESIS`'ten başlıyor)
+- [x] `verify_audit.py` — bağımsız CLI script, zinciri baştan sona doğrular, bir yedek dosyasına karşı da çalıştırılabilir (offline sertifikasyon denetimi için)
+- [x] `POST /api/audit/verify` (admin only) — aynı doğrulamayı UI'dan tetikler, sonucu audit log'a da yazar (`VERIFY_AUDIT_CHAIN`)
+- [x] Audit Log ekranına "Zinciri Doğrula" butonu eklendi
+- [x] `scheduler.py`'a yeni iş: `audit_export` — audit log'u 24 saatte bir JSON olarak `BACKUP_DIR`'e (DB'den bağımsız) dışa aktarır, zincir ucu hash'ini not eder, son 30 export'u saklar
+- [x] `docs/audit_logging.md` yazıldı — hash zinciri modeli, sanitizasyon, checklist, bilinen sınırlamalar (geçmiş kayıtlar zincirlenemez, nadir eşzamanlılık senaryosu)
+- [x] **Doğrulandı (preview/local):** hash-zincirleme migration hatasız çalıştı; "Zinciri Doğrula" butonu doğru sonuç veriyor; bir satır doğrudan SQL ile değiştirilip zincirin bunu yakaladığı (`record_hash uyuşmuyor`) canlı olarak test edildi ve satır geri alınınca zincir tekrar geçerli oldu; `verify_audit.py --db tracker.db` CLI de bağımsız çalışıyor
+- [ ] Ubuntu test sunucusunda (Gunicorn 2 worker, gerçek prod DB'ye dokunmadan bir kopya üzerinde) henüz denenmedi — deploy günü doğrulanacak
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
@@ -152,7 +163,7 @@
 ## 🔧 Bilinen Sorunlar / Bekleyen İşler
 
 - [x] ~~Yedekleme dayanıklılığı~~ — Faz 1'de koddan giderildi (host bind-mount + scheduler); **canlıda henüz doğrulanmadı**
-- [ ] Audit log: zaman damgası + reddedilemezlik (tamper-evidence) yok, sertifikasyon kanıtı için yetersiz — **Faz 2**
+- [x] ~~Audit log tamper-evidence~~ — Faz 2'de hash-zincirleme ile giderildi (koddan doğrulandı); **canlıda (Ubuntu/Gunicorn) henüz doğrulanmadı**
 - [ ] Rol yapısı genişletilecek: Müdür / Kıdemli Analist / Analist hiyerarşisi (mevcut admin/analyst/settings üzerine) — **Faz 3**
 - [ ] Tuning & UC: prod'a otomatik geçiş var, manuel onay + soru-cevap kapısı planlanıyor — **Faz 4**
 - [ ] Threat Hunt: talep açılır açılmaz "gerçek" hunt sayılıyor, ön onay (hipotez onayı) adımı yok — **Faz 5**

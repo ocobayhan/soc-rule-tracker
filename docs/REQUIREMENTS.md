@@ -76,8 +76,10 @@ Proaktif tehdit avı taleplerinin ve raporlarının yönetimi.
 
 ### Audit Log
 - Her CREATE/UPDATE/DELETE/CLOSE/CLAIM işlemi loglanır
-- `audit_log` tablosu: user_id, username, action, record_type, record_id, detail, created_at
+- `audit_log` tablosu: user_id, username, action, record_type, record_id, detail, created_at, prev_hash, record_hash
 - Sadece admin görebilir
+- Hash-zincirleme (tamper-evidence): her kayıt bir öncekine sha256 ile bağlı, "Zinciri Doğrula" butonu (admin) veya `verify_audit.py` CLI ile bütünlük doğrulanır — bkz. `docs/audit_logging.md`
+- 24 saatte bir audit log JSON olarak dayanıklı bir konuma (backups dizini) dışa aktarılır
 
 ### Excel Export
 - 4 sheet: Tuning, Use-Case, Threat Hunting, Kullanıcılar
