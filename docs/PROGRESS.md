@@ -216,6 +216,16 @@
 - [x] **Doğrulandı (API + DOM):** görsel yükleme → hunt kaydına kaydetme → kayıt yeniden çekildiğinde kalıcı olduğu → rapor modalı yeniden açıldığında önizlemenin geri geldiği → detay panelinde `<img>` olarak göründüğü uçtan uca test edildi
 - [ ] İlk ajan raporunun "`restorePreview()` hiç çağrılmıyor" iddiası **yanlıştı** — grep ile doğrulandı, zaten 3 yerde çağrılıyordu; bu not gelecekte aynı yanlış varsayımın tekrarlanmaması için
 
+### Faz B — Dashboard / Rapor / Excel Doğruluğu (2026-07-19)
+- [x] **Gerçek bir veri gizleme hatası bulundu ve düzeltildi:** Dashboard'da "9 toplam talep" yazarken KPI kartı sadece 6'sını gösteriyordu (Ön Onay Bekliyor + Reddedildi hiçbir yerde yoktu) — Faz 4/5'in eklediği yeni durumlar Dashboard (`/api/kpi`), Aylık Rapor (`/report` + `report.html`) ve Excel'in (KPI Özeti sayfası) hiçbirine eklenmemişti. Üçüne de eklendi.
+- [x] **Gerçek bir tutarsızlık düzeltildi:** Dashboard'daki `tune_success_rate` formülü (payda: başarılı+yeniden tune) ile Rapor/Excel'deki aynı isimli metrik (payda: +edilmedi) farklıydı — Dashboard, Rapor/Excel'in formülüne eşitlendi.
+- [x] **Gerçek bir SQL injection düzeltildi:** `/api/kpi`'deki ay filtresi (`mf()`) `month` parametresini doğrudan f-string ile sorguya ekliyordu — parametreli sorguya çevrildi (Rapor/Excel zaten güvenliydi, sadece Dashboard'daki en eski/ilk yazılan fonksiyon bu deseni kullanmıyordu).
+- [x] **Faz 4'ten bağımsız, önceden var olan iki eksiklik de giderildi:** Dashboard'da tune/UC için "İnceleniyor" bucket'ı hiç yoktu; Tune için "Tune Edilmedi" bucket'ı hiç yoktu — ikisi de eklendi.
+- [x] Yeni "Ön Onay Red Oranı" metriği (tune/UC/hunt ayrı ayrı) — kullanıcı kararına göre Reddedildi, başarı/prod oranlarına karışmıyor, ayrı ve açıkça etiketlenmiş bir metrik
+- [x] Excel'e onay-izi/hesap verebilirlik kolonları eklendi: Tuning (`validated_by/at/note`, `qa_test_ok`, `qa_peer_reviewed`, `approval_note`, `xsoar_case_id`, `xsoar_url`), UC (`validated_by/at/note`, `qa_test_ok`, `qa_peer_reviewed`), Hunt (`validated_by/at/note`, `result_approved_by/at/note`, `hunt_duration_hours`, keşfedilen zafiyetler)
+- [x] Dashboard KPI kartlarına yeni bir özet satırı eklendi ("Ön Onay Bekliyor: N · Reddedildi: N") — mevcut 3-slotluk tasarım bozulmadan hiçbir sayı gizli kalmıyor
+- [x] **Doğrulandı (API + gerçek Excel dosyası indirilip açılarak):** her üç modül için `/api/kpi`'de gösterilen tüm bucket'ların toplamının `*_total`'a **birebir eşit olduğu** doğrulandı (Tuning 9=9, UC 3=3, Hunt 7=7); aynı doğrulama `/report`'un donut chart verileri ve indirilen Excel'in "KPI Özeti" sayfası için de tekrarlandı — üçü de aynı sayıları veriyor; Excel'in yeni onay-izi kolonlarının (ör. XSOAR case ID) gerçek verilerle doğru dolduğu teyit edildi
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

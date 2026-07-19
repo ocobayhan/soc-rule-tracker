@@ -350,6 +350,16 @@ input, select, textarea { font-family: inherit; }
 }
 .kpi-rate-label strong { color: var(--green); font-weight: 600; }
 
+/* Onay bekleyen/reddedilen özet satırı — hiçbir kayıt gizli kalmasın diye */
+.kpi-module-extra {
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 6px 0 2px;
+  border-top: 0.5px solid var(--border);
+  margin-top: 6px;
+}
+.kpi-module-extra strong { color: var(--text-2); font-weight: 600; }
+
 /* ============================================================ FILTER BAR */
 .filter-bar {
   display: flex;

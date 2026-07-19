@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v20
+   SOC Tracker — Frontend  v21
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -267,14 +267,21 @@ async function loadKPI() {
     set("kpi-tune-rate", rate + "%");
     const fill = document.getElementById("kpi-tune-rate-fill");
     if (fill) fill.style.width = Math.min(rate, 100) + "%";
+    set("kpi-tune-pendingval", d.tune_pending_validation);
+    set("kpi-tune-rejected",   d.tune_rejected);
     set("kpi-uc-total",       d.uc_total);
     set("kpi-uc-open",        d.uc_open);
     set("kpi-uc-testing",     d.uc_testing);
     set("kpi-uc-prod",        d.uc_prod);
+    set("kpi-uc-pendingval",  d.uc_pending_validation);
+    set("kpi-uc-rejected",    d.uc_rejected);
     set("kpi-hunt-total",     d.hunt_total);
     set("kpi-hunt-open",      d.hunt_open);
     set("kpi-hunt-reviewing", d.hunt_reviewing);
     set("kpi-hunt-done",      d.hunt_done);
+    set("kpi-hunt-pendingval",   d.hunt_pending_validation);
+    set("kpi-hunt-resultpending", d.hunt_result_pending);
+    set("kpi-hunt-rejected",     d.hunt_rejected);
   } catch (_) {}
 }
 

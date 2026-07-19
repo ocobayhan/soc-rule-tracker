@@ -385,6 +385,21 @@ body {
         <div class="kpi-value">{{ kpi.tune_total + kpi.uc_total + kpi.hunt_total }}</div>
         <div class="kpi-sub">{{ kpi.tune_total }}T + {{ kpi.uc_total }}UC + {{ kpi.hunt_total }}H</div>
       </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">Ön Onay Bekliyor</div>
+        <div class="kpi-value">{{ kpi.tune_pending_validation + kpi.uc_pending_validation + kpi.hunt_pending_validation }}</div>
+        <div class="kpi-sub">{{ kpi.tune_pending_validation }}T · {{ kpi.uc_pending_validation }}UC · {{ kpi.hunt_pending_validation }}H</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-label">Reddedildi (Ön Onay)</div>
+        <div class="kpi-value">{{ kpi.tune_rejected + kpi.uc_rejected + kpi.hunt_rejected }}</div>
+        <div class="kpi-sub">Red oranı: {{ kpi.tune_rejection_rate }}%T · {{ kpi.uc_rejection_rate }}%UC · {{ kpi.hunt_rejection_rate }}%H</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">Hunt: Sonuç Onayı Bekliyor</div>
+        <div class="kpi-value">{{ kpi.hunt_result_pending }}</div>
+        <div class="kpi-sub">Kıdemli Analist/Müdür onayı bekleniyor</div>
+      </div>
     </div>
 
     <!-- Summary progress bars -->
@@ -397,8 +412,10 @@ body {
             ('Tune Edildi', kpi.tune_edildi, '#8B5CF6'),
             ('İnceleniyor', kpi.tune_reviewing, '#5E6AD2'),
             ('Açık', kpi.tune_open, '#F59E0B'),
+            ('Ön Onay Bekliyor', kpi.tune_pending_validation, '#3B82F6'),
             ('Yeniden Tune', kpi.tune_retry, '#EF4444'),
             ('Edilmedi', kpi.tune_edilmedi, '#9CA3AF'),
+            ('Reddedildi', kpi.tune_rejected, '#EC4899'),
         ] %}
         <div class="bar-row">
           <span class="bar-label">{{ label }}</span>
@@ -416,7 +433,9 @@ body {
             ('Test Ediliyor', kpi.uc_testing, '#14B8A6'),
             ('İnceleniyor', kpi.uc_reviewing, '#5E6AD2'),
             ('Açık', kpi.uc_open, '#F59E0B'),
+            ('Ön Onay Bekliyor', kpi.uc_pending_validation, '#3B82F6'),
             ('Yazılamaz', kpi.uc_cantwrite, '#9CA3AF'),
+            ('Reddedildi', kpi.uc_rejected, '#EC4899'),
         ] %}
         <div class="bar-row">
           <span class="bar-label">{{ label }}</span>
@@ -431,9 +450,12 @@ body {
         <div class="module-bar-title">Threat Hunting</div>
         {% for label, val, color in [
             ('Tamamlandı', kpi.hunt_done, '#2DB27D'),
+            ('Sonuç Onayı Bekliyor', kpi.hunt_result_pending, '#8B5CF6'),
             ('İnceleniyor', kpi.hunt_reviewing, '#5E6AD2'),
             ('Açık', kpi.hunt_open, '#F59E0B'),
+            ('Ön Onay Bekliyor', kpi.hunt_pending_validation, '#3B82F6'),
             ('İptal', kpi.hunt_cancelled, '#9CA3AF'),
+            ('Reddedildi', kpi.hunt_rejected, '#EC4899'),
         ] %}
         <div class="bar-row">
           <span class="bar-label">{{ label }}</span>
@@ -667,21 +689,21 @@ function donut(id, labels, data, colors) {
 }
 
 donut('tuneChart',
-  ['Tune Başarılı', 'Tune Edildi', 'İnceleniyor', 'Açık', 'Yeniden Tune', 'Edilmedi'],
-  [{{ kpi.tune_success }}, {{ kpi.tune_edildi }}, {{ kpi.tune_reviewing }}, {{ kpi.tune_open }}, {{ kpi.tune_retry }}, {{ kpi.tune_edilmedi }}],
-  ['#2DB27D', '#8B5CF6', '#5E6AD2', '#F59E0B', '#EF4444', '#9CA3AF']
+  ['Tune Başarılı', 'Tune Edildi', 'İnceleniyor', 'Açık', 'Ön Onay Bekliyor', 'Yeniden Tune', 'Edilmedi', 'Reddedildi'],
+  [{{ kpi.tune_success }}, {{ kpi.tune_edildi }}, {{ kpi.tune_reviewing }}, {{ kpi.tune_open }}, {{ kpi.tune_pending_validation }}, {{ kpi.tune_retry }}, {{ kpi.tune_edilmedi }}, {{ kpi.tune_rejected }}],
+  ['#2DB27D', '#8B5CF6', '#5E6AD2', '#F59E0B', '#3B82F6', '#EF4444', '#9CA3AF', '#EC4899']
 );
 
 donut('ucChart',
-  ["Prod'da Aktif", 'Test Ediliyor', 'İnceleniyor', 'Açık', 'Yazılamaz'],
-  [{{ kpi.uc_prod }}, {{ kpi.uc_testing }}, {{ kpi.uc_reviewing }}, {{ kpi.uc_open }}, {{ kpi.uc_cantwrite }}],
-  ['#2DB27D', '#14B8A6', '#5E6AD2', '#F59E0B', '#9CA3AF']
+  ["Prod'da Aktif", 'Test Ediliyor', 'İnceleniyor', 'Açık', 'Ön Onay Bekliyor', 'Yazılamaz', 'Reddedildi'],
+  [{{ kpi.uc_prod }}, {{ kpi.uc_testing }}, {{ kpi.uc_reviewing }}, {{ kpi.uc_open }}, {{ kpi.uc_pending_validation }}, {{ kpi.uc_cantwrite }}, {{ kpi.uc_rejected }}],
+  ['#2DB27D', '#14B8A6', '#5E6AD2', '#F59E0B', '#3B82F6', '#9CA3AF', '#EC4899']
 );
 
 donut('huntChart',
-  ['Tamamlandı', 'İnceleniyor', 'Açık', 'İptal'],
-  [{{ kpi.hunt_done }}, {{ kpi.hunt_reviewing }}, {{ kpi.hunt_open }}, {{ kpi.hunt_cancelled }}],
-  ['#2DB27D', '#5E6AD2', '#F59E0B', '#9CA3AF']
+  ['Tamamlandı', 'Sonuç Onayı Bekliyor', 'İnceleniyor', 'Açık', 'Ön Onay Bekliyor', 'İptal', 'Reddedildi'],
+  [{{ kpi.hunt_done }}, {{ kpi.hunt_result_pending }}, {{ kpi.hunt_reviewing }}, {{ kpi.hunt_open }}, {{ kpi.hunt_pending_validation }}, {{ kpi.hunt_cancelled }}, {{ kpi.hunt_rejected }}],
+  ['#2DB27D', '#8B5CF6', '#5E6AD2', '#F59E0B', '#3B82F6', '#9CA3AF', '#EC4899']
 );
 </script>
 </body>

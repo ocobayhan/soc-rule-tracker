@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
-  <link rel="stylesheet" href="/static/styles.css?v=11.4"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.5"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -105,6 +105,10 @@
             <div class="kpi-stat-lbl">Tune Başarılı</div>
           </div>
         </div>
+        <div class="kpi-module-extra">
+          Ön Onay Bekliyor: <strong id="kpi-tune-pendingval">—</strong> ·
+          Reddedildi: <strong id="kpi-tune-rejected">—</strong>
+        </div>
         <div class="kpi-module-rate">
           <div class="kpi-rate-track">
             <div class="kpi-rate-fill" id="kpi-tune-rate-fill" style="width:0%"></div>
@@ -136,6 +140,10 @@
             <div class="kpi-stat-lbl">Prod'da Aktif</div>
           </div>
         </div>
+        <div class="kpi-module-extra">
+          Ön Onay Bekliyor: <strong id="kpi-uc-pendingval">—</strong> ·
+          Reddedildi: <strong id="kpi-uc-rejected">—</strong>
+        </div>
       </div>
 
       <!-- Threat Hunting -->
@@ -160,6 +168,11 @@
             <div class="kpi-stat-val" style="color:var(--green)" id="kpi-hunt-done">—</div>
             <div class="kpi-stat-lbl">Tamamlandı</div>
           </div>
+        </div>
+        <div class="kpi-module-extra">
+          Ön Onay Bekliyor: <strong id="kpi-hunt-pendingval">—</strong> ·
+          Sonuç Onayı Bekliyor: <strong id="kpi-hunt-resultpending">—</strong> ·
+          Reddedildi: <strong id="kpi-hunt-rejected">—</strong>
         </div>
       </div>
 
@@ -1353,6 +1366,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=20"></script>
+<script src="/static/app.js?v=21"></script>
 </body>
 </html>

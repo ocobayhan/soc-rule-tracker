@@ -570,40 +570,92 @@ def get_kpi():
     db = get_db()
 
     def mf(col):
-        return f"AND strftime('%Y-%m', {col}) = '{month}'" if month else ""
+        """Ay filtresi — parametreli sorgu (önceki sürüm f-string ile SQL
+        injection'a açıktı: month doğrudan sorguya ekleniyordu)."""
+        return (f" AND strftime('%Y-%m', {col}) = ?", (month,)) if month else ("", ())
 
-    tune_open        = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
-    tune_pending     = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Edildi' {mf('tuned_at')}").fetchone()["c"]
-    tune_success     = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Başarılı' {mf('approved_at')}").fetchone()["c"]
-    tune_retry       = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE status='Yeniden Tune' {mf('updated_at')}").fetchone()["c"]
-    tune_total       = db.execute(f"SELECT COUNT(*) c FROM tune_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
-    uc_total         = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
-    uc_open          = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
-    uc_testing       = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Test Ediliyor' {mf('test_started_at')}").fetchone()["c"]
-    uc_prod          = db.execute(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='Prod''da Aktif' {mf('test_approved_at')}").fetchone()["c"]
-    hunt_open        = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık' {mf('created_at')}").fetchone()["c"]
-    hunt_reviewing   = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İnceleniyor' {mf('created_at')}").fetchone()["c"]
-    hunt_done        = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı' {mf('completed_at')}").fetchone()["c"]
-    hunt_total       = db.execute(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE 1=1 {mf('created_at')}").fetchone()["c"]
+    def count(table, status, col="created_at"):
+        cond, args = mf(col)
+        return db.execute(f"SELECT COUNT(*) c FROM {table} WHERE status=?{cond}", (status, *args)).fetchone()["c"]
 
-    tune_resolved    = tune_success + tune_retry
+    def count_all(table, col="created_at"):
+        cond, args = mf(col)
+        return db.execute(f"SELECT COUNT(*) c FROM {table} WHERE 1=1{cond}", args).fetchone()["c"]
+
+    tune_pending_validation = count("tune_requests", STATUS_PENDING_VALIDATION, "created_at")
+    tune_open        = count("tune_requests", "Açık", "created_at")
+    tune_reviewing   = count("tune_requests", "İnceleniyor", "created_at")
+    tune_pending     = count("tune_requests", "Tune Edildi", "tuned_at")
+    tune_success     = count("tune_requests", "Tune Başarılı", "approved_at")
+    tune_retry       = count("tune_requests", "Yeniden Tune", "updated_at")
+    tune_edilmedi    = count("tune_requests", "Tune Edilmedi", "completed_at")
+    tune_rejected    = count("tune_requests", STATUS_REJECTED, "validated_at")
+    tune_total       = count_all("tune_requests", "created_at")
+
+    uc_pending_validation = count("usecase_requests", STATUS_PENDING_VALIDATION, "created_at")
+    uc_open          = count("usecase_requests", "Açık", "created_at")
+    uc_reviewing     = count("usecase_requests", "İnceleniyor", "created_at")
+    uc_testing       = count("usecase_requests", "Test Ediliyor", "test_started_at")
+    uc_prod          = count("usecase_requests", "Prod'da Aktif", "test_approved_at")
+    uc_cantwrite     = count("usecase_requests", "Yazılamaz", "completed_at")
+    uc_rejected      = count("usecase_requests", STATUS_REJECTED, "validated_at")
+    uc_total         = count_all("usecase_requests", "created_at")
+
+    hunt_pending_validation = count("threat_hunt_requests", STATUS_PENDING_VALIDATION, "created_at")
+    hunt_open        = count("threat_hunt_requests", "Açık", "created_at")
+    hunt_reviewing   = count("threat_hunt_requests", "İnceleniyor", "created_at")
+    hunt_result_pending = count("threat_hunt_requests", STATUS_HUNT_RESULT_PENDING, "created_at")
+    hunt_done        = count("threat_hunt_requests", "Tamamlandı", "completed_at")
+    hunt_cancelled   = count("threat_hunt_requests", "İptal", "completed_at")
+    hunt_rejected    = count("threat_hunt_requests", STATUS_REJECTED, "validated_at")
+    hunt_total       = count_all("threat_hunt_requests", "created_at")
+
+    # Tune Edilmedi dahil — daha önce bu bucket KPI'da hiç yoktu (Faz 4'ten
+    # bağımsız, önceden var olan bir eksiklik). Rapor/Excel ile aynı formül.
+    tune_resolved    = tune_success + tune_retry + tune_edilmedi
     tune_success_rate = round(tune_success / tune_resolved * 100) if tune_resolved else 0
 
+    # Ön Onay Red Oranı — Reddedildi, başarı oranına karışmaz (talep hiç işe
+    # alınmadı); ayrı, kendi başına bir metrik. Payda: ön onay kararı verilmiş
+    # tüm talepler (= toplam - hâlâ ön onay bekleyenler).
+    def rejection_rate(rejected, total, pending_validation):
+        decided = total - pending_validation
+        return round(rejected / decided * 100) if decided else 0
+
+    tune_rejection_rate = rejection_rate(tune_rejected, tune_total, tune_pending_validation)
+    uc_rejection_rate   = rejection_rate(uc_rejected,   uc_total,   uc_pending_validation)
+    hunt_rejection_rate = rejection_rate(hunt_rejected, hunt_total, hunt_pending_validation)
+
     return jsonify({
+        "tune_pending_validation": tune_pending_validation,
         "tune_open":          tune_open,
+        "tune_reviewing":     tune_reviewing,
         "tune_pending":       tune_pending,
         "tune_success":       tune_success,
         "tune_retry":         tune_retry,
+        "tune_edilmedi":      tune_edilmedi,
+        "tune_rejected":      tune_rejected,
         "tune_total":         tune_total,
         "tune_success_rate":  tune_success_rate,
+        "tune_rejection_rate": tune_rejection_rate,
+        "uc_pending_validation": uc_pending_validation,
         "uc_total":           uc_total,
         "uc_open":            uc_open,
+        "uc_reviewing":       uc_reviewing,
         "uc_testing":         uc_testing,
         "uc_prod":            uc_prod,
+        "uc_cantwrite":       uc_cantwrite,
+        "uc_rejected":        uc_rejected,
+        "uc_rejection_rate":  uc_rejection_rate,
+        "hunt_pending_validation": hunt_pending_validation,
         "hunt_open":          hunt_open,
         "hunt_reviewing":     hunt_reviewing,
+        "hunt_result_pending": hunt_result_pending,
         "hunt_done":          hunt_done,
+        "hunt_cancelled":     hunt_cancelled,
+        "hunt_rejected":      hunt_rejected,
         "hunt_total":         hunt_total,
+        "hunt_rejection_rate": hunt_rejection_rate,
     })
 
 # ---------------------------------------------------------------------------
@@ -1792,11 +1844,18 @@ def export_data():
         return val[:10] if val else ""
 
     # ── Sheet 1 : Tuning Talepleri ─────────────────────────────────────────
+    def gv(row, col, fallback=""):
+        """Şema eski bir kayıt/kolon içermiyorsa bile güvenli okuma."""
+        return row[col] if col in row.keys() and row[col] is not None else fallback
+
     ws1 = wb.active
     ws1.title = "Tuning Talepleri"
     tune_cols = ["ID", "Kural İsmi", "Ortam", "Raporlayan", "Tune Nedeni",
                  "Tetiklenme Sıklığı", "Tune Eden Analist", "Nasıl Tune Edildi",
-                 "Durum", "Raporlandı", "Tune Tarihi", "Onaylayan", "Onay Tarihi", "Tamamlandı"]
+                 "Durum", "Raporlandı", "Tune Tarihi", "Onaylayan", "Onay Tarihi", "Tamamlandı",
+                 "Ön Onayı Veren", "Ön Onay Tarihi", "Ön Onay Notu",
+                 "Test Ortamında Sorunsuz", "Peer Review", "Onay Notu",
+                 "XSOAR Case ID", "XSOAR URL"]
     write_headers(ws1, tune_cols)
 
     tune_q = "SELECT * FROM tune_requests"
@@ -1810,7 +1869,10 @@ def export_data():
                fmt_date(r["tuned_at"]) if "tuned_at" in r.keys() else "",
                r["approved_by"] if "approved_by" in r.keys() else "",
                fmt_date(r["approved_at"]) if "approved_at" in r.keys() else "",
-               fmt_date(r["completed_at"])]
+               fmt_date(r["completed_at"]),
+               gv(r, "validated_by"), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
+               gv(r, "qa_test_ok"), gv(r, "qa_peer_reviewed"), gv(r, "approval_note"),
+               gv(r, "xsoar_case_id"), gv(r, "xsoar_url")]
         ws1.append(row)
         for ci in range(1, len(tune_cols) + 1):
             ws1.cell(row=ws1.max_row, column=ci).alignment = CELL_ALIGN
@@ -1821,7 +1883,9 @@ def export_data():
     ws2 = wb.create_sheet("Use-Case Talepleri")
     uc_cols = ["ID", "Use-Case Tanımı", "Ortam", "Talep Eden",
                "Analist", "Yazılan Kural Adı", "Notlar",
-               "Durum", "Talep Tarihi", "Test Başlama", "Prod Onay Tarihi", "Prod Onaylayan", "Test Notları", "Tamamlandı"]
+               "Durum", "Talep Tarihi", "Test Başlama", "Prod Onay Tarihi", "Prod Onaylayan", "Test Notları", "Tamamlandı",
+               "Ön Onayı Veren", "Ön Onay Tarihi", "Ön Onay Notu",
+               "Test Ortamında Sorunsuz", "Peer Review"]
     write_headers(ws2, uc_cols)
 
     uc_q = "SELECT * FROM usecase_requests"
@@ -1835,7 +1899,9 @@ def export_data():
                fmt_date(r["test_approved_at"]) if "test_approved_at" in r.keys() else "",
                r["test_approved_by"] if "test_approved_by" in r.keys() else "",
                r["test_notes"] if "test_notes" in r.keys() else "",
-               fmt_date(r["completed_at"])]
+               fmt_date(r["completed_at"]),
+               gv(r, "validated_by"), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
+               gv(r, "qa_test_ok"), gv(r, "qa_peer_reviewed")]
         ws2.append(row)
         for ci in range(1, len(uc_cols) + 1):
             ws2.cell(row=ws2.max_row, column=ci).alignment = CELL_ALIGN
@@ -1848,8 +1914,10 @@ def export_data():
                  "Durum", "Rapor Durumu", "Sonuç", "Şiddet",
                  "MITRE Teknikleri", "Bulgular", "IOC Listesi",
                  "Etkilenen Varlıklar", "Hedef & Kapsam",
-                 "Detection Önerisi", "Öneriler",
-                 "Talep Tarihi", "Başlama", "Tamamlanma"]
+                 "Detection Önerisi", "Öneriler", "Keşfedilen Zafiyetler", "Hunt Süresi (saat)",
+                 "Talep Tarihi", "Başlama", "Tamamlanma",
+                 "Ön Onayı Veren", "Ön Onay Tarihi", "Ön Onay Notu",
+                 "Sonucu Onaylayan", "Sonuç Onay Tarihi", "Sonuç Onay Notu"]
     write_headers(ws3, hunt_cols)
 
     hunt_q = "SELECT * FROM threat_hunt_requests"
@@ -1868,6 +1936,11 @@ def export_data():
             ioc_txt  = ", ".join(ioc_list) if isinstance(ioc_list, list) else ""
         except Exception:
             ioc_txt  = ""
+        try:
+            vuln_list = _json.loads(gv(r, "discovered_vulnerabilities", "[]"))
+            vuln_txt  = "; ".join(vuln_list) if isinstance(vuln_list, list) else ""
+        except Exception:
+            vuln_txt  = ""
         env_val = r["hunt_environment"] if "hunt_environment" in r.keys() and r["hunt_environment"] else (r["environment"] if "environment" in r.keys() else "")
         row = [r["id"], r["hunt_subject"], env_val, r["requester"],
                r["assigned_analyst"] or "", r["status"],
@@ -1877,8 +1950,10 @@ def export_data():
                r["affected_assets"] if "affected_assets" in r.keys() else "",
                r["scope"] or "",
                (r["detection_suggestion"] or "") + ((" — " + r["detection_detail"]) if r["detection_detail"] else ""),
-               r["recommendations"] or "",
-               fmt_date(r["created_at"]), fmt_date(r["started_at"]), fmt_date(r["completed_at"])]
+               r["recommendations"] or "", vuln_txt, gv(r, "hunt_duration_hours"),
+               fmt_date(r["created_at"]), fmt_date(r["started_at"]), fmt_date(r["completed_at"]),
+               gv(r, "validated_by"), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
+               gv(r, "result_approved_by"), fmt_date(gv(r, "result_approved_at")), gv(r, "result_approval_note")]
         ws3.append(row)
         for ci in range(1, len(hunt_cols) + 1):
             ws3.cell(row=ws3.max_row, column=ci).alignment = CELL_ALIGN
@@ -1900,9 +1975,31 @@ def export_data():
         """Count with optional completed_at month filter."""
         mf = f" AND strftime('%Y-%m',completed_at)=?" if exp_month else ""
         return db.execute(sql + mf + extra, _mf_args).fetchone()["c"]
+    def qv(sql, extra=""):
+        """Count with optional validated_at month filter (ön onay/red tarihi)."""
+        mf = f" AND strftime('%Y-%m',validated_at)=?" if exp_month else ""
+        return db.execute(sql + mf + extra, _mf_args).fetchone()["c"]
+
+    def rejection_rate(rejected, total, pending_validation):
+        decided = total - pending_validation
+        return round(rejected / decided * 100, 1) if decided else 0
 
     total_tune = qc("SELECT COUNT(*) c FROM tune_requests WHERE 1=1")
+    total_uc   = qc("SELECT COUNT(*) c FROM usecase_requests WHERE 1=1")
     total_hunt = qc("SELECT COUNT(*) c FROM threat_hunt_requests WHERE 1=1")
+
+    tune_pending_validation = qc(f"SELECT COUNT(*) c FROM tune_requests WHERE status='{STATUS_PENDING_VALIDATION}'")
+    tune_rejected = qv(f"SELECT COUNT(*) c FROM tune_requests WHERE status='{STATUS_REJECTED}'")
+    tune_rejection_pct = rejection_rate(tune_rejected, total_tune, tune_pending_validation)
+
+    uc_pending_validation = qc(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='{STATUS_PENDING_VALIDATION}'")
+    uc_rejected = qv(f"SELECT COUNT(*) c FROM usecase_requests WHERE status='{STATUS_REJECTED}'")
+    uc_rejection_pct = rejection_rate(uc_rejected, total_uc, uc_pending_validation)
+
+    hunt_pending_validation = qc(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='{STATUS_PENDING_VALIDATION}'")
+    hunt_result_pending = qc(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='{STATUS_HUNT_RESULT_PENDING}'")
+    hunt_rejected = qv(f"SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='{STATUS_REJECTED}'")
+    hunt_rejection_pct = rejection_rate(hunt_rejected, total_hunt, hunt_pending_validation)
 
     tune_success = db.execute(
         "SELECT COUNT(*) c FROM tune_requests WHERE status='Tune Başarılı'"
@@ -1919,7 +2016,6 @@ def export_data():
     tune_resolved = tune_success + tune_retry + tune_edilmedi
     tune_rate = round(tune_success / tune_resolved * 100, 1) if tune_resolved else 0
 
-    total_uc   = qc("SELECT COUNT(*) c FROM usecase_requests WHERE 1=1")
     uc_prod    = db.execute(
         "SELECT COUNT(*) c FROM usecase_requests WHERE status='Prod''da Aktif'"
         + (" AND strftime('%Y-%m',test_approved_at)=?" if exp_month else ""),
@@ -1941,29 +2037,39 @@ def export_data():
     kpi_rows += [
         ("── TUNING ──────────────────────", ""),
         ("Toplam Tuning Talebi",      total_tune),
+        ("Ön Onay Bekliyor",          tune_pending_validation),
         ("Açık",                      qc("SELECT COUNT(*) c FROM tune_requests WHERE status='Açık'")),
         ("İnceleniyor",               qc("SELECT COUNT(*) c FROM tune_requests WHERE status='İnceleniyor'")),
         ("Tune Edildi (Onay Bekleyen)", tune_edildi),
         ("Tune Başarılı",             tune_success),
         ("Yeniden Tune",              tune_retry),
         ("Tune Edilmedi",             tune_edilmedi),
+        ("Reddedildi (Ön Onay)",      tune_rejected),
         ("Tune Başarı Oranı (%)",     tune_rate),
+        ("Ön Onay Red Oranı (%)",     tune_rejection_pct),
         ("", ""),
         ("── USE-CASE ────────────────────", ""),
         ("Toplam Use-Case Talebi",    total_uc),
+        ("Ön Onay Bekliyor",          uc_pending_validation),
         ("Açık",                      qc("SELECT COUNT(*) c FROM usecase_requests WHERE status='Açık'")),
         ("İnceleniyor",               qc("SELECT COUNT(*) c FROM usecase_requests WHERE status='İnceleniyor'")),
         ("Test Ediliyor",             uc_testing),
         ("Prod'da Aktif",             uc_prod),
         ("Yazılamaz",                 uc_cantwrite),
+        ("Reddedildi (Ön Onay)",      uc_rejected),
         ("UC Prod Dönüşüm Oranı (%)", uc_rate),
+        ("Ön Onay Red Oranı (%)",     uc_rejection_pct),
         ("", ""),
         ("── THREAT HUNT ─────────────────", ""),
         ("Toplam Hunt Talebi",        total_hunt),
+        ("Ön Onay Bekliyor",          hunt_pending_validation),
         ("Açık",                      qc("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Açık'")),
         ("İnceleniyor",               qc("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İnceleniyor'")),
+        ("Sonuç Onayı Bekliyor",      hunt_result_pending),
         ("Tamamlandı",                qd("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='Tamamlandı'")),
         ("İptal",                     qd("SELECT COUNT(*) c FROM threat_hunt_requests WHERE status='İptal'")),
+        ("Reddedildi (Ön Onay)",      hunt_rejected),
+        ("Ön Onay Red Oranı (%)",     hunt_rejection_pct),
         ("", ""),
         ("Dışa Aktarım Tarihi",       date.today().isoformat()),
     ]
@@ -2004,29 +2110,45 @@ def monthly_report():
 
     # ── KPI numbers ────────────────────────────────────────────────────────
     kpi = {
+        "tune_pending_validation": count(f"tune_requests WHERE status='{STATUS_PENDING_VALIDATION}'"),
         "tune_open":        count("tune_requests WHERE status='Açık'"),
         "tune_reviewing":   count("tune_requests WHERE status='İnceleniyor'"),
         "tune_edildi":      count("tune_requests WHERE status='Tune Edildi'", "tuned_at"),
         "tune_success":     count("tune_requests WHERE status='Tune Başarılı'", "approved_at"),
         "tune_retry":       count("tune_requests WHERE status='Yeniden Tune'"),
         "tune_edilmedi":    count("tune_requests WHERE status='Tune Edilmedi'", "completed_at"),
+        "tune_rejected":    count(f"tune_requests WHERE status='{STATUS_REJECTED}'", "validated_at"),
         "tune_total":       count("tune_requests WHERE 1=1"),
+        "uc_pending_validation": count(f"usecase_requests WHERE status='{STATUS_PENDING_VALIDATION}'"),
         "uc_open":          count("usecase_requests WHERE status='Açık'"),
         "uc_reviewing":     count("usecase_requests WHERE status='İnceleniyor'"),
         "uc_testing":       count("usecase_requests WHERE status='Test Ediliyor'", "test_started_at"),
         "uc_prod":          count("usecase_requests WHERE status='Prod''da Aktif'", "test_approved_at"),
         "uc_cantwrite":     count("usecase_requests WHERE status='Yazılamaz'", "completed_at"),
+        "uc_rejected":      count(f"usecase_requests WHERE status='{STATUS_REJECTED}'", "validated_at"),
         "uc_total":         count("usecase_requests WHERE 1=1"),
+        "hunt_pending_validation": count(f"threat_hunt_requests WHERE status='{STATUS_PENDING_VALIDATION}'"),
         "hunt_open":        count("threat_hunt_requests WHERE status='Açık'"),
         "hunt_reviewing":   count("threat_hunt_requests WHERE status='İnceleniyor'"),
+        "hunt_result_pending": count(f"threat_hunt_requests WHERE status='{STATUS_HUNT_RESULT_PENDING}'"),
         "hunt_done":        count("threat_hunt_requests WHERE status='Tamamlandı'", "completed_at"),
         "hunt_cancelled":   count("threat_hunt_requests WHERE status='İptal'", "completed_at"),
+        "hunt_rejected":    count(f"threat_hunt_requests WHERE status='{STATUS_REJECTED}'", "validated_at"),
         "hunt_total":       count("threat_hunt_requests WHERE 1=1"),
     }
     resolved = kpi["tune_success"] + kpi["tune_retry"] + kpi["tune_edilmedi"]
     kpi["tune_success_rate"] = round(kpi["tune_success"] / resolved * 100) if resolved else 0
     prod_eligible = kpi["uc_prod"] + kpi["uc_cantwrite"]
     kpi["uc_prod_rate"] = round(kpi["uc_prod"] / prod_eligible * 100) if prod_eligible else 0
+
+    # Ön Onay Red Oranı — Reddedildi başarı/prod oranlarına karışmaz, ayrı metrik.
+    def _rejection_rate(rejected, total, pending_validation):
+        decided = total - pending_validation
+        return round(rejected / decided * 100) if decided else 0
+
+    kpi["tune_rejection_rate"] = _rejection_rate(kpi["tune_rejected"], kpi["tune_total"], kpi["tune_pending_validation"])
+    kpi["uc_rejection_rate"]   = _rejection_rate(kpi["uc_rejected"],   kpi["uc_total"],   kpi["uc_pending_validation"])
+    kpi["hunt_rejection_rate"] = _rejection_rate(kpi["hunt_rejected"], kpi["hunt_total"], kpi["hunt_pending_validation"])
 
     # ── Records for tables ─────────────────────────────────────────────────
     def rows(sql, col="created_at"):
