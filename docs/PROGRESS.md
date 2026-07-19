@@ -158,6 +158,21 @@
 - [x] **Doğrulandı (preview/local):** migration hatasız çalıştı (`admin→Müdür`, `analyst→Analist` doğru uygulandı); Settings ekranında bir kullanıcının onay seviyesi "Kıdemli Analist" olarak değiştirildi ve rozet güncellendi; o kullanıcı ile giriş yapılıp `IS_SENIOR=true` render edildiği doğrulandı (curl ile)
 - [ ] Ubuntu test sunucusunda henüz denenmedi — deploy günü doğrulanacak
 
+### Faz 4 — Tuning & UC: Ön Onay + Q&A'lı Son Onay (2026-07-19)
+- [x] Yeni durumlar: `Ön Onay Bekliyor` (yeni taleplerin varsayılanı — istemciden gelen `status` artık yok sayılıyor) ve `Reddedildi` (terminal)
+- [x] Yeni uçlar: `POST /api/tune|usecase/<id>/validate` ve `.../reject-validation` (sadece `is_senior()`; red için gerekçe zorunlu)
+- [x] `approve_tune`, `retry_tune`, `test_approve_uc`, `test_reject_uc`: onaylayıcı kontrolü `is_senior()`'a çevrildi (öncesinde "admin veya talep eden" / salt admin gibi gevşek kontroller vardı)
+- [x] `approve_tune`/`test_approve_uc`: zorunlu Q&A — `qa_test_ok`, `qa_peer_reviewed`, onay notu (tune: yeni `approval_note`, UC: mevcut `test_notes` — notu zorunlu hale getirildi)
+- [x] UC'nin otomatik prod geçişi kaldırıldı — artık Q&A + `is_senior()` onayı olmadan `Prod'da Aktif` olamaz
+- [x] Hunt'tan otomatik oluşturulan UC talepleri de artık `Ön Onay Bekliyor` ile açılıyor (önceden doğrudan `Açık` ile açılan ayrı bir kod yolu vardı — bulunup düzeltildi)
+- [x] **Güvenlik kapıları:** `update_tune`/`update_usecase` (PUT) artık onay-korumalı durumlardan (`Ön Onay Bekliyor`, `Tune Edildi`/`Test Ediliyor`, `Tune Başarılı`/`Prod'da Aktif`, `Reddedildi`) çıkışı ve bu durumlara (`Tune Başarılı`/`Prod'da Aktif`, `Reddedildi`) doğrudan girişi engelliyor — sadece dedicated onay uçlarından geçilebilir
+- [x] Yan bug düzeltmesi: UC test-approve/reject'te frontend `notes` gönderiyordu, backend `test_notes` okuyordu — anahtar uyuşmazlığı giderildi (not hep boş kaydediliyordu)
+- [x] Frontend: yeni "Onayla / Reddet" (validate) modalı (Tuning+UC ortak), mevcut Tune/UC onay modallarına Q&A checkbox'ları + zorunlu not eklendi, yeni durum badge/dot renkleri (`status-pending`/`status-rejected`), detay panellerine ön onay + Q&A alanları eklendi
+- [x] `docs/REQUIREMENTS.md` onay matrisi güncellendi
+- [x] **Doğrulandı (preview + API testleri):** Tuning ve UC için tam yaşam döngüsü (oluştur → ön onay/red → üstlen → kapat → son onay Q&A ile) API üzerinden test edildi; güvenlik kapıları için bypass denemeleri (durum korumalı alanlardan/durumlara doğrudan PUT) doğru şekilde 400 ile reddedildi — **ilk yazımda bir kaçak bulundu ve düzeltildi** (Reddedildi/Tune Başarılı/Test Ediliyor gibi korumalı durumlardan genel PUT ile çıkış engellenmemişti); düşük onay seviyeli (Analist) bir kullanıcının validate/approve denemesi 403 ile reddedildiği doğrulandı
+- [ ] Ubuntu test sunucusunda henüz denenmedi — deploy günü doğrulanacak
+- [ ] KPI kartları, Excel export ve aylık rapor yeni durumları (Ön Onay Bekliyor/Reddedildi) henüz yansıtmıyor — kapsam dışı bırakıldı, ayrı bir iyileştirme olarak not edildi
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
@@ -176,7 +191,7 @@
 - [x] ~~Yedekleme dayanıklılığı~~ — Faz 1'de koddan giderildi (host bind-mount + scheduler); **canlıda henüz doğrulanmadı**
 - [x] ~~Audit log tamper-evidence~~ — Faz 2'de hash-zincirleme ile giderildi (koddan doğrulandı); **canlıda (Ubuntu/Gunicorn) henüz doğrulanmadı**
 - [x] ~~Rol yapısı genişletilecek~~ — Faz 3'te `tier` alanı (Müdür/Kıdemli Analist/Analist) eklendi (koddan doğrulandı); onay uçlarını fiilen buna bağlamak **Faz 4/5**'te
-- [ ] Tuning & UC: prod'a otomatik geçiş var, manuel onay + soru-cevap kapısı planlanıyor — **Faz 4**
+- [x] ~~Tuning & UC otomatik prod geçişi~~ — Faz 4'te ön onay + Q&A'lı son onay ile giderildi (koddan doğrulandı); **canlıda henüz doğrulanmadı**
 - [ ] Threat Hunt: talep açılır açılmaz "gerçek" hunt sayılıyor, ön onay (hipotez onayı) adımı yok — **Faz 5**
 - [ ] Threat Hunt raporları için PDF export yok — **Faz 6**
 - [ ] XSOAR entegrasyonu yok (Needs Tuning → otomatik tuning talebi) — **Faz 7**

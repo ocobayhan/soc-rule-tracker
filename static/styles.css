@@ -552,6 +552,10 @@ input, select, textarea { font-family: inherit; }
 .status-skipped   { background: rgba(85,85,85,0.15);  color: var(--text-2); }
 .status-cancelled { background: rgba(85,85,85,0.15);  color: var(--text-2); }
 
+/* Ön onay / red — Tuning + UC ortak (bkz. docs/rbac.md, Faz 4) */
+.status-pending   { background: var(--blue-subtle);   color: var(--blue);   }
+.status-rejected  { background: var(--red-subtle);    color: var(--red);    }
+
 /* UC statuses */
 .status-written   { background: var(--blue-subtle);   color: var(--blue);   }
 .status-testing   { background: var(--teal-subtle);   color: var(--teal);   }
@@ -572,6 +576,8 @@ input, select, textarea { font-family: inherit; }
 .dot-prod       { background: var(--green); }
 .dot-done       { background: var(--green); }
 .dot-skipped    { background: var(--text-3); }
+.dot-pending    { background: var(--blue); }
+.dot-rejected   { background: var(--red); }
 
 /* ============================================================ COUNTDOWN */
 .countdown {

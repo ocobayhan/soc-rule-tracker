@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v16
+   SOC Tracker — Frontend  v17
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -70,35 +70,46 @@ function esc(str) {
 // ---------------------------------------------------------------------------
 // Status & frequency badges
 // ---------------------------------------------------------------------------
+const STATUS_PENDING_VALIDATION = "Ön Onay Bekliyor";
+const STATUS_REJECTED           = "Reddedildi";
+
 const TUNE_CLS = {
+  "Ön Onay Bekliyor": "status-pending",
   "Açık":          "status-open",
   "İnceleniyor":   "status-reviewing",
   "Tune Edildi":   "status-tuned",
   "Tune Başarılı": "status-success",
   "Yeniden Tune":  "status-retry",
   "Tune Edilmedi": "status-skipped",
+  "Reddedildi":    "status-rejected",
 };
 const TUNE_DOT = {
+  "Ön Onay Bekliyor": "dot-pending",
   "Açık":          "dot-open",
   "İnceleniyor":   "dot-reviewing",
   "Tune Edildi":   "dot-tuned",
   "Tune Başarılı": "dot-success",
   "Yeniden Tune":  "dot-retry",
   "Tune Edilmedi": "dot-skipped",
+  "Reddedildi":    "dot-rejected",
 };
 const UC_CLS = {
+  "Ön Onay Bekliyor": "status-pending",
   "Açık":          "status-open",
   "İnceleniyor":   "status-reviewing",
   "Test Ediliyor": "status-testing",
   "Prod'da Aktif": "status-prod",
   "Yazılamaz":     "status-cant",
+  "Reddedildi":    "status-rejected",
 };
 const UC_DOT = {
+  "Ön Onay Bekliyor": "dot-pending",
   "Açık":          "dot-open",
   "İnceleniyor":   "dot-reviewing",
   "Test Ediliyor": "dot-testing",
   "Prod'da Aktif": "dot-prod",
   "Yazılamaz":     "dot-skipped",
+  "Reddedildi":    "dot-rejected",
 };
 
 function badge(label, map) {
@@ -413,6 +424,9 @@ function openTuneDetail(id) {
     ${detailRow("Raporlayan",        r.reporter)}
     ${detailRow("Ortam",             r.environment)}
     ${detailRow("Durum",             r.status)}
+    ${r.validated_by ? detailRow("Ön Onay Veren",   r.validated_by)      : ""}
+    ${r.validated_at ? detailRow("Ön Onay Tarihi",  fmt(r.validated_at)) : ""}
+    ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note)   : ""}
     ${detailRow("Tetiklenme",        r.trigger_frequency)}
     ${detailRow("Tune Nedeni",       r.tune_reason)}
     ${detailImgRow("Kanıt Görseli",  [r.evidence_image])}
@@ -422,6 +436,9 @@ function openTuneDetail(id) {
     ${r.tuned_at     ? detailRow("Tune Tarihi",  fmt(r.tuned_at))     : ""}
     ${r.approved_by  ? detailRow("Onaylayan",    r.approved_by)       : ""}
     ${r.approved_at  ? detailRow("Onay Tarihi",  fmt(r.approved_at))  : ""}
+    ${r.approval_note ? detailRow("Onay Notu",   r.approval_note)     : ""}
+    ${r.qa_test_ok ? detailRow("Test Ortamında Sorunsuz", r.qa_test_ok) : ""}
+    ${r.qa_peer_reviewed ? detailRow("Peer Review", r.qa_peer_reviewed) : ""}
     ${detailRow("Raporlandı",        fmt(r.created_at))}
     ${detailRow("Tamamlandı",        fmt(r.completed_at))}
   </div>`;
@@ -436,6 +453,9 @@ function openUCDetail(id) {
     ${detailRow("Talep Eden",       r.requester)}
     ${detailRow("Ortam",            parseEnvStr(r.environment).join(", ") || r.environment)}
     ${detailRow("Durum",            r.status)}
+    ${r.validated_by ? detailRow("Ön Onay Veren",   r.validated_by)      : ""}
+    ${r.validated_at ? detailRow("Ön Onay Tarihi",  fmt(r.validated_at)) : ""}
+    ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note)   : ""}
     ${detailRow("Use-Case",         r.usecase_description)}
     ${detailRow("Analist",          r.rule_author)}
     ${detailRow("Yazılan Kural",    r.rule_name)}
@@ -444,6 +464,8 @@ function openUCDetail(id) {
     ${r.test_approved_by ? detailRow("Prod Onaylayan",   r.test_approved_by)      : ""}
     ${r.test_approved_at ? detailRow("Prod Onay Tarihi", fmt(r.test_approved_at)) : ""}
     ${r.test_notes       ? detailRow("Test Notları",     r.test_notes)            : ""}
+    ${r.qa_test_ok ? detailRow("Test Ortamında Sorunsuz", r.qa_test_ok) : ""}
+    ${r.qa_peer_reviewed ? detailRow("Peer Review", r.qa_peer_reviewed) : ""}
     ${detailRow("Talep Tarihi",     fmt(r.created_at))}
     ${detailRow("Tamamlandı",       fmt(r.completed_at))}
   </div>`;
@@ -536,11 +558,15 @@ function tuneActionBtns(r) {
     ? `<button class="btn-icon danger" title="Sil" onclick="deleteTune(${r.id})">&#x1F5D1;</button>`
     : "";
 
+  if (r.status === STATUS_PENDING_VALIDATION && IS_SENIOR)
+    return `<button class="btn-action-claim" onclick="openValidateModal('tune',${r.id})">Onayla / Reddet</button> ${edit}${del}`;
+  if (r.status === STATUS_PENDING_VALIDATION)
+    return `${edit}${del}`;
   if (r.status === "Açık")
     return `<button class="btn-action-claim" onclick="openTuneClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
   if (r.status === "İnceleniyor" && (isAdmin || isMyTask))
     return `<button class="btn-action-close" onclick="openTuneCloseModal(${r.id})">Kapat</button> ${edit}${del}`;
-  if (r.status === "Tune Edildi" && (isAdmin || isMyReport)) {
+  if (r.status === "Tune Edildi" && IS_SENIOR) {
     const dl = r.approval_deadline ? r.approval_deadline.slice(0, 10) : "";
     const dlTip = dl ? ` title="Son: ${dl}"` : "";
     return `<button class="btn-action-close" onclick="openTuneApproveModal(${r.id})"${dlTip}>Onayla</button> ${edit}${del}`;
@@ -803,9 +829,12 @@ function openTuneApproveModal(id) {
   const dl = r.approval_deadline ? ` Son onay: ${r.approval_deadline.slice(0,10)}.` : "";
   document.getElementById("approve-tune-desc").textContent =
     `"${r.rule_name}" kuralı için tune onayı.${dl} Onaylamak için "Tune Başarılı", yeniden tune için "Yeniden Tune"yi seçin.`;
+  document.getElementById("approve-tune-test-ok").checked = false;
+  document.getElementById("approve-tune-peer").checked    = false;
+  document.getElementById("approve-tune-note").value      = "";
   document.getElementById("approve-tune-error").style.display = "none";
   const retryBtn = document.getElementById("btn-retry-tune");
-  if (retryBtn) retryBtn.style.display = USER_ROLE === "admin" ? "" : "none";
+  if (retryBtn) retryBtn.style.display = IS_SENIOR ? "" : "none";
   document.getElementById("tune-approve-modal").style.display = "flex";
 }
 
@@ -813,8 +842,17 @@ async function execApproveTune() {
   const id    = document.getElementById("approve-tune-id").value;
   const errEl = document.getElementById("approve-tune-error");
   errEl.style.display = "none";
+  const approval_note = document.getElementById("approve-tune-note").value.trim();
+  if (!approval_note) {
+    errEl.textContent = "Onay notu zorunludur.";
+    errEl.style.display = "block"; return;
+  }
   try {
-    await apiFetch(`/api/tune/${id}/approve`, { method: "POST" });
+    await apiFetch(`/api/tune/${id}/approve`, { method: "POST", body: JSON.stringify({
+      qa_test_ok:       document.getElementById("approve-tune-test-ok").checked ? "Evet" : "Hayır",
+      qa_peer_reviewed: document.getElementById("approve-tune-peer").checked    ? "Evet" : "Hayır",
+      approval_note,
+    }) });
     document.getElementById("tune-approve-modal").style.display = "none";
     loadTune(); loadKPI(); loadDashboardTables();
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
@@ -829,6 +867,57 @@ async function execRetryTune() {
     document.getElementById("tune-approve-modal").style.display = "none";
     loadTune(); loadKPI(); loadDashboardTables();
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+// ---------------------------------------------------------------------------
+// Ön onay (validate/reject) — Tuning + UC ortak
+// ---------------------------------------------------------------------------
+function openValidateModal(type, id) {
+  const rows = type === "tune" ? tuneRows : ucRows;
+  const r = rows.find(x => x.id === id); if (!r) return;
+  const label = type === "tune" ? r.rule_name : (r.usecase_description || "").slice(0, 80);
+  document.getElementById("validate-type").value = type;
+  document.getElementById("validate-id").value   = id;
+  document.getElementById("validate-desc").textContent =
+    `"${label}" talebinin geçerliliğini onaylıyor musunuz? Reddederseniz talep "Reddedildi" olarak kapanır.`;
+  document.getElementById("validate-note").value = "";
+  document.getElementById("validate-error").style.display = "none";
+  document.getElementById("validate-modal").style.display = "flex";
+}
+
+async function execValidate() {
+  const type  = document.getElementById("validate-type").value;
+  const id    = document.getElementById("validate-id").value;
+  const note  = document.getElementById("validate-note").value.trim();
+  const errEl = document.getElementById("validate-error");
+  errEl.style.display = "none";
+  try {
+    await apiFetch(`/api/${type}/${id}/validate`, { method: "POST", body: JSON.stringify({ validation_note: note }) });
+    document.getElementById("validate-modal").style.display = "none";
+    reloadAfterValidate(type);
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+async function execRejectValidation() {
+  const type  = document.getElementById("validate-type").value;
+  const id    = document.getElementById("validate-id").value;
+  const note  = document.getElementById("validate-note").value.trim();
+  const errEl = document.getElementById("validate-error");
+  errEl.style.display = "none";
+  if (!note) {
+    errEl.textContent = "Red gerekçesi zorunludur.";
+    errEl.style.display = "block"; return;
+  }
+  try {
+    await apiFetch(`/api/${type}/${id}/reject-validation`, { method: "POST", body: JSON.stringify({ validation_note: note }) });
+    document.getElementById("validate-modal").style.display = "none";
+    reloadAfterValidate(type);
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+function reloadAfterValidate(type) {
+  if (type === "tune") { loadTune(); } else { loadUC(); }
+  loadKPI(); loadDashboardTables();
 }
 
 // ---------------------------------------------------------------------------
@@ -847,11 +936,15 @@ function ucActionBtns(r) {
     ? `<button class="btn-icon danger" title="Sil" onclick="deleteUC(${r.id})">&#x1F5D1;</button>`
     : "";
 
+  if (r.status === STATUS_PENDING_VALIDATION && IS_SENIOR)
+    return `<button class="btn-action-claim" onclick="openValidateModal('usecase',${r.id})">Onayla / Reddet</button> ${edit}${del}`;
+  if (r.status === STATUS_PENDING_VALIDATION)
+    return `${edit}${del}`;
   if (r.status === "Açık")
     return `<button class="btn-action-claim" onclick="openUCClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
   if (r.status === "İnceleniyor" && (isAdmin || isMyTask))
     return `<button class="btn-action-close" onclick="openUCCloseModal(${r.id})">Kapat</button> ${edit}${del}`;
-  if (r.status === "Test Ediliyor" && isAdmin)
+  if (r.status === "Test Ediliyor" && IS_SENIOR)
     return `<button class="btn-action-close" onclick="openUCTestApproveModal(${r.id})">Test Onayla</button> ${edit}${del}`;
   return `${edit}${del}`;
 }
@@ -1146,30 +1239,40 @@ function openUCTestApproveModal(id) {
   document.getElementById("test-approve-uc-id").value = id;
   document.getElementById("test-approve-uc-desc").textContent =
     `"${r.usecase_description?.slice(0,80) || ""}" — Test sonucunu seçin.`;
+  document.getElementById("test-approve-test-ok").checked = false;
+  document.getElementById("test-approve-peer").checked    = false;
   document.getElementById("test-approve-notes").value = "";
   document.getElementById("test-approve-uc-error").style.display = "none";
   document.getElementById("uc-test-approve-modal").style.display = "flex";
 }
 
 async function execTestApproveUC() {
-  const id    = document.getElementById("test-approve-uc-id").value;
-  const notes = document.getElementById("test-approve-notes").value.trim();
-  const errEl = document.getElementById("test-approve-uc-error");
+  const id         = document.getElementById("test-approve-uc-id").value;
+  const test_notes = document.getElementById("test-approve-notes").value.trim();
+  const errEl      = document.getElementById("test-approve-uc-error");
   errEl.style.display = "none";
+  if (!test_notes) {
+    errEl.textContent = "Onay notu zorunludur.";
+    errEl.style.display = "block"; return;
+  }
   try {
-    await apiFetch(`/api/usecase/${id}/test-approve`, { method: "POST", body: JSON.stringify({ notes }) });
+    await apiFetch(`/api/usecase/${id}/test-approve`, { method: "POST", body: JSON.stringify({
+      test_notes,
+      qa_test_ok:       document.getElementById("test-approve-test-ok").checked ? "Evet" : "Hayır",
+      qa_peer_reviewed: document.getElementById("test-approve-peer").checked    ? "Evet" : "Hayır",
+    }) });
     document.getElementById("uc-test-approve-modal").style.display = "none";
     loadUC(); loadKPI(); loadDashboardTables();
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
 }
 
 async function execTestRejectUC() {
-  const id    = document.getElementById("test-approve-uc-id").value;
-  const notes = document.getElementById("test-approve-notes").value.trim();
-  const errEl = document.getElementById("test-approve-uc-error");
+  const id         = document.getElementById("test-approve-uc-id").value;
+  const test_notes = document.getElementById("test-approve-notes").value.trim();
+  const errEl      = document.getElementById("test-approve-uc-error");
   errEl.style.display = "none";
   try {
-    await apiFetch(`/api/usecase/${id}/test-reject`, { method: "POST", body: JSON.stringify({ notes }) });
+    await apiFetch(`/api/usecase/${id}/test-reject`, { method: "POST", body: JSON.stringify({ test_notes }) });
     document.getElementById("uc-test-approve-modal").style.display = "none";
     loadUC(); loadKPI(); loadDashboardTables();
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
@@ -1207,6 +1310,10 @@ const ACTION_TR = {
   "TEST_APPROVE_UC":"UC test onaylandı",
   "TEST_REJECT_UC": "UC test reddedildi",
   "VERIFY_AUDIT_CHAIN": "Audit zinciri doğrulandı",
+  "VALIDATE_TUNE":          "Tune talebi onaylandı (ön onay)",
+  "REJECT_VALIDATION_TUNE": "Tune talebi reddedildi (ön onay)",
+  "VALIDATE_UC":            "UC talebi onaylandı (ön onay)",
+  "REJECT_VALIDATION_UC":   "UC talebi reddedildi (ön onay)",
 };
 const ACTION_CLS = {
   "LOGIN": "audit-login",
@@ -1216,6 +1323,8 @@ const ACTION_CLS = {
   "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",   "EDIT_HUNT":   "audit-edit",   "EDIT_USER":   "audit-edit",  "REPORT_HUNT": "audit-edit",
   "DELETE_TUNE": "audit-delete", "DELETE_UC": "audit-delete", "DELETE_USER": "audit-delete", "DELETE_HUNT": "audit-delete",
   "VERIFY_AUDIT_CHAIN": "audit-edit",
+  "VALIDATE_TUNE": "audit-claim", "VALIDATE_UC": "audit-claim",
+  "REJECT_VALIDATION_TUNE": "audit-delete", "REJECT_VALIDATION_UC": "audit-delete",
 };
 
 async function verifyAuditChain() {

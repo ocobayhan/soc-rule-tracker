@@ -29,6 +29,24 @@ TIER_MUDUR   = "Müdür"
 TIERS = (TIER_ANALIST, TIER_KIDEMLI, TIER_MUDUR)
 SENIOR_TIERS = (TIER_KIDEMLI, TIER_MUDUR)
 
+# Ön onay (validity) durumu — yeni tune/UC talepleri bu durumda açılır, işe
+# başlanabilmesi (Açık/İnceleniyor) için Kıdemli Analist/Müdür onayı gerekir.
+# "Onay Bekliyor" ismi KPI'da zaten "Tune Edildi" (son onay bekleyen) için
+# kullanıldığından kasıtlı olarak farklı adlandırıldı — bkz. docs/rbac.md.
+STATUS_PENDING_VALIDATION = "Ön Onay Bekliyor"
+STATUS_REJECTED           = "Reddedildi"
+
+# PUT /api/tune|usecase üzerinden durum değişikliği kısıtları (bkz. update_tune/
+# update_usecase). "LEAVE" kümesindeki bir durumdan çıkış, "ARRIVE" kümesindeki
+# bir duruma giriş sadece dedicated onay uçlarından (validate/reject-validation/
+# approve/retry/test-approve/test-reject) yapılabilir — genel PUT ile değil.
+# Örn. "İnceleniyor → Tune Edildi" (Kapat) normal PUT ile kalır çünkü
+# "Tune Edildi" sadece LEAVE kümesinde, ARRIVE kümesinde değil.
+TUNE_LOCKED_LEAVE   = (STATUS_PENDING_VALIDATION, "Tune Edildi", "Tune Başarılı", STATUS_REJECTED)
+TUNE_LOCKED_ARRIVE  = ("Tune Başarılı", STATUS_REJECTED)
+UC_LOCKED_LEAVE     = (STATUS_PENDING_VALIDATION, "Test Ediliyor", "Prod'da Aktif", STATUS_REJECTED)
+UC_LOCKED_ARRIVE    = ("Prod'da Aktif", STATUS_REJECTED)
+
 # ---------------------------------------------------------------------------
 # DB
 # ---------------------------------------------------------------------------
@@ -221,6 +239,13 @@ def init_db():
         db.execute(f"ALTER TABLE users ADD COLUMN tier TEXT NOT NULL DEFAULT '{TIER_ANALIST}'")
         db.execute(f"UPDATE users SET tier='{TIER_MUDUR}' WHERE role='admin'")
         db.execute(f"UPDATE users SET tier='{TIER_ANALIST}' WHERE role='analyst'")
+    # Ön onay (validate) + son onay Q&A kolonları — Faz 4 (bkz. docs/PROGRESS.md)
+    for col in ["validated_by", "validated_at", "validation_note", "qa_test_ok", "qa_peer_reviewed", "approval_note"]:
+        if not _col_exists(db, "tune_requests", col):
+            db.execute(f"ALTER TABLE tune_requests ADD COLUMN {col} TEXT")
+    for col in ["validated_by", "validated_at", "validation_note", "qa_test_ok", "qa_peer_reviewed"]:
+        if not _col_exists(db, "usecase_requests", col):
+            db.execute(f"ALTER TABLE usecase_requests ADD COLUMN {col} TEXT")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -586,7 +611,7 @@ def create_tune():
         data.get("trigger_frequency","").strip(),
         data.get("tuning_analyst","").strip(),
         data.get("how_tuned","").strip(),
-        data.get("status","Açık"),
+        STATUS_PENDING_VALIDATION,  # istemciden gelen status yok sayılır — her talep ön onay bekler
         data.get("evidence_image","") or None,
         data.get("resolution_image","") or None,
         now, None, now
@@ -605,6 +630,14 @@ def update_tune(item_id):
     row  = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
+
+    # ── Onay kapıları: bu durumlara/durumlardan geçiş sadece dedicated uçlardan ──
+    requested_status = data.get("status", row["status"])
+    if requested_status != row["status"]:
+        if row["status"] in TUNE_LOCKED_LEAVE:
+            return jsonify({"error": "Bu durum değişikliği ilgili onay ucundan (validate/reject-validation/approve/retry) yapılmalı."}), 400
+        if requested_status in TUNE_LOCKED_ARRIVE:
+            return jsonify({"error": "Bu durum değişikliği ilgili onay ucundan (approve/reject-validation) yapılmalı."}), 400
 
     # ── Permission checks for analyst role ──────────────────────────────────
     role    = session.get("role", "analyst")
@@ -709,6 +742,53 @@ def update_tune(item_id):
     write_audit(a_action, "tune", item_id, a_detail)
     return jsonify(dict(updated))
 
+@app.route("/api/tune/<int:item_id>/validate", methods=["POST"])
+@login_required
+def validate_tune(item_id):
+    """Ön onay: talebin geçerliliğini onaylar, Ön Onay Bekliyor → Açık.
+    Sadece Kıdemli Analist/Müdür onay seviyesindeki kullanıcılar yapabilir."""
+    db = get_db()
+    row = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_PENDING_VALIDATION:
+        return jsonify({"error": f"Sadece '{STATUS_PENDING_VALIDATION}' statüsündeki kayıtlar onaylanabilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Talep onayı için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    note  = (request.json or {}).get("validation_note", "")
+    db.execute("""UPDATE tune_requests SET status='Açık',
+                  validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
+               (uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("VALIDATE_TUNE", "tune", item_id, f"Kural: {row['rule_name']}")
+    return jsonify(dict(updated))
+
+@app.route("/api/tune/<int:item_id>/reject-validation", methods=["POST"])
+@login_required
+def reject_validation_tune(item_id):
+    """Ön onay reddi: talep hiç işleme alınmadan kapatılır (Reddedildi)."""
+    db = get_db()
+    row = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_PENDING_VALIDATION:
+        return jsonify({"error": f"Sadece '{STATUS_PENDING_VALIDATION}' statüsündeki kayıtlar reddedilebilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Talep reddi için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    note = (request.json or {}).get("validation_note", "").strip()
+    if not note:
+        return jsonify({"error": "Red gerekçesi zorunludur."}), 400
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""UPDATE tune_requests SET status=?,
+                  validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
+               (STATUS_REJECTED, uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("REJECT_VALIDATION_TUNE", "tune", item_id, f"Kural: {row['rule_name']} | Gerekçe: {note[:80]}")
+    return jsonify(dict(updated))
+
 @app.route("/api/tune/<int:item_id>/approve", methods=["POST"])
 @login_required
 def approve_tune(item_id):
@@ -717,14 +797,20 @@ def approve_tune(item_id):
     if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
     if row["status"] != "Tune Edildi":
         return jsonify({"error": "Sadece 'Tune Edildi' statüsündeki kayıtlar onaylanabilir."}), 400
-    role  = session.get("role", "analyst")
+    if not is_senior():
+        return jsonify({"error": "Son onay için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    body = request.json or {}
+    approval_note = body.get("approval_note", "").strip()
+    if not approval_note:
+        return jsonify({"error": "Onay notu zorunludur."}), 400
     uname = session.get("username", "")
-    if role == "analyst" and row["reporter"] != uname:
-        return jsonify({"error": "Sadece talep eden veya admin onaylayabilir."}), 403
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     db.execute("""UPDATE tune_requests SET status='Tune Başarılı',
-                  approved_by=?, approved_at=?, completed_at=?, updated_at=? WHERE id=?""",
-               (uname, now, now, now, item_id))
+                  approved_by=?, approved_at=?, completed_at=?, updated_at=?,
+                  qa_test_ok=?, qa_peer_reviewed=?, approval_note=? WHERE id=?""",
+               (uname, now, now, now,
+                body.get("qa_test_ok", "Hayır"), body.get("qa_peer_reviewed", "Hayır"),
+                approval_note, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
     write_audit("APPROVE_TUNE", "tune", item_id, f"Kural: {row['rule_name']}")
@@ -738,15 +824,15 @@ def retry_tune(item_id):
     if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
     if row["status"] not in ("Tune Edildi", "Tune Başarılı"):
         return jsonify({"error": "Sadece 'Tune Edildi' veya 'Tune Başarılı' kayıtlar yeniden tune edilebilir."}), 400
-    role  = session.get("role", "analyst")
+    if not is_senior():
+        return jsonify({"error": "Yeniden tune için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
     uname = session.get("username", "")
-    if role == "analyst":
-        return jsonify({"error": "Yeniden tune için admin yetkisi gereklidir."}), 403
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     db.execute("""UPDATE tune_requests SET status='Açık',
                   tuning_analyst='', how_tuned='', tuned_at=NULL,
                   approval_deadline=NULL, approved_by=NULL, approved_at=NULL,
-                  completed_at=NULL, updated_at=? WHERE id=?""",
+                  completed_at=NULL, qa_test_ok=NULL, qa_peer_reviewed=NULL, approval_note=NULL,
+                  updated_at=? WHERE id=?""",
                (now, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM tune_requests WHERE id=?", (item_id,)).fetchone()
@@ -818,7 +904,7 @@ def create_usecase():
         data["requester"].strip(), data["usecase_description"].strip(),
         data["environment"],
         data.get("rule_name","").strip(), data.get("rule_author","").strip(),
-        data.get("notes","").strip(), data.get("status","Açık"),
+        data.get("notes","").strip(), STATUS_PENDING_VALIDATION,  # istemciden gelen status yok sayılır
         source_hunt_id, now, None, now
     ))
     db.commit()
@@ -842,6 +928,14 @@ def update_usecase(item_id):
     row  = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
+
+    # ── Onay kapıları: bu durumlara/durumlardan geçiş sadece dedicated uçlardan ──
+    requested_status = data.get("status", row["status"])
+    if requested_status != row["status"]:
+        if row["status"] in UC_LOCKED_LEAVE:
+            return jsonify({"error": "Bu durum değişikliği ilgili onay ucundan (validate/reject-validation/test-approve/test-reject) yapılmalı."}), 400
+        if requested_status in UC_LOCKED_ARRIVE:
+            return jsonify({"error": "Bu durum değişikliği ilgili onay ucundan (test-approve/reject-validation) yapılmalı."}), 400
 
     # ── Permission checks for analyst role ──────────────────────────────────
     role    = session.get("role", "analyst")
@@ -947,6 +1041,54 @@ def update_usecase(item_id):
     write_audit(a_action, "usecase", item_id, a_detail)
     return jsonify(dict(updated))
 
+@app.route("/api/usecase/<int:item_id>/validate", methods=["POST"])
+@login_required
+def validate_usecase(item_id):
+    """Ön onay: talebin geçerliliğini onaylar, Ön Onay Bekliyor → Açık.
+    Sadece Kıdemli Analist/Müdür onay seviyesindeki kullanıcılar yapabilir."""
+    db = get_db()
+    row = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_PENDING_VALIDATION:
+        return jsonify({"error": f"Sadece '{STATUS_PENDING_VALIDATION}' statüsündeki kayıtlar onaylanabilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Talep onayı için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    note  = (request.json or {}).get("validation_note", "")
+    db.execute("""UPDATE usecase_requests SET status='Açık',
+                  validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
+               (uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("VALIDATE_UC", "usecase", item_id, f"Tanım: {row['usecase_description'][:60]}")
+    return jsonify(dict(updated))
+
+@app.route("/api/usecase/<int:item_id>/reject-validation", methods=["POST"])
+@login_required
+def reject_validation_usecase(item_id):
+    """Ön onay reddi: talep hiç işleme alınmadan kapatılır (Reddedildi)."""
+    db = get_db()
+    row = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_PENDING_VALIDATION:
+        return jsonify({"error": f"Sadece '{STATUS_PENDING_VALIDATION}' statüsündeki kayıtlar reddedilebilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Talep reddi için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    note = (request.json or {}).get("validation_note", "").strip()
+    if not note:
+        return jsonify({"error": "Red gerekçesi zorunludur."}), 400
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""UPDATE usecase_requests SET status=?,
+                  validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
+               (STATUS_REJECTED, uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("REJECT_VALIDATION_UC", "usecase", item_id,
+                f"Tanım: {row['usecase_description'][:60]} | Gerekçe: {note[:80]}")
+    return jsonify(dict(updated))
+
 @app.route("/api/usecase/<int:item_id>/test-approve", methods=["POST"])
 @login_required
 def test_approve_uc(item_id):
@@ -955,16 +1097,19 @@ def test_approve_uc(item_id):
     if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
     if row["status"] != "Test Ediliyor":
         return jsonify({"error": "Sadece 'Test Ediliyor' statüsündeki kayıtlar onaylanabilir."}), 400
-    role  = session.get("role", "analyst")
-    if role == "analyst":
-        return jsonify({"error": "Test onayı için admin yetkisi gereklidir."}), 403
+    if not is_senior():
+        return jsonify({"error": "Prod onayı için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    body = request.json or {}
+    test_notes = body.get("test_notes", "").strip()
+    if not test_notes:
+        return jsonify({"error": "Onay notu zorunludur."}), 400
     uname = session.get("username", "")
     now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    test_notes = (request.json or {}).get("test_notes", "")
     db.execute("""UPDATE usecase_requests SET status='Prod''da Aktif',
                   test_approved_by=?, test_approved_at=?, test_notes=?,
-                  completed_at=?, updated_at=? WHERE id=?""",
-               (uname, now, test_notes, now, now, item_id))
+                  completed_at=?, updated_at=?, qa_test_ok=?, qa_peer_reviewed=? WHERE id=?""",
+               (uname, now, test_notes, now, now,
+                body.get("qa_test_ok", "Hayır"), body.get("qa_peer_reviewed", "Hayır"), item_id))
     db.commit()
     updated = db.execute("SELECT * FROM usecase_requests WHERE id=?", (item_id,)).fetchone()
     write_audit("TEST_APPROVE_UC", "usecase", item_id,
@@ -979,9 +1124,8 @@ def test_reject_uc(item_id):
     if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
     if row["status"] != "Test Ediliyor":
         return jsonify({"error": "Sadece 'Test Ediliyor' statüsündeki kayıtlar reddedilebilir."}), 400
-    role = session.get("role", "analyst")
-    if role == "analyst":
-        return jsonify({"error": "Test reddi için admin yetkisi gereklidir."}), 403
+    if not is_senior():
+        return jsonify({"error": "Test reddi için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
     uname = session.get("username", "")
     now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     test_notes = (request.json or {}).get("test_notes", "")
@@ -1229,7 +1373,7 @@ def update_hunt(item_id):
                       (id,requester,usecase_description,environment,status,source_hunt_id,
                        notes,created_at,updated_at)
                     VALUES (?,?,?,?,?,?,?,?,?)
-                """, (uc_id, uc_req, uc_desc, uc_env, "Açık", hunt_new_id,
+                """, (uc_id, uc_req, uc_desc, uc_env, STATUS_PENDING_VALIDATION, hunt_new_id,
                       f"Threat Hunt #{hunt_new_id} sonucu oluşturuldu.", now, now))
                 db.commit()
                 uc_created_id = uc_id

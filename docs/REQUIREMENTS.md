@@ -66,6 +66,24 @@ Proaktif tehdit avı taleplerinin ve raporlarının yönetimi.
 | Kapat | ✅ | ❌ | ✅ |
 | Sil | ✅ | ❌ | ❌ |
 
+### Onay Süreci — Tuning & Use-Case (2026-07-19, Faz 4)
+
+Bu iki modülde yukarıdaki tabloya ek olarak **iki onay kapısı** var, ikisi de
+`role`den bağımsız `tier`e (Kıdemli Analist/Müdür — bkz. `docs/rbac.md`) bakar:
+
+1. **Ön onay:** yeni talepler `Ön Onay Bekliyor` durumunda açılır (istemciden
+   gelen durum bilgisi yok sayılır). Kıdemli Analist/Müdür onaylarsa `Açık`'a
+   geçer ve normal akış başlar; reddederse (gerekçe zorunlu) `Reddedildi`
+   olarak kapanır.
+2. **Son onay (Q&A'lı):** Tuning'de `Tune Edildi → Tune Başarılı`, UC'de
+   `Test Ediliyor → Prod'da Aktif` geçişi artık otomatik değil — Kıdemli
+   Analist/Müdür "test ortamında sorunsuz mu", "peer review yapıldı mı"
+   sorularını işaretleyip zorunlu bir onay notu girmeden bu geçiş olmaz.
+
+Bu iki durum arasındaki (ve bu durumlara giren/çıkan) geçişler genel
+`PUT` uçlarından değil, sadece `/validate`, `/reject-validation`,
+`/approve` (tune), `/test-approve`, `/test-reject` (UC) uçlarından yapılabilir.
+
 ### Ortam (multi-select)
 - Birden fazla ortam seçilebilir (PROD, DEV, TEST, vb.)
 - Storage: virgülle ayrılmış string (`"PROD,DEV"`)
