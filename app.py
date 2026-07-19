@@ -2114,11 +2114,30 @@ def hunt_report_pdf(item_id):
 
     try:
         from weasyprint import HTML
+        pdf_bytes = HTML(string=html).write_pdf()
     except (ImportError, OSError) as e:
-        app.logger.error(f"[hunt-pdf] WeasyPrint yüklenemedi: {e}")
-        return jsonify({"error": "PDF oluşturma sunucuda kullanılamıyor (WeasyPrint kurulu değil/yüklenemedi)."}), 500
-
-    pdf_bytes = HTML(string=html).write_pdf()
+        # Yerel Windows geliştirmede WeasyPrint'in native kütüphaneleri (Pango/Cairo)
+        # bulunamaz — production (Linux/Docker) bu satıra hiç düşmez. Sadece
+        # WEASYPRINT_EXE env var'ı taşınabilir bir weasyprint.exe'ye işaret ediyorsa
+        # ona düşülür; yoksa temiz bir hata döner. Bkz. docs/PROGRESS.md Faz 6.
+        weasyprint_exe = os.environ.get("WEASYPRINT_EXE", "")
+        if not weasyprint_exe or not os.path.exists(weasyprint_exe):
+            app.logger.error(f"[hunt-pdf] WeasyPrint yüklenemedi: {e}")
+            return jsonify({"error": "PDF oluşturma sunucuda kullanılamıyor (WeasyPrint kurulu değil/yüklenemedi)."}), 500
+        import subprocess
+        import tempfile
+        fd_html, html_path = tempfile.mkstemp(suffix=".html")
+        pdf_path = html_path[:-5] + ".pdf"
+        try:
+            with os.fdopen(fd_html, "w", encoding="utf-8") as f:
+                f.write(html)
+            subprocess.run([weasyprint_exe, html_path, pdf_path], check=True, timeout=30)
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+        finally:
+            os.remove(html_path)
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
     write_audit("EXPORT_HUNT_PDF", "hunt", item_id, f"Konu: {row['hunt_subject']}")
     return send_file(
         BytesIO(pdf_bytes),
