@@ -1,6 +1,6 @@
 # SOC Tracker — İlerleme Günlüğü
 
-## Son Güncelleme: 2026-06-11
+## Son Güncelleme: 2026-06-11 (commit f9a9d9d'e kadar)
 
 ---
 
@@ -120,9 +120,49 @@
 - [x] Excel KPI sayfası: Tune Edildi, Tune Başarılı, Yeniden Tune, UC Test/Prod satırları güncellendi
 - [x] Excel KPI: tune_success_rate ve uc_prod_rate hesapları
 
+### Otomatik Veritabanı Yedekleme (2026-06-11)
+- [x] `_do_backup()` — anlık SQLite kopyası, kota bazlı eski yedek temizliği
+- [x] Uygulama başlangıcında otomatik yedek (son 5 gün içinde yedek yoksa)
+- [x] Yedek sıklığı: 5 günde bir, 12 yedek saklanır (≈2 ay)
+- [x] `/api/admin/backup` (oluştur), `/api/admin/backups` (listele), `/api/admin/backup/<file>` (indir/sil) — admin only
+- [x] Docker: yedekler `/data/backups` altında `soc_data` volume'üne kalıcı yazılıyor
+- [ ] ⚠️ **Bilinen risk:** yedekler DB ile aynı Docker volume'ünde (`soc_data`) — volume silinirse (`docker volume rm` / `down -v`) hem DB hem yedekler birlikte gider. Kalıcılık sertleştirmesi planlanıyor.
+
+### Faz 1 — Yedekleme Dayanıklılığı (2026-07-19)
+- [x] `docker-compose.yml`: `/data/backups` artık `soc_data` named volume'ü yerine host bind-mount (`${BACKUP_HOST_DIR:-./backups}`) — `docker volume rm soc_data` / `down -v` artık yedekleri silmiyor
+- [x] `scheduler.py`: `JobScheduler` / `ScheduledJob` — Gunicorn'un 2 worker'ından yalnızca biri çalıştırsın diye dosya kilidi (`fcntl.flock`) ile korunan arka plan thread'i
+- [x] `app.py`: `_auto_backup_on_start` → `_backup_if_due(keep, max_age_days)` olarak genelleştirildi; hem başlangıçta hem de scheduler tarafından 6 saatte bir kontrol ediliyor (konteyner haftalarca yeniden başlamasa bile 5 günlük yedekleme politikası devam ediyor)
+- [x] `docs/PLAN_SCHEDULER_REDESIGN.md` ve `docs/BACKUP_RESTORE.md` yazıldı
+- [ ] **Doğrulanmadı:** Ubuntu test sunucusunda `docker volume rm` sonrası yedeklerin sağlam kaldığı ve restore adımlarının çalıştığı henüz canlıda denenmedi — kullanıcı ile birlikte deploy günü test edilecek
+- [ ] `backup.py` (standalone script) host crontab'ında gerçekten kullanılıyor mu henüz teyit edilmedi — SSH erişimi olduğunda kontrol edilecek
+
+### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
+- [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
+- [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
+- [x] Görsel yapıştırma (paste) desteği
+- [x] Tune & UC detay modallarında onaylayan kullanıcı + onay tarihi gösterimi (önceki bilinen eksik giderildi)
+- [x] `fmtDate` düzeltmesi — `esc()` çift encode sorunu giderildi
+- [x] Hunt raporu modalı: dış tıklamayla kapanmıyor, sadece X butonu kapatıyor (yanlışlıkla veri kaybını önlemek için)
+- [x] UC form reset null-safe hale getirildi (sessiz TypeError önlendi)
+
+### UX Kalite İyileştirmeleri (2026-06-11)
+- [x] Animasyon ve geçiş iyileştirmeleri
+- [x] Scroll performansı optimizasyonu
+
 ## 🔧 Bilinen Sorunlar / Bekleyen İşler
 
-- [ ] Detay görünümlerinde (tune/UC/hunt) `approved_by`, `tuned_at`, `test_notes` alanları gösterilmeli
+- [x] ~~Yedekleme dayanıklılığı~~ — Faz 1'de koddan giderildi (host bind-mount + scheduler); **canlıda henüz doğrulanmadı**
+- [ ] Audit log: zaman damgası + reddedilemezlik (tamper-evidence) yok, sertifikasyon kanıtı için yetersiz — **Faz 2**
+- [ ] Rol yapısı genişletilecek: Müdür / Kıdemli Analist / Analist hiyerarşisi (mevcut admin/analyst/settings üzerine) — **Faz 3**
+- [ ] Tuning & UC: prod'a otomatik geçiş var, manuel onay + soru-cevap kapısı planlanıyor — **Faz 4**
+- [ ] Threat Hunt: talep açılır açılmaz "gerçek" hunt sayılıyor, ön onay (hipotez onayı) adımı yok — **Faz 5**
+- [ ] Threat Hunt raporları için PDF export yok — **Faz 6**
+- [ ] XSOAR entegrasyonu yok (Needs Tuning → otomatik tuning talebi) — **Faz 7**
+
+> Not: 2026-07-19'da konuşulan 8 fazlı (Faz 0-7) güvenilirlik/hesap verebilirlik yol haritası onaylandı —
+> plan dosyası: `C:\Users\Oguzhan\.claude\plans\cheerful-puzzling-pumpkin.md`. Faz 0/1 (SSH gerektiren
+> canlı doğrulama ve volume-rm testi) kullanıcıyla birlikte deploy günü yapılacak şekilde ertelendi;
+> Faz 1'in kod tarafı tamamlandı.
 
 ---
 
@@ -130,8 +170,8 @@
 
 | Hash | Açıklama |
 |------|----------|
-| 321f8ad | feat: user management - role change and password reset |
-| 240b08b | feat: multi-env select, MITRE dedup, remove related requests |
-| 33ce45b | feat: complete Threat Hunting module with MITRE ATT&CK integration |
-| 29083d5 | feat: add Threat Hunting module — request/claim/report/detail, DB schema, KPI, Excel export |
-| 1b64b44 | docs: add Threat Hunting module design plan |
+| f9a9d9d | feat: UX quality improvements — animations, transitions, scroll performance |
+| d998975 | fix: remove hunt-report-modal from global overlay-click-close listener |
+| 0a7369f | fix: disable outside-click close on hunt report modal — only X button closes it |
+| bf19053 | fix: null-safe UC form reset in openHuntReportModal to prevent silent TypeError |
+| c63f0e7 | fix: fmtDate returns plain dash instead of HTML to prevent esc() double-encoding in detailRow |

@@ -10,6 +10,11 @@ services:
     volumes:
       - soc_data:/data
       - soc_uploads:/app/static/uploads
+      # Yedekler kasıtlı olarak soc_data named volume'ünün DIŞINDA, host'un
+      # kendi dosya sistemine bind-mount edilir. Böylece "docker volume rm
+      # soc_data" veya "docker-compose down -v" DB'yi silse bile yedekler
+      # etkilenmez (host bind mount'lar named volume gibi silinmez).
+      - ${BACKUP_HOST_DIR:-./backups}:/data/backups
     environment:
       - SECRET_KEY=${SECRET_KEY:-soc-tracker-CHANGE-THIS-IN-PRODUCTION}
       - DATABASE=/data/tracker.db

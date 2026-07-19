@@ -1739,22 +1739,36 @@ def api_delete_backup(filename):
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
-def _auto_backup_on_start():
-    """Son 5 gün içinde yedek yoksa otomatik oluşturur."""
+def _backup_if_due(keep: int = 12, max_age_days: int = 5) -> None:
+    """Son `max_age_days` gün içinde yedek yoksa yeni bir yedek oluşturur.
+
+    Hem uygulama başlangıcında hem de JobScheduler tarafından periyodik
+    olarak çağrılır — böylece konteyner haftalarca yeniden başlamasa bile
+    yedekleme politikası (5 günde bir) devam eder.
+    """
     import glob as _glob
     from datetime import timedelta
-    cutoff = (datetime.now() - timedelta(days=5)).timestamp()
+    cutoff = (datetime.now() - timedelta(days=max_age_days)).timestamp()
     recent = [f for f in _glob.glob(os.path.join(BACKUP_DIR, "tracker_*.db"))
               if os.path.getmtime(f) >= cutoff]
     if not recent:
-        name = _do_backup(keep=12)
+        name = _do_backup(keep=keep)
         if name:
-            app.logger.info(f"[backup] Otomatik başlangıç yedeği: {name}")
+            app.logger.info(f"[backup] Otomatik yedek oluşturuldu: {name}")
 
 
 with app.app_context():
     init_db()
-    _auto_backup_on_start()
+    _backup_if_due()
+
+from scheduler import JobScheduler, ScheduledJob
+
+_scheduler = JobScheduler(
+    check_interval_seconds=3600,
+    lock_path=os.path.join(BACKUP_DIR, ".scheduler.lock"),
+)
+_scheduler.register(ScheduledJob("db_backup", _backup_if_due, interval_hours=6))
+_scheduler.start()
 
 if __name__ == "__main__":
     host  = os.environ.get("HOST", "127.0.0.1")
