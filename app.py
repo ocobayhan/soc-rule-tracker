@@ -266,6 +266,9 @@ def init_db():
     for col in ["xsoar_case_id", "xsoar_url"]:
         if not _col_exists(db, "tune_requests", col):
             db.execute(f"ALTER TABLE tune_requests ADD COLUMN {col} TEXT")
+    # SOAR case zorunluluğu manuel taleplerde de — "case bulunamadı" bayrağı
+    if not _col_exists(db, "tune_requests", "xsoar_case_missing"):
+        db.execute("ALTER TABLE tune_requests ADD COLUMN xsoar_case_missing TEXT DEFAULT 'Hayır'")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -683,6 +686,12 @@ def create_tune():
     for f in ["reporter", "environment", "rule_name", "tune_reason"]:
         if not data.get(f, "").strip():
             return jsonify({"error": f"{f} zorunludur"}), 400
+    # SOAR case referansı zorunlu — ya gerçek bir SOAR case ID/linki, ya da
+    # "SOAR'da case bulunamadı" işaretlenip elle girilen bir case no.
+    # Bkz. docs/xsoar_integration.md — XSOAR webhook'u zaten aynı alanı zorunlu tutuyor,
+    # burada manuel oluşturulan taleplere de aynı iz sürülebilirlik getiriliyor.
+    if not str(data.get("xsoar_case_id", "")).strip():
+        return jsonify({"error": "SOAR Case ID zorunludur (case bulunamıyorsa ilgili kutucuğu işaretleyip bir case no girin)"}), 400
     # Analyst can only report as themselves
     if session.get("role") == "analyst":
         data["reporter"] = session.get("username")
@@ -694,8 +703,8 @@ def create_tune():
         INSERT INTO tune_requests
           (id,reporter,environment,rule_name,tune_reason,trigger_frequency,
            tuning_analyst,how_tuned,status,evidence_image,resolution_image,
-           created_at,completed_at,updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           created_at,completed_at,updated_at,xsoar_case_id,xsoar_url,xsoar_case_missing)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
         new_id,
         data["reporter"].strip(), data["environment"].strip(),
@@ -706,7 +715,10 @@ def create_tune():
         STATUS_PENDING_VALIDATION,  # istemciden gelen status yok sayılır — her talep ön onay bekler
         data.get("evidence_image","") or None,
         data.get("resolution_image","") or None,
-        now, None, now
+        now, None, now,
+        str(data["xsoar_case_id"]).strip(),
+        (data.get("xsoar_url") or "").strip() or None,
+        "Evet" if data.get("xsoar_case_missing") else "Hayır",
     ))
     db.commit()
     new_row = db.execute("SELECT * FROM tune_requests WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -799,7 +811,8 @@ def update_tune(item_id):
         data["reporter"] = row["reporter"]
         # Rapor alanları yalnızca raporlayan tarafından değiştirilebilir
         if not is_reporter:
-            for f in ("environment", "rule_name", "tune_reason", "trigger_frequency", "evidence_image"):
+            for f in ("environment", "rule_name", "tune_reason", "trigger_frequency", "evidence_image",
+                       "xsoar_case_id", "xsoar_url", "xsoar_case_missing"):
                 data[f] = row[f]
         # Çalışma alanları yalnızca atanmış analist tarafından değiştirilebilir
         if not is_assigned:
@@ -844,6 +857,7 @@ def update_tune(item_id):
           id=?,reporter=?,environment=?,rule_name=?,tune_reason=?,trigger_frequency=?,
           tuning_analyst=?,how_tuned=?,status=?,
           evidence_image=?,resolution_image=?,
+          xsoar_case_id=?,xsoar_url=?,xsoar_case_missing=?,
           created_at=?,completed_at=?,tuned_at=?,approval_deadline=?,updated_at=?
         WHERE id=?
     """, (
@@ -858,6 +872,9 @@ def update_tune(item_id):
         new_status,
         data.get("evidence_image",    row["evidence_image"]) or None,
         data.get("resolution_image",  row["resolution_image"]) or None,
+        str(data.get("xsoar_case_id", row["xsoar_case_id"] or "")).strip() or None,
+        (data.get("xsoar_url", row["xsoar_url"]) or "").strip() or None,
+        "Evet" if data.get("xsoar_case_missing", row["xsoar_case_missing"] == "Evet") else "Hayır",
         created_at_val, completed_at, tuned_at, approval_deadline, now, item_id
     ))
     db.commit()
@@ -1855,7 +1872,7 @@ def export_data():
                  "Durum", "Raporlandı", "Tune Tarihi", "Onaylayan", "Onay Tarihi", "Tamamlandı",
                  "Ön Onayı Veren", "Ön Onay Tarihi", "Ön Onay Notu",
                  "Test Ortamında Sorunsuz", "Peer Review", "Onay Notu",
-                 "XSOAR Case ID", "XSOAR URL"]
+                 "SOAR Case ID", "SOAR URL", "SOAR'da Case Bulunamadı (manuel)"]
     write_headers(ws1, tune_cols)
 
     tune_q = "SELECT * FROM tune_requests"
@@ -1872,7 +1889,7 @@ def export_data():
                fmt_date(r["completed_at"]),
                gv(r, "validated_by"), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
                gv(r, "qa_test_ok"), gv(r, "qa_peer_reviewed"), gv(r, "approval_note"),
-               gv(r, "xsoar_case_id"), gv(r, "xsoar_url")]
+               gv(r, "xsoar_case_id"), gv(r, "xsoar_url"), gv(r, "xsoar_case_missing", "Hayır")]
         ws1.append(row)
         for ci in range(1, len(tune_cols) + 1):
             ws1.cell(row=ws1.max_row, column=ci).alignment = CELL_ALIGN

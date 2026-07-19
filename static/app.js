@@ -422,7 +422,7 @@ function openTuneDetail(id) {
   document.getElementById("tune-detail-body").innerHTML = `<div class="detail-grid">
     ${detailRow("Raporlayan",        r.reporter)}
     ${r.xsoar_case_id ? `<div class="detail-row">
-        <span class="detail-label">XSOAR Case</span>
+        <span class="detail-label">${r.xsoar_case_missing === "Evet" ? "Case No (SOAR'da yok, manuel)" : "SOAR Case"}</span>
         <span class="detail-value">${r.xsoar_url
           ? `<a href="${esc(r.xsoar_url)}" target="_blank" rel="noopener">#${esc(r.xsoar_case_id)}</a>`
           : esc(r.xsoar_case_id)}</span>
@@ -630,6 +630,31 @@ function clearTuneFilters() {
 }
 
 // ---------------------------------------------------------------------------
+// SOAR case ID — "case bulunamadı" kutucuğu işaretlenince case ID alanı
+// gerçek bir SOAR referansı yerine elle girilen bir case no'ya dönüşür,
+// case linki alanı ise anlamsız hale geldiği için kilitlenir.
+// ---------------------------------------------------------------------------
+function toggleXsoarMissing(prefix) {
+  const missing  = document.getElementById(`${prefix}-xsoar-missing`).checked;
+  const idInput  = document.getElementById(`${prefix}-xsoar-case-id`);
+  const idLabel  = document.getElementById(`${prefix}-xsoar-case-id-label`);
+  const urlGroup = document.getElementById(`${prefix}-xsoar-url-group`);
+  const urlInput = document.getElementById(`${prefix}-xsoar-url`);
+  if (missing) {
+    idLabel.textContent = "Case No (manuel) *";
+    idInput.placeholder = "SOAR'da yok — elle takip için bir numara girin";
+    urlInput.value = "";
+    urlInput.disabled = true;
+    urlGroup.style.opacity = "0.5";
+  } else {
+    idLabel.textContent = "SOAR Case ID *";
+    idInput.placeholder = "örn. INC-12345";
+    urlInput.disabled = false;
+    urlGroup.style.opacity = "1";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Tune — Create modal
 // ---------------------------------------------------------------------------
 function openTuneModal() {
@@ -639,6 +664,10 @@ function openTuneModal() {
   document.getElementById("tune-rule-name").value = "";
   document.getElementById("tune-reason").value   = "";
   document.getElementById("tune-freq").value     = "";
+  document.getElementById("tune-xsoar-case-id").value = "";
+  document.getElementById("tune-xsoar-url").value     = "";
+  document.getElementById("tune-xsoar-missing").checked = false;
+  toggleXsoarMissing("tune");
   // Raporlayan: analist sadece kendisi, admin seçebilir
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
     lockToSelf("tune-reporter");
@@ -654,6 +683,12 @@ function closeTuneModal() { document.getElementById("tune-modal").style.display 
 async function saveTune() {
   const errEl = document.getElementById("tune-modal-error");
   errEl.style.display = "none";
+  const caseId = document.getElementById("tune-xsoar-case-id").value.trim();
+  if (!caseId) {
+    errEl.textContent = "SOAR Case ID zorunludur (case bulunamıyorsa kutucuğu işaretleyip bir case no girin).";
+    errEl.style.display = "block";
+    return;
+  }
   const payload = {
     reporter:          document.getElementById("tune-reporter").value,
     environment:       document.getElementById("tune-env").value,
@@ -662,6 +697,9 @@ async function saveTune() {
     trigger_frequency: document.getElementById("tune-freq").value,
     status:            "Açık",
     evidence_image:    document.getElementById("tune-evidence-image").value || null,
+    xsoar_case_id:     caseId,
+    xsoar_url:         document.getElementById("tune-xsoar-url").value.trim() || null,
+    xsoar_case_missing: document.getElementById("tune-xsoar-missing").checked,
   };
   try {
     await apiFetch("/api/tune", { method: "POST", body: JSON.stringify(payload) });
@@ -683,6 +721,10 @@ function openTuneEditModal(id) {
   document.getElementById("edit-tune-freq").value      = r.trigger_frequency || "";
   document.getElementById("edit-tune-status").value    = r.status || "Açık";
   document.getElementById("edit-tune-how").value       = r.how_tuned || "";
+  document.getElementById("edit-tune-xsoar-case-id").value = r.xsoar_case_id || "";
+  document.getElementById("edit-tune-xsoar-url").value     = r.xsoar_url || "";
+  document.getElementById("edit-tune-xsoar-missing").checked = r.xsoar_case_missing === "Evet";
+  toggleXsoarMissing("edit-tune");
   // Alan kilitleme: role ve sahipliğe göre
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
     const isAssigned = r.tuning_analyst === CURRENT_USER;
@@ -698,16 +740,20 @@ function openTuneEditModal(id) {
       sel.disabled  = true;
     }
     // Rapor alanları (raporlayan doldurur): yalnızca raporlayan düzenleyebilir
-    ["edit-tune-env","edit-tune-rule-name","edit-tune-reason","edit-tune-freq"].forEach(id => {
+    ["edit-tune-env","edit-tune-rule-name","edit-tune-reason","edit-tune-freq",
+     "edit-tune-xsoar-case-id","edit-tune-xsoar-missing"].forEach(id => {
       document.getElementById(id).disabled = !isReporter;
     });
+    document.getElementById("edit-tune-xsoar-url").disabled = !isReporter || r.xsoar_case_missing === "Evet";
     // Çalışma alanları (analist doldurur): yalnızca atanmış analist düzenleyebilir
     document.getElementById("edit-tune-how").disabled    = !isAssigned;
     document.getElementById("edit-tune-status").disabled = !isAssigned;
   } else {
-    // Admin: tüm alanlar serbest
+    // Admin: tüm alanlar serbest (case linki, "case yok" kutucuğunun
+    // durumuna göre toggleXsoarMissing() tarafından zaten yönetiliyor)
     ["edit-tune-env","edit-tune-rule-name","edit-tune-reason","edit-tune-freq",
-     "edit-tune-how","edit-tune-status"].forEach(id => {
+     "edit-tune-how","edit-tune-status","edit-tune-xsoar-case-id",
+     "edit-tune-xsoar-missing"].forEach(id => {
       document.getElementById(id).disabled = false;
     });
     freeSelect("edit-tune-reporter", r.reporter || "");
@@ -745,6 +791,9 @@ async function saveTuneEdit() {
     how_tuned:         document.getElementById("edit-tune-how").value.trim(),
     evidence_image:    document.getElementById("edit-tune-evidence-image").value || null,
     resolution_image:  document.getElementById("edit-tune-resolution-image").value || null,
+    xsoar_case_id:      document.getElementById("edit-tune-xsoar-case-id").value.trim() || null,
+    xsoar_url:          document.getElementById("edit-tune-xsoar-url").value.trim() || null,
+    xsoar_case_missing: document.getElementById("edit-tune-xsoar-missing").checked,
     ...(USER_ROLE === "settings" ? {
       new_id:       document.getElementById("edit-tune-new-id").value       || undefined,
       created_at:   document.getElementById("edit-tune-created-at").value   || undefined,

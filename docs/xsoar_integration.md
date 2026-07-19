@@ -78,3 +78,26 @@ tarafındaki ekiple birlikte yapılmalı.
 integrations/xsoar/<modül>` ucu + `api_key_required` decorator'ının
 yeniden kullanılması) ileride Use-Case ve Threat Hunt için de
 uygulanabilir.
+
+## Manuel Tuning Taleplerinde SOAR Case Zorunluluğu (2026-07-19)
+
+Bu webhook'tan bağımsız bir kural: artık **elle** (UI üzerinden) açılan
+Tuning taleplerinde de bir SOAR case referansı zorunlu — amaç, tune
+edilen her kuralın SOAR'da işaretlenebilen gerçek bir case'e
+dayanmasını sağlamak.
+
+- `xsoar_case_id` alanı zorunlu (POST `/api/tune`, 400 döner eksikse).
+- Case gerçekten SOAR'da yoksa, "SOAR'da case bulunamadı" kutucuğu
+  işaretlenip aynı alana elle bir case no girilir — bu durumda
+  `xsoar_case_missing='Evet'` olarak işaretlenir ve case linki alanı
+  anlamsız olduğu için devre dışı kalır.
+- **Not:** XSOAR'ın kendi API'sine gerçek zamanlı bir sorgu atılmıyor —
+  case'in gerçekten var olup olmadığı doğrulanmıyor, sadece bir
+  referansın girilmiş olması zorunlu tutuluyor. Gerçek API doğrulaması
+  istenirse XSOAR'ın sorgu endpoint'i + kimlik bilgileri gerekir, bu
+  ayrı ve daha büyük bir entegrasyon işi olur.
+- Bu zorunluluk sadece **yeni kayıt oluştururken** geçerli — bu
+  özellikten önce açılmış, case ID'si olmayan eski kayıtlar
+  düzenlenebilmeye devam eder (geriye dönük olarak kilitlenmezler).
+- Kapsam sadece Tuning — Use-Case ve Threat Hunt'a bilinçli olarak
+  uygulanmadı.

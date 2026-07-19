@@ -237,6 +237,53 @@
 - [x] Mojibake/encoding taraması yapıldı — **sorun bulunmadı**, tüm dosyalar doğru UTF-8
 - [x] **Doğrulandı (ekran görüntüleriyle, önce/sonra karşılaştırmalı):** Tuning tablosunun başlıkları artık tamamen okunabilir ve ayrık; yeni logo hem sidebar'da hem login sayfasında doğru render oluyor
 
+### Faz D — Detay Modalı Çakışması, Ayarlar/Backup RBAC Düzeltmesi, SOAR Case Zorunluluğu (2026-07-19)
+
+Kullanıcının Faz C sonrası bildirdiği 4 talep üzerine:
+
+1. **Hunt/Tune/UC detay kutucuklarında metin çakışması — bulundu, doğrulandı, düzeltildi.**
+   Onay verecek analistin raporu okuyamamasına neden olan gerçek bir hata:
+   `detailRow()`/`detailImgRow()` (üç modülün de paylaştığı ortak render
+   fonksiyonu) `.detail-value` span'ına `white-space`/`overflow-wrap`
+   vermiyordu. Fetch-mock ile (DB'ye hiç yazmadan) canlı ölçüldü: boşluksuz
+   uzun bir token (hostname, hash, IOC) `.modal-body`'yi 41-61px taşırıyordu
+   (flex kolonunun varsayılan `min-width:auto`'su nedeniyle), üstüne
+   çok-paragraflı yapıştırılan metin satır sonu korumasız tek bloğa
+   dönüşüyordu. `.detail-value`'ya `overflow-wrap/word-break:break-word` +
+   `white-space:pre-wrap`, `.detail-row`'a `min-width:0` eklendi — tek yerden
+   üç modülü birden düzeltti. Düzeltme sonrası ölçümde taşma 0.
+
+2. **Beklenmedik bulgu: Ayarlar sayfası (yedekleme dahil) admin için hiç erişilemezdi.**
+   `is_settings` şablon koşulu sadece `role=='settings'` iken doğruydu — admin
+   nav'da "Ayarlar"ı hiç göremiyordu, dolayısıyla `docs/rbac.md`'nin
+   belgelediği "backup yönetimi" yetkisine rağmen yedekleme panelini UI'dan
+   hiç kullanamıyordu. `is_settings or user_role=='admin'` yapıldı (nav,
+   şablon bölümü, `settings_required` decorator'ı); admin artık Dashboard/
+   Tuning/UC/Hunt/Audit'i kaybetmeden Ayarlar'ı da görüyor. `app.js`'teki
+   init dalı (`IS_SETTINGS` → `HAS_DASHBOARD`) da bu yüzden düzeltildi,
+   yoksa admin dashboard'unu kaybedecekti.
+
+3. **XSOAR entegrasyonu bilgilendirme paneli** — Ayarlar sayfasına, teknik
+   olmayan bir dille "bu ne işe yarar / kurulum için XSOAR ekibine ne
+   verilir" açıklaması eklendi (mevcut `docs/xsoar_integration.md`'nin
+   içeriğine dayanıyor, admin-only backup panelinin yanına).
+
+4. **Manuel Tuning taleplerinde SOAR Case ID zorunluluğu** (kullanıcı kararı:
+   gerçek zamanlı XSOAR API doğrulaması değil, zorunlu alan + "case
+   bulunamadı" kutucuğuyla manuel case no; kapsam sadece Tuning).
+   - Yeni kolon: `tune_requests.xsoar_case_missing` (TEXT, 'Evet'/'Hayır').
+   - `POST /api/tune`: `xsoar_case_id` boşsa 400 (istemci + sunucu tarafında).
+   - "Yeni Talep" ve "Düzenle" modallerine Case ID/Link alanları + "SOAR'da
+     case bulunamadı" kutucuğu eklendi (`toggleXsoarMissing()`); işaretlenince
+     alan etiketi "Case No (manuel)"a döner, case linki devre dışı kalır.
+   - **Geriye dönük kilitlemiyor:** bu özellikten önce açılmış, case ID'si
+     olmayan kayıtlar düzenlenmeye devam edilebiliyor — zorunluluk sadece
+     yeni kayıt oluştururken geçerli.
+   - Detay modali ve Excel export'u güncellendi (yeni "SOAR'da Case
+     Bulunamadı" kolonu).
+   - Uçtan uca doğrulandı: gerçek case ID'li ve "case yok" (manuel)
+     senaryolarının ikisi de test edilip temizlendi.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
