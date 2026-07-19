@@ -508,6 +508,39 @@ Faz B dersi):
   "% Percentage of assets covered" (varlık envanteri/CMDB gerektirir,
   sistemde hiç yok) — bu, gerçek bir yeni özellik gerektirir.
 
+### Faz K — DB/Upload'lar da Named Volume'den Bind-Mount'a (2026-07-20)
+
+Kullanıcı canlıdaki **gerçek kurumsal verinin** (test/dummy veri değil)
+kesinlikle kaybolmaması gerektiğini vurguladı. Bu vesileyle `docker-
+compose.yml` yeniden gözden geçirildi ve Faz 1'den kalma bilinen bir risk
+bulundu: yedekler zaten host bind-mount'taydı ama **DB'nin kendisi hâlâ
+`soc_data` adlı bir Docker named volume'ündeydi** — yani `docker volume rm
+soc_data` veya `docker-compose down -v` hâlâ canlı DB'yi (sadece yedeğini
+değil) doğrudan silebiliyordu. Bu, `docs/PROGRESS.md`'de zaten "bilinen
+risk, kalıcılık sertleştirmesi planlanıyor" olarak not edilmişti (Faz 1),
+ama hiç kapatılmamıştı.
+
+- [x] `docker-compose.yml`: `soc_data`/`soc_uploads` named volume'leri
+  kaldırıldı, DB (`./data`) ve upload'lar (`./uploads`) da yedekler gibi
+  host bind-mount oldu — üçü de birbirinden **ayrı** host dizinlerinde
+  (yedekler DB'nin dizininin altında değil, kardeş bir dizinde — host
+  üzerinde yanlışlıkla `rm -rf ./data` çalıştırılsa bile yedekler etkilenmez).
+- [x] `.gitignore`'a `uploads/` eklendi — yeni host dizini `static/uploads/`
+  deseniyle eşleşmiyordu, gerçek yüklenmiş görseller yanlışlıkla commit'e
+  girebilirdi.
+- [x] `docs/BACKUP_RESTORE.md` tamamen yeniden yazıldı: normal restore artık
+  Docker volume gymnastics'i gerektirmiyor (düz dosya kopyalama); **eski
+  (named volume) kurulumdan yeni (bind-mount) kuruluma geçiş** için ayrı,
+  adım adım bir prosedür eklendi — özellikle "önce eski volume'deki gerçek
+  veriyi yeni host dizinine kopyala, SONRA yeni compose dosyasını devreye
+  al" sırası vurgulandı, çünkü bu sıra atlanırsa yeni kurulum boş bir
+  `./data` ile başlar ve gerçek veri (hâlâ eski volume'de duruyor olsa da)
+  uygulamada görünmez hale gelir.
+- [ ] **Doğrulanmadı — canlıda henüz denenmedi.** Kullanıcının gerçek
+  sunucusu muhtemelen hâlâ eski (`soc_data` named volume'lü) kurulumla
+  çalışıyor; bu geçiş kullanıcıyla birlikte, `docs/BACKUP_RESTORE.md`'deki
+  prosedür izlenerek yapılmalı — SSH oturumu kullanıcı ne zaman isterse.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

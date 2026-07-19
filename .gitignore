@@ -8,5 +8,6 @@ __pycache__/
 data/
 *.db
 backups/
+uploads/
 logs/
 .tools/

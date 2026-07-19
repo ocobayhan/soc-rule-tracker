@@ -8,12 +8,17 @@ services:
     ports:
       - "9897:5000"
     volumes:
-      - soc_data:/data
-      - soc_uploads:/app/static/uploads
-      # Yedekler kasıtlı olarak soc_data named volume'ünün DIŞINDA, host'un
-      # kendi dosya sistemine bind-mount edilir. Böylece "docker volume rm
-      # soc_data" veya "docker-compose down -v" DB'yi silse bile yedekler
-      # etkilenmez (host bind mount'lar named volume gibi silinmez).
+      # 2026-07-20: DB ve upload'lar da named volume yerine host bind-mount'a
+      # taşındı. Önceki durumda (soc_data named volume) "docker volume rm
+      # soc_data" veya "docker-compose down -v" canlı DB'yi (tracker.db)
+      # doğrudan silebiliyordu — sadece yedekler bundan korunuyordu. Artık
+      # DB de host'un kendi dosya sisteminde düz bir dosya; bu iki komut da
+      # ona dokunmuyor. Ayrıca yedekler bilinçli olarak AYRI bir host
+      # dizininde (./backups, ./data'nın ALTINDA değil) — böylece host
+      # üzerinde yanlışlıkla "rm -rf ./data" çalıştırılsa bile yedekler
+      # etkilenmez.
+      - ${DATA_HOST_DIR:-./data}:/data
+      - ${UPLOADS_HOST_DIR:-./uploads}:/app/static/uploads
       - ${BACKUP_HOST_DIR:-./backups}:/data/backups
     environment:
       - SECRET_KEY=${SECRET_KEY:-soc-tracker-CHANGE-THIS-IN-PRODUCTION}
@@ -27,7 +32,3 @@ services:
       - BACKUP_DIR=/data/backups
       - UPLOAD_FOLDER=/app/static/uploads
       - TZ=Europe/Istanbul
-
-volumes:
-  soc_data:
-  soc_uploads:
