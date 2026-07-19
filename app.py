@@ -226,6 +226,17 @@ def init_db():
         ("ioc_list",             "'[]'"), ("affected_assets",      "''"),
         ("severity",             "''"),  ("related_requests",     "'[]'"),
         ("hunt_duration_hours",  "NULL"),
+        # Rapor alanları — CREATE TABLE'a (yukarıda) eklenmişti ama mevcut/eski
+        # kurulumlar için ALTER TABLE migrasyonu hiç yazılmamıştı. Gerçek bir
+        # eski-şema kopyasına karşı test edilerek bulundu: bu kolonlar eksikken
+        # init_db() aşağıdaki hunt_result UPDATE'inde çöküyor, uygulama hiç
+        # açılamıyordu (bkz. docs/PROGRESS.md).
+        ("scope",                "''"),  ("scope_image",          "NULL"),
+        ("mitre_techniques",     "'[]'"), ("findings",             "''"),
+        ("findings_image",       "NULL"), ("detection_suggestion", "'Hayır'"),
+        ("detection_detail",     "''"),  ("recommendations",      "''"),
+        ("recommendations_image","NULL"), ("hunt_result",          "''"),
+        ("started_at",           "NULL"), ("report_updated_at",    "NULL"),
     ]
     for col, default in hunt_new_cols:
         if not _col_exists(db, "threat_hunt_requests", col):
@@ -2315,6 +2326,20 @@ def _do_backup(keep: int = 30):
     return name
 
 
+def _backup_before_migration(keep: int = 12) -> None:
+    """init_db()'nin şema migrasyonundan HEMEN ÖNCE koşulsuz bir yedek alır.
+
+    _backup_if_due() son 5 gün içinde yedek varsa atlıyor — ama migrasyonun
+    çalıştığı an tam olarak riskin en yüksek olduğu an (eski şemalı bir DB
+    ilk kez yeni koda karşı açılıyor); "zaten yakın zamanda yedek var" diye
+    bu adımı atlamak yanlış olur. Maliyeti düşük (dosya kopyası) olduğu için
+    her uygulama başlangıcında koşulsuz çalışır.
+    """
+    name = _do_backup(keep=keep)
+    if name:
+        app.logger.info(f"[backup] Migrasyon öncesi yedek: {name}")
+
+
 @app.route("/api/admin/backup", methods=["POST"])
 @login_required
 def api_create_backup():
@@ -2422,6 +2447,7 @@ def _scheduled_audit_export() -> None:
 
 
 with app.app_context():
+    _backup_before_migration()
     init_db()
     _backup_if_due()
 

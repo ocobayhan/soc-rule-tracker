@@ -284,6 +284,41 @@ Kullanıcının Faz C sonrası bildirdiği 4 talep üzerine:
    - Uçtan uca doğrulandı: gerçek case ID'li ve "case yok" (manuel)
      senaryolarının ikisi de test edilip temizlendi.
 
+### Faz E — Eski Şemalı DB'nin Güvenli Geçişi (2026-07-19)
+
+Kullanıcının canlı ortamda çalışan, eski şemalı bir DB'si var — güncellemenin
+veri kaybetmeden yeni şemaya geçmesi gerekiyordu. Gerçek DB'ye hiç
+dokunmadan, izole bir temp dizinde eski-şema bir SQLite kopyası oluşturup
+(`users`/`tune_requests`/`usecase_requests`/`threat_hunt_requests`/
+`audit_log` — Faz 1 öncesi minimal kolon seti, gerçekçi örnek veriyle) gerçek
+`init_db()` migrasyonunu buna karşı çalıştırarak doğrulandı.
+
+- [x] **Kritik bulgu — çöküyordu:** `threat_hunt_requests` tablosuna zaman
+  içinde eklenen 12 kolon (`scope`, `scope_image`, `mitre_techniques`,
+  `findings`, `findings_image`, `detection_suggestion`, `detection_detail`,
+  `recommendations`, `recommendations_image`, `hunt_result`, `started_at`,
+  `report_updated_at`) sadece sıfırdan-kurulum şemasına (`CREATE TABLE IF NOT
+  EXISTS`) eklenmişti — mevcut/eski bir tabloyu yükseltecek `ALTER TABLE`
+  migrasyonu hiç yazılmamıştı. `init_db()`, `hunt_result` kolonunu
+  içermeyen bir tabloya karşı çalışınca `sqlite3.OperationalError: no such
+  column: hunt_result` ile çöküyordu — uygulama eski bir DB ile **hiç
+  açılamıyordu**. Bu 12 kolon idempotent migrasyon listesine eklendi.
+- [x] **İkinci bulgu — yedekleme sırası ters:** `init_db()` (riskli
+  migrasyon adımı) `_backup_if_due()`'dan ÖNCE çalışıyordu; üstelik
+  `_backup_if_due()` son 5 gün içinde bir yedek varsa hiç yedek almadan
+  atlıyor — tam olarak migrasyonun ilk kez çalıştığı, riskin en yüksek
+  olduğu anda "yakında zaten yedek var" diye yeni bir yedek alınmayabiliyordu.
+  Yeni `_backup_before_migration()` eklendi — maliyeti düşük olduğu için
+  (dosya kopyası) her başlangıçta koşulsuz çalışır, `init_db()`'den önce.
+- [x] **Doğrulandı:** düzeltmeler sonrası aynı izole test tekrar çalıştırıldı
+  — migrasyon hatasız tamamlandı, orijinal tüm satırlar (id, tüm sütun
+  değerleri) birebir korundu, sadece yeni kolonlar makul varsayılanlarla
+  eklendi. Beklenen tek fark: `init_db()`'nin zaten yaptığı `settings`
+  kullanıcı seed'i (eğer yoksa) — veri kaybı değil, kasıtlı ekleme.
+- [ ] Bu test sentetik/izole bir kopyaydı — gerçek canlı DB'nin bir
+  kopyasıyla aynı testin tekrarlanması hâlâ değerli olur (bkz. Faz 0,
+  hâlâ beklemede — kullanıcı SSH oturumunu şimdilik istemedi).
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
