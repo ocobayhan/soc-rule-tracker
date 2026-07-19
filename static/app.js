@@ -3,6 +3,11 @@
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
+// Admin artık hem Dashboard hem Ayarlar sekmesine sahip; hangisinin
+// başlangıçta eager-load edileceği IS_SETTINGS yerine tab-dashboard'ın
+// DOM'da var olup olmamasına göre belirlenir (sadece 'settings' rolünde
+// dashboard sekmesi hiç render edilmiyor).
+const HAS_DASHBOARD = !!document.getElementById("tab-dashboard");
 
 // ---------------------------------------------------------------------------
 // Tab navigation
@@ -2424,17 +2429,17 @@ async function deleteHunt(id) {
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
-if (IS_SETTINGS) {
-  loadDropdownData().then(() => {
-    loadSettings();
-    setupAllPaste();
-    document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
-  });
-} else {
+if (HAS_DASHBOARD) {
   loadDropdownData().then(() => {
     loadDashboard();
     setupAllPaste();
     // Attach column resizers (tables are in static HTML, always present)
+    document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
+  });
+} else {
+  loadDropdownData().then(() => {
+    loadSettings();
+    setupAllPaste();
     document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
   });
 }

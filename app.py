@@ -373,7 +373,7 @@ def login_required(f):
 def settings_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if session.get("role") != "settings":
+        if session.get("role") not in ("settings", "admin"):
             return jsonify({"error": "Forbidden"}), 403
         return f(*args, **kwargs)
     return decorated

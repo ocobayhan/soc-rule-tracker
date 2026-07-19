@@ -11,12 +11,23 @@ roadmap'i bu boyuta dokunmuyor):
 
 | Rol | Yetki |
 |-----|-------|
-| `admin` | Tüm modüllere tam erişim, kayıt silme, backup yönetimi, audit log görüntüleme, kullanıcı düzenleme (settings ekranı hariç kendi başına) |
+| `admin` | Tüm modüllere tam erişim, kayıt silme, audit log görüntüleme; ayrıca Ayarlar sayfasına da erişir (ortam/kullanıcı yönetimi, yedekleme, XSOAR entegrasyon bilgisi) |
 | `analyst` | Kendi taleplerini açar/düzenler, atandığı taleplerin raporunu doldurur — bkz. `docs/REQUIREMENTS.md` izin matrisi |
-| `settings` | Sadece Ayarlar sayfası: ortam/kullanıcı yönetimi, ID/tarih override |
+| `settings` | Sadece Ayarlar sayfası: ortam/kullanıcı yönetimi, ID/tarih override (Dashboard/Tuning/UC/Hunt/Audit'a erişimi yok) |
 
 Backend kontrolü: `session.get("role")`. Frontend kontrolü: `USER_ROLE`
 (`templates/index.html` → `static/app.js`).
+
+**2026-07-19 düzeltmesi:** Ayarlar sayfası (`is_settings` şablon koşulu)
+önceden yalnızca `role == "settings"` olduğunda render ediliyordu — admin
+için nav'da "Ayarlar" hiç görünmüyordu, dolayısıyla admin yedekleme
+panelini ("Veri Yedekleme") UI üzerinden hiçbir zaman göremiyordu (bu
+satırın belgelediği "backup yönetimi" yetkisiyle çelişen bir durumdu).
+Şablon koşulu `is_settings or user_role == "admin"` olarak, backend'de
+`settings_required` decorator'ı da `role in ("settings", "admin")` olarak
+güncellendi — admin artık Ayarlar sekmesinin tamamını (ortam/kullanıcı/
+yedekleme/XSOAR paneli) görüp kullanabiliyor, Dashboard/Tuning/UC/Hunt/
+Audit sekmeleri admin için değişmedi.
 
 ## Boyut 2: `tier` — Onay Seviyesi (Kıdem)
 
