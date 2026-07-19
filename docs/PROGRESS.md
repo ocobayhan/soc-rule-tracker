@@ -195,6 +195,18 @@
 - [x] **Doğrulandı (yerelde, kısmi):** route'un durum kontrolü (`Tamamlandı` değilse 400) ve WeasyPrint yüklenemediğinde temiz bir JSON hatası dönmesi (çökme yerine) test edildi; Jinja2 şablonu temsili verilerle ayrıca doğrudan render edilip hatasız çalıştığı doğrulandı
 - [ ] ⚠️ **Gerçek PDF üretimi (WeasyPrint'in Pango/Cairo native kütüphaneleri) bu Windows geliştirme makinesinde test edilemedi** — WeasyPrint bu ortamda `libgobject-2.0` gibi native kütüphaneleri bulamıyor (beklenen; bunlar sadece Linux'ta apt ile kurulabiliyor). Gerçek PDF çıktısının doğru göründüğü (görseller, Türkçe karakterler, sayfa kırılmaları) **mutlaka Ubuntu test sunucusunda** doğrulanmalı — deploy günü yapılacak.
 
+### Faz 7 — XSOAR Webhook Entegrasyonu (Tuning) (2026-07-19)
+- [x] `POST /api/integrations/xsoar/tune` — session yerine `X-API-Key` header ile korunuyor (`api_key_required` decorator, `hmac.compare_digest`, ortam değişkeni `XSOAR_WEBHOOK_TOKEN`)
+- [x] Zorunlu alanlar: `xsoar_case_id`, `rule_name`, `environment`, `analyst_comment`; opsiyonel: `xsoar_url`
+- [x] Oluşan talep `reporter="XSOAR Entegrasyonu"`, `status="Ön Onay Bekliyor"` ile açılıyor — otomatik kaynaklı olduğu için Faz 4'ün insan onayı kapısından geçmesi bilinçli bir güvenlik katmanı
+- [x] `tune_requests` tablosuna `xsoar_case_id`/`xsoar_url` kolonları eklendi; tune detay panelinde tıklanabilir case linki olarak gösteriliyor
+- [x] Audit: `CREATE_TUNE_XSOAR` aksiyonu
+- [x] `docker-compose.yml`'e `XSOAR_WEBHOOK_TOKEN` eklendi — **yan düzeltme:** `AUDIT_CHAIN_SECRET` de (Faz 2'de env-var olarak tanımlanmış ama docker-compose.yml'e hiç eklenmemişti) aynı seferde eklendi, yoksa production'da audit zinciri sessizce dev-fallback salt ile çalışıyor olacaktı
+- [x] `docs/xsoar_integration.md` yazıldı — tam JSON şeması, auth, örnek curl isteği, XSOAR tarafı için notlar
+- [x] **Doğrulandı (yerelde):** auth kontrolü (anahtar yok/yanlış → 401), eksik alan kontrolü (→ 400), başarılı istek (→ 201, doğru alanlarla `Ön Onay Bekliyor` durumunda kayıt), detay panelinde XSOAR case linkinin tıklanabilir render edildiği (DOM üzerinden doğrudan doğrulandı)
+- [ ] Sadece Tuning modülünde — UC/Hunt'a genişletme ileride aynı desenle (`api_key_required` + yeni bir uç) yapılabilir
+- [ ] Ubuntu test sunucusunda henüz denenmedi; XSOAR tarafının gerçek isteği atıp atamadığı (ağ erişimi teyit edildi ama gerçek deneme yapılmadı) deploy günü doğrulanacak
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
@@ -216,12 +228,14 @@
 - [x] ~~Tuning & UC otomatik prod geçişi~~ — Faz 4'te ön onay + Q&A'lı son onay ile giderildi (koddan doğrulandı); **canlıda henüz doğrulanmadı**
 - [x] ~~Threat Hunt ön onay yok~~ — Faz 5'te tuning/UC ile aynı iki kapılı desen eklendi (koddan doğrulandı); **canlıda henüz doğrulanmadı**
 - [x] ~~Threat Hunt PDF export yok~~ — Faz 6'da eklendi (koddan/şablondan doğrulandı); **gerçek PDF üretimi Ubuntu'da henüz doğrulanmadı** (Windows'ta WeasyPrint native kütüphaneleri yok)
-- [ ] XSOAR entegrasyonu yok (Needs Tuning → otomatik tuning talebi) — **Faz 7**
+- [x] ~~XSOAR entegrasyonu yok~~ — Faz 7'de Tuning için webhook eklendi (doğrulandı); UC/Hunt'a genişletme ileride; **canlıda / gerçek XSOAR isteğiyle henüz doğrulanmadı**
 
 > Not: 2026-07-19'da konuşulan 8 fazlı (Faz 0-7) güvenilirlik/hesap verebilirlik yol haritası onaylandı —
-> plan dosyası: `C:\Users\Oguzhan\.claude\plans\cheerful-puzzling-pumpkin.md`. Faz 0/1 (SSH gerektiren
-> canlı doğrulama ve volume-rm testi) kullanıcıyla birlikte deploy günü yapılacak şekilde ertelendi;
-> Faz 1'in kod tarafı tamamlandı.
+> plan dosyası: `C:\Users\Oguzhan\.claude\plans\cheerful-puzzling-pumpkin.md`. **Faz 1-7'nin kod tarafı
+> tamamlandı ve her biri ayrı commit olarak yerelde (preview + doğrudan API testleriyle) doğrulandı.**
+> Sadece **Faz 0** (SSH erişimi gerektiren canlı sunucu doğrulaması — docker volume rm testi, gerçek
+> restore denemesi, Gunicorn çoklu worker davranışı, gerçek WeasyPrint PDF üretimi, gerçek bir XSOAR
+> isteği) kullanıcıyla birlikte deploy günü yapılmak üzere bekliyor. Bu, yol haritasındaki son adım.
 
 ---
 

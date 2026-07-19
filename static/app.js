@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v19
+   SOC Tracker — Frontend  v20
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -423,6 +423,12 @@ function openTuneDetail(id) {
   document.getElementById("tune-detail-title").textContent = r.rule_name;
   document.getElementById("tune-detail-body").innerHTML = `<div class="detail-grid">
     ${detailRow("Raporlayan",        r.reporter)}
+    ${r.xsoar_case_id ? `<div class="detail-row">
+        <span class="detail-label">XSOAR Case</span>
+        <span class="detail-value">${r.xsoar_url
+          ? `<a href="${esc(r.xsoar_url)}" target="_blank" rel="noopener">#${esc(r.xsoar_case_id)}</a>`
+          : esc(r.xsoar_case_id)}</span>
+      </div>` : ""}
     ${detailRow("Ortam",             r.environment)}
     ${detailRow("Durum",             r.status)}
     ${r.validated_by ? detailRow("Ön Onay Veren",   r.validated_by)      : ""}
@@ -1331,6 +1337,7 @@ async function execTestRejectUC() {
 const ACTION_TR = {
   "LOGIN":       "Giriş yapıldı",
   "CREATE_TUNE": "Tuning oluşturuldu",
+  "CREATE_TUNE_XSOAR": "Tuning oluşturuldu (XSOAR)",
   "CLAIM_TUNE":  "Tuning üstlenildi",
   "CLOSE_TUNE":  "Tuning kapatıldı",
   "EDIT_TUNE":   "Tuning düzenlendi",
@@ -1367,6 +1374,7 @@ const ACTION_TR = {
 const ACTION_CLS = {
   "LOGIN": "audit-login",
   "CREATE_TUNE": "audit-create", "CREATE_UC": "audit-create", "CREATE_USER": "audit-create", "CREATE_HUNT": "audit-create",
+  "CREATE_TUNE_XSOAR": "audit-create",
   "CLAIM_TUNE":  "audit-claim",  "CLAIM_UC":  "audit-claim",  "CLAIM_HUNT":  "audit-claim",
   "CLOSE_TUNE":  "audit-close",  "CLOSE_UC":  "audit-close",  "CLOSE_HUNT":  "audit-close",
   "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",   "EDIT_HUNT":   "audit-edit",   "EDIT_USER":   "audit-edit",  "REPORT_HUNT": "audit-edit",

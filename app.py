@@ -1,3 +1,4 @@
+import hmac
 import os
 import uuid
 from datetime import datetime, date
@@ -19,6 +20,9 @@ DATABASE      = os.environ.get("DATABASE",      os.path.join(_BASE, "tracker.db"
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(_BASE, "static", "uploads"))
 BACKUP_DIR    = os.environ.get("BACKUP_DIR",    os.path.join(_BASE, "backups"))
 ALLOWED_EXT  = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
+# XSOAR webhook entegrasyonu (Faz 7) — bkz. docs/xsoar_integration.md
+XSOAR_WEBHOOK_TOKEN = os.environ.get("XSOAR_WEBHOOK_TOKEN", "soc-tracker-xsoar-webhook-CHANGE-IN-PRODUCTION")
 
 # Onay seviyesi (tier) — role'den (admin/analyst/settings) bağımsız ikinci bir
 # RBAC boyutu. Onay gerektiren işlemler (tune/UC/hunt approve) role'e değil
@@ -257,6 +261,10 @@ def init_db():
                 "result_approved_by", "result_approved_at", "result_approval_note"]:
         if not _col_exists(db, "threat_hunt_requests", col):
             db.execute(f"ALTER TABLE threat_hunt_requests ADD COLUMN {col} TEXT")
+    # XSOAR entegrasyonu kolonları — Faz 7 (bkz. docs/xsoar_integration.md)
+    for col in ["xsoar_case_id", "xsoar_url"]:
+        if not _col_exists(db, "tune_requests", col):
+            db.execute(f"ALTER TABLE tune_requests ADD COLUMN {col} TEXT")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -366,6 +374,17 @@ def settings_required(f):
     def decorated(*args, **kwargs):
         if session.get("role") != "settings":
             return jsonify({"error": "Forbidden"}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+def api_key_required(f):
+    """Makine-makine entegrasyonları (XSOAR vb.) için — kullanıcı session'ı değil,
+    sabit bir API anahtarı header'ı ister. Bkz. docs/xsoar_integration.md."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        provided = request.headers.get("X-API-Key", "")
+        if not hmac.compare_digest(provided, XSOAR_WEBHOOK_TOKEN):
+            return jsonify({"error": "Geçersiz veya eksik API anahtarı"}), 401
         return f(*args, **kwargs)
     return decorated
 
@@ -631,6 +650,46 @@ def create_tune():
     new_row = db.execute("SELECT * FROM tune_requests WHERE id=?", (cur.lastrowid,)).fetchone()
     write_audit("CREATE_TUNE", "tune", new_row["id"],
                 f"Kural: {new_row['rule_name']} | Ortam: {new_row['environment']}")
+    return jsonify(dict(new_row)), 201
+
+# ---------------------------------------------------------------------------
+# Entegrasyonlar — XSOAR webhook (Faz 7, bkz. docs/xsoar_integration.md)
+# ---------------------------------------------------------------------------
+XSOAR_REPORTER_NAME = "XSOAR Entegrasyonu"
+
+@app.route("/api/integrations/xsoar/tune", methods=["POST"])
+@api_key_required
+def xsoar_create_tune():
+    """XSOAR'da bir playbook 'Needs Tuning' adımına geldiğinde çağrılır.
+    Oluşan talep, insan onayından geçsin diye Ön Onay Bekliyor'da açılır —
+    otomatik kaynaklı bir talep olduğu için bu ekstra güvenlik katmanı bilinçli."""
+    data = request.json or {}
+    required = ["xsoar_case_id", "rule_name", "environment", "analyst_comment"]
+    missing  = [f for f in required if not str(data.get(f, "")).strip()]
+    if missing:
+        return jsonify({"error": f"Eksik alan(lar): {', '.join(missing)}"}), 400
+
+    db  = get_db()
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    new_id = next_available_id(db, "tune_requests")
+    cur = db.execute("""
+        INSERT INTO tune_requests
+          (id,reporter,environment,rule_name,tune_reason,trigger_frequency,
+           tuning_analyst,how_tuned,status,evidence_image,resolution_image,
+           created_at,completed_at,updated_at,xsoar_case_id,xsoar_url)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (
+        new_id, XSOAR_REPORTER_NAME,
+        str(data["environment"]).strip(), str(data["rule_name"]).strip(),
+        str(data["analyst_comment"]).strip(),
+        "", "", "", STATUS_PENDING_VALIDATION, None, None,
+        now, None, now,
+        str(data["xsoar_case_id"]).strip(), (data.get("xsoar_url") or "").strip() or None,
+    ))
+    db.commit()
+    new_row = db.execute("SELECT * FROM tune_requests WHERE id=?", (cur.lastrowid,)).fetchone()
+    write_audit("CREATE_TUNE_XSOAR", "tune", new_row["id"],
+                f"Kural: {new_row['rule_name']} | XSOAR Case: {new_row['xsoar_case_id']}")
     return jsonify(dict(new_row)), 201
 
 @app.route("/api/tune/<int:item_id>", methods=["PUT"])

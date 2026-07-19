@@ -17,6 +17,12 @@ services:
       - ${BACKUP_HOST_DIR:-./backups}:/data/backups
     environment:
       - SECRET_KEY=${SECRET_KEY:-soc-tracker-CHANGE-THIS-IN-PRODUCTION}
+      # Audit hash-zinciri salt'ı — bkz. docs/audit_logging.md. Prod'da .env ile
+      # override edilmezse dev fallback kullanılır (zincir hâlâ çalışır ama
+      # salt herkese açık/tahmin edilebilir olur).
+      - AUDIT_CHAIN_SECRET=${AUDIT_CHAIN_SECRET:-soc-tracker-audit-chain-dev-secret-CHANGE-IN-PRODUCTION}
+      # XSOAR webhook API anahtarı — bkz. docs/xsoar_integration.md
+      - XSOAR_WEBHOOK_TOKEN=${XSOAR_WEBHOOK_TOKEN:-soc-tracker-xsoar-webhook-CHANGE-IN-PRODUCTION}
       - DATABASE=/data/tracker.db
       - BACKUP_DIR=/data/backups
       - UPLOAD_FOLDER=/app/static/uploads

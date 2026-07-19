@@ -29,6 +29,7 @@ Kural gürültüsü / false-positive azaltma taleplerinin yönetimi.
 **Alanlar:** Ortam, Kural Adı, Tune Sebebi, Tetiklenme Sıklığı, Analist, Nasıl Tune Edildi, Durum  
 **Görseller:** Kanıt, Çözüm  
 **Durumlar:** Ön Onay Bekliyor → Açık → İnceleniyor → Tune Edildi → Tune Başarılı (veya Yeniden Tune → Açık) / Tune Edilmedi — ön onay reddedilirse Reddedildi (bkz. "Onay Süreci" altta)  
+**XSOAR entegrasyonu:** "Needs Tuning" playbook adımından webhook ile otomatik talep açılabilir (`xsoar_case_id`, `xsoar_url` alanları) — bkz. `docs/xsoar_integration.md`  
 
 ### 2. Use-Case
 SIEM use-case geliştirme taleplerinin yönetimi.
