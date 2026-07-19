@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v17
+   SOC Tracker — Frontend  v18
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -72,6 +72,7 @@ function esc(str) {
 // ---------------------------------------------------------------------------
 const STATUS_PENDING_VALIDATION = "Ön Onay Bekliyor";
 const STATUS_REJECTED           = "Reddedildi";
+const STATUS_HUNT_RESULT_PENDING = "Sonuç Onayı Bekliyor";
 
 const TUNE_CLS = {
   "Ön Onay Bekliyor": "status-pending",
@@ -873,9 +874,9 @@ async function execRetryTune() {
 // Ön onay (validate/reject) — Tuning + UC ortak
 // ---------------------------------------------------------------------------
 function openValidateModal(type, id) {
-  const rows = type === "tune" ? tuneRows : ucRows;
+  const rows = type === "tune" ? tuneRows : (type === "usecase" ? ucRows : huntRows);
   const r = rows.find(x => x.id === id); if (!r) return;
-  const label = type === "tune" ? r.rule_name : (r.usecase_description || "").slice(0, 80);
+  const label = type === "tune" ? r.rule_name : (type === "usecase" ? (r.usecase_description || "").slice(0, 80) : r.hunt_subject);
   document.getElementById("validate-type").value = type;
   document.getElementById("validate-id").value   = id;
   document.getElementById("validate-desc").textContent =
@@ -916,8 +917,51 @@ async function execRejectValidation() {
 }
 
 function reloadAfterValidate(type) {
-  if (type === "tune") { loadTune(); } else { loadUC(); }
+  if (type === "tune") { loadTune(); }
+  else if (type === "usecase") { loadUC(); }
+  else { loadHunt(); }
   loadKPI(); loadDashboardTables();
+}
+
+// ---------------------------------------------------------------------------
+// Hunt — Sonuç Onayı (approve-result / reject-result)
+// ---------------------------------------------------------------------------
+function openHuntResultModal(id) {
+  const r = huntRows.find(x => x.id === id); if (!r) return;
+  document.getElementById("hunt-result-id").value = id;
+  document.getElementById("hunt-result-desc").textContent =
+    `"${r.hunt_subject}" hunt'ının sonucunu/raporunu onaylıyor musunuz? Revizyona gönderirseniz İnceleniyor'a döner.`;
+  document.getElementById("hunt-result-note").value = "";
+  document.getElementById("hunt-result-error").style.display = "none";
+  document.getElementById("hunt-result-modal").style.display = "flex";
+}
+
+async function execApproveHuntResult() {
+  const id    = document.getElementById("hunt-result-id").value;
+  const note  = document.getElementById("hunt-result-note").value.trim();
+  const errEl = document.getElementById("hunt-result-error");
+  errEl.style.display = "none";
+  try {
+    await apiFetch(`/api/hunt/${id}/approve-result`, { method: "POST", body: JSON.stringify({ result_approval_note: note }) });
+    document.getElementById("hunt-result-modal").style.display = "none";
+    loadHunt(); loadKPI(); loadDashboardTables();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+async function execRejectHuntResult() {
+  const id    = document.getElementById("hunt-result-id").value;
+  const note  = document.getElementById("hunt-result-note").value.trim();
+  const errEl = document.getElementById("hunt-result-error");
+  errEl.style.display = "none";
+  if (!note) {
+    errEl.textContent = "Revizyon gerekçesi zorunludur.";
+    errEl.style.display = "block"; return;
+  }
+  try {
+    await apiFetch(`/api/hunt/${id}/reject-result`, { method: "POST", body: JSON.stringify({ result_approval_note: note }) });
+    document.getElementById("hunt-result-modal").style.display = "none";
+    loadHunt(); loadKPI(); loadDashboardTables();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
 }
 
 // ---------------------------------------------------------------------------
@@ -1314,6 +1358,10 @@ const ACTION_TR = {
   "REJECT_VALIDATION_TUNE": "Tune talebi reddedildi (ön onay)",
   "VALIDATE_UC":            "UC talebi onaylandı (ön onay)",
   "REJECT_VALIDATION_UC":   "UC talebi reddedildi (ön onay)",
+  "VALIDATE_HUNT":          "Hunt talebi onaylandı (ön onay)",
+  "REJECT_VALIDATION_HUNT": "Hunt talebi reddedildi (ön onay)",
+  "APPROVE_HUNT_RESULT":    "Hunt sonucu onaylandı",
+  "REJECT_HUNT_RESULT":     "Hunt sonucu revizyona gönderildi",
 };
 const ACTION_CLS = {
   "LOGIN": "audit-login",
@@ -1323,8 +1371,9 @@ const ACTION_CLS = {
   "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",   "EDIT_HUNT":   "audit-edit",   "EDIT_USER":   "audit-edit",  "REPORT_HUNT": "audit-edit",
   "DELETE_TUNE": "audit-delete", "DELETE_UC": "audit-delete", "DELETE_USER": "audit-delete", "DELETE_HUNT": "audit-delete",
   "VERIFY_AUDIT_CHAIN": "audit-edit",
-  "VALIDATE_TUNE": "audit-claim", "VALIDATE_UC": "audit-claim",
-  "REJECT_VALIDATION_TUNE": "audit-delete", "REJECT_VALIDATION_UC": "audit-delete",
+  "VALIDATE_TUNE": "audit-claim", "VALIDATE_UC": "audit-claim", "VALIDATE_HUNT": "audit-claim",
+  "REJECT_VALIDATION_TUNE": "audit-delete", "REJECT_VALIDATION_UC": "audit-delete", "REJECT_VALIDATION_HUNT": "audit-delete",
+  "APPROVE_HUNT_RESULT": "audit-close", "REJECT_HUNT_RESULT": "audit-delete",
 };
 
 async function verifyAuditChain() {
@@ -1597,16 +1646,22 @@ function makeColumnsResizable(table) {
 // Threat Hunt
 // ---------------------------------------------------------------------------
 const HUNT_CLS = {
-  "Açık":        "status-open",
-  "İnceleniyor": "status-reviewing",
-  "Tamamlandı":  "status-done",
-  "İptal":       "status-skipped",
+  "Ön Onay Bekliyor":      "status-pending",
+  "Açık":                  "status-open",
+  "İnceleniyor":           "status-reviewing",
+  "Sonuç Onayı Bekliyor":  "status-tuned",
+  "Tamamlandı":            "status-done",
+  "İptal":                 "status-skipped",
+  "Reddedildi":            "status-rejected",
 };
 const HUNT_DOT = {
-  "Açık":        "dot-open",
-  "İnceleniyor": "dot-reviewing",
-  "Tamamlandı":  "dot-done",
-  "İptal":       "dot-skipped",
+  "Ön Onay Bekliyor":      "dot-pending",
+  "Açık":                  "dot-open",
+  "İnceleniyor":           "dot-reviewing",
+  "Sonuç Onayı Bekliyor":  "dot-tuned",
+  "Tamamlandı":            "dot-done",
+  "İptal":                 "dot-skipped",
+  "Reddedildi":            "dot-rejected",
 };
 
 let huntRows    = [];
@@ -1637,6 +1692,10 @@ function huntActionBtns(r) {
     ? `<button class="btn-icon danger" title="Sil" onclick="deleteHunt(${r.id})">&#x1F5D1;</button>`
     : "";
 
+  if (r.status === STATUS_PENDING_VALIDATION && IS_SENIOR)
+    return `<button class="btn-action-claim" onclick="openValidateModal('hunt',${r.id})">Onayla / Reddet</button> ${edit}${del}`;
+  if (r.status === STATUS_PENDING_VALIDATION)
+    return `${edit}${del}`;
   if (r.status === "Açık")
     return `<button class="btn-action-claim" onclick="openHuntClaimModal(${r.id})">Üstlen</button> ${edit}${del}`;
   if (r.status === "İnceleniyor") {
@@ -1646,6 +1705,8 @@ function huntActionBtns(r) {
       : "";
     return `${startBtn}${report} ${edit}${del}`;
   }
+  if (r.status === STATUS_HUNT_RESULT_PENDING && IS_SENIOR)
+    return `<button class="btn-action-close" onclick="openHuntResultModal(${r.id})">Sonucu Onayla</button> ${edit}${del}`;
   return `${edit}${del}`;
 }
 
@@ -2293,6 +2354,12 @@ async function openHuntDetail(id) {
     let body = `
       <div class="detail-section">
         ${detailRow("Durum", r.status)}
+        ${r.validated_by ? detailRow("Ön Onay Veren", r.validated_by) : ""}
+        ${r.validated_at ? detailRow("Ön Onay Tarihi", fmtDate(r.validated_at)) : ""}
+        ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note) : ""}
+        ${r.result_approved_by ? detailRow("Sonucu Onaylayan", r.result_approved_by) : ""}
+        ${r.result_approved_at ? detailRow("Sonuç Onay Tarihi", fmtDate(r.result_approved_at)) : ""}
+        ${r.result_approval_note ? detailRow("Sonuç Onay Notu", r.result_approval_note) : ""}
         ${detailRow("Talep Eden", r.requester)}
         ${detailRow("Atanan Analist", r.assigned_analyst)}
         ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${envBadges}</span></div>` : ""}

@@ -300,7 +300,8 @@
       <select id="hunt-filter-status-env" class="form-input input-sm" style="display:none"></select>
       <select id="hunt-filter-status" class="form-input input-sm">
         <option value="">Tüm Durumlar</option>
-        <option>Açık</option><option>İnceleniyor</option><option>Tamamlandı</option><option>İptal</option>
+        <option>Ön Onay Bekliyor</option><option>Açık</option><option>İnceleniyor</option>
+        <option>Sonuç Onayı Bekliyor</option><option>Tamamlandı</option><option>İptal</option><option>Reddedildi</option>
       </select>
       <button class="btn btn-secondary" onclick="loadHunt()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearHuntFilters()">Temizle</button>
@@ -1198,7 +1199,7 @@
           <label class="form-label">Hunt Durumu</label>
           <select class="form-input" id="report-hunt-status">
             <option value="İnceleniyor">İnceleniyor</option>
-            <option value="Tamamlandı">Tamamlandı</option>
+            <option value="Sonuç Onayı Bekliyor">Rapor Tamamlandı — Onaya Gönder</option>
             <option value="İptal">İptal</option>
           </select>
         </div>
@@ -1248,6 +1249,30 @@
       <button class="btn-ghost-sm" onclick="document.getElementById('validate-modal').style.display='none'">İptal</button>
       <button class="btn btn-secondary" onclick="execRejectValidation()" style="color:var(--red);border-color:rgba(229,72,77,0.3)">Reddet</button>
       <button class="btn btn-primary" onclick="execValidate()">Onayla ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Hunt Sonuç Onayı ===== -->
+<div id="hunt-result-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Hunt Sonucu Onayı</h2>
+      <button class="modal-close" onclick="document.getElementById('hunt-result-modal').style.display='none'">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="hunt-result-id"/>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.6" id="hunt-result-desc"></p>
+      <div class="form-group" style="margin-top:8px">
+        <label class="form-label">Not <span class="text-muted" style="font-weight:400">(revizyona gönderirken zorunlu)</span></label>
+        <textarea class="form-input form-textarea" id="hunt-result-note" rows="3" placeholder="Onay/revizyon gerekçesi…"></textarea>
+      </div>
+      <div id="hunt-result-error" class="form-error" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="document.getElementById('hunt-result-modal').style.display='none'">İptal</button>
+      <button class="btn btn-secondary" onclick="execRejectHuntResult()" style="color:var(--red);border-color:rgba(229,72,77,0.3)">Revizyona Gönder</button>
+      <button class="btn btn-primary" onclick="execApproveHuntResult()">Tamamlandı ✓</button>
     </div>
   </div>
 </div>
@@ -1319,6 +1344,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=17"></script>
+<script src="/static/app.js?v=18"></script>
 </body>
 </html>

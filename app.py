@@ -47,6 +47,12 @@ TUNE_LOCKED_ARRIVE  = ("Tune Başarılı", STATUS_REJECTED)
 UC_LOCKED_LEAVE     = (STATUS_PENDING_VALIDATION, "Test Ediliyor", "Prod'da Aktif", STATUS_REJECTED)
 UC_LOCKED_ARRIVE    = ("Prod'da Aktif", STATUS_REJECTED)
 
+# Hunt sonuç onayı — analist "işim bitti, rapor hazır" dediğinde bu duruma
+# geçer; Tamamlandı'ya geçiş Kıdemli Analist/Müdür onayından geçer (Faz 5).
+STATUS_HUNT_RESULT_PENDING = "Sonuç Onayı Bekliyor"
+HUNT_LOCKED_LEAVE  = (STATUS_PENDING_VALIDATION, STATUS_HUNT_RESULT_PENDING, "Tamamlandı", STATUS_REJECTED)
+HUNT_LOCKED_ARRIVE = ("Tamamlandı", STATUS_REJECTED)
+
 # ---------------------------------------------------------------------------
 # DB
 # ---------------------------------------------------------------------------
@@ -246,6 +252,11 @@ def init_db():
     for col in ["validated_by", "validated_at", "validation_note", "qa_test_ok", "qa_peer_reviewed"]:
         if not _col_exists(db, "usecase_requests", col):
             db.execute(f"ALTER TABLE usecase_requests ADD COLUMN {col} TEXT")
+    # Ön onay + sonuç onayı kolonları — Faz 5 (bkz. docs/PROGRESS.md)
+    for col in ["validated_by", "validated_at", "validation_note",
+                "result_approved_by", "result_approved_at", "result_approval_note"]:
+        if not _col_exists(db, "threat_hunt_requests", col):
+            db.execute(f"ALTER TABLE threat_hunt_requests ADD COLUMN {col} TEXT")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -1195,7 +1206,7 @@ def create_hunt():
         VALUES (?,?,?,?,?,?,?,?)
     """, (new_id, hunt_subject, requester,
           data.get("assigned_analyst", "").strip(),
-          data.get("notes", "").strip(), "Açık", now, now))
+          data.get("notes", "").strip(), STATUS_PENDING_VALIDATION, now, now))
     db.commit()
     row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (cur.lastrowid,)).fetchone()
     write_audit("CREATE_HUNT", "hunt", row["id"], f"Konu: {hunt_subject}")
@@ -1222,6 +1233,14 @@ def update_hunt(item_id):
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
 
+    # ── Onay kapıları: bu durumlara/durumlardan geçiş sadece dedicated uçlardan ──
+    requested_status = data.get("status", row["status"])
+    if requested_status != row["status"]:
+        if row["status"] in HUNT_LOCKED_LEAVE:
+            return jsonify({"error": "Bu durum değişikliği ilgili onay ucundan (validate/reject-validation/approve-result/reject-result) yapılmalı."}), 400
+        if requested_status in HUNT_LOCKED_ARRIVE:
+            return jsonify({"error": "Bu durum değişikliği ilgili onay ucundan (approve-result/reject-validation) yapılmalı."}), 400
+
     role  = session.get("role", "analyst")
     uname = session.get("username", "")
 
@@ -1242,7 +1261,7 @@ def update_hunt(item_id):
             if new_analyst != uname:
                 return jsonify({"error": "Sadece kendinize atama yapabilirsiniz."}), 403
 
-        if new_st in ("Tamamlandı", "İptal") and not is_assigned:
+        if new_st in (STATUS_HUNT_RESULT_PENDING, "İptal") and not is_assigned:
             return jsonify({"error": "Sadece size atanan hunt'ları kapatabilirsiniz."}), 403
 
         data["requester"] = row["requester"]
@@ -1383,7 +1402,7 @@ def update_hunt(item_id):
     if new_status == "İnceleniyor" and data.get("assigned_analyst") and not row["assigned_analyst"]:
         a_action = "CLAIM_HUNT"
         a_detail = f"Konu: {updated['hunt_subject']} | Analist: {updated['assigned_analyst']}"
-    elif new_status in ("Tamamlandı", "İptal"):
+    elif new_status in (STATUS_HUNT_RESULT_PENDING, "İptal"):
         a_action = "CLOSE_HUNT"
         a_detail = f"Konu: {updated['hunt_subject']} | Durum: {new_status}"
     elif report_changed:
@@ -1396,6 +1415,101 @@ def update_hunt(item_id):
     r = dict(updated)
     r["uc_created_id"] = uc_created_id
     return jsonify(r)
+
+@app.route("/api/hunt/<int:item_id>/validate", methods=["POST"])
+@login_required
+def validate_hunt(item_id):
+    """Ön onay: hunt talebinin geçerliliğini onaylar, Ön Onay Bekliyor → Açık.
+    Sadece Kıdemli Analist/Müdür onay seviyesindeki kullanıcılar yapabilir."""
+    db = get_db()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_PENDING_VALIDATION:
+        return jsonify({"error": f"Sadece '{STATUS_PENDING_VALIDATION}' statüsündeki kayıtlar onaylanabilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Talep onayı için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    note  = (request.json or {}).get("validation_note", "")
+    db.execute("""UPDATE threat_hunt_requests SET status='Açık',
+                  validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
+               (uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("VALIDATE_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    return jsonify(dict(updated))
+
+@app.route("/api/hunt/<int:item_id>/reject-validation", methods=["POST"])
+@login_required
+def reject_validation_hunt(item_id):
+    """Ön onay reddi: hunt hiç işleme alınmadan kapatılır (Reddedildi)."""
+    db = get_db()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_PENDING_VALIDATION:
+        return jsonify({"error": f"Sadece '{STATUS_PENDING_VALIDATION}' statüsündeki kayıtlar reddedilebilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Talep reddi için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    note = (request.json or {}).get("validation_note", "").strip()
+    if not note:
+        return jsonify({"error": "Red gerekçesi zorunludur."}), 400
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""UPDATE threat_hunt_requests SET status=?,
+                  validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
+               (STATUS_REJECTED, uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("REJECT_VALIDATION_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']} | Gerekçe: {note[:80]}")
+    return jsonify(dict(updated))
+
+@app.route("/api/hunt/<int:item_id>/approve-result", methods=["POST"])
+@login_required
+def approve_hunt_result(item_id):
+    """Sonuç onayı: rapor/sonuç incelenip Tamamlandı'ya geçirilir.
+    Sadece Kıdemli Analist/Müdür onay seviyesindeki kullanıcılar yapabilir."""
+    db = get_db()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_HUNT_RESULT_PENDING:
+        return jsonify({"error": f"Sadece '{STATUS_HUNT_RESULT_PENDING}' statüsündeki kayıtlar onaylanabilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Sonuç onayı için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    note  = (request.json or {}).get("result_approval_note", "")
+    db.execute("""UPDATE threat_hunt_requests SET status='Tamamlandı',
+                  result_approved_by=?, result_approved_at=?, result_approval_note=?,
+                  completed_at=?, updated_at=? WHERE id=?""",
+               (uname, now, note, now, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("APPROVE_HUNT_RESULT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    return jsonify(dict(updated))
+
+@app.route("/api/hunt/<int:item_id>/reject-result", methods=["POST"])
+@login_required
+def reject_hunt_result(item_id):
+    """Sonuç reddi: rapor yetersiz/eksik, hunt revizyon için İnceleniyor'a döner."""
+    db = get_db()
+    row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    if not row: return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_HUNT_RESULT_PENDING:
+        return jsonify({"error": f"Sadece '{STATUS_HUNT_RESULT_PENDING}' statüsündeki kayıtlar reddedilebilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Sonuç reddi için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    note = (request.json or {}).get("result_approval_note", "").strip()
+    if not note:
+        return jsonify({"error": "Revizyon gerekçesi zorunludur."}), 400
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""UPDATE threat_hunt_requests SET status='İnceleniyor',
+                  result_approved_by=?, result_approved_at=?, result_approval_note=?, updated_at=? WHERE id=?""",
+               (uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
+    write_audit("REJECT_HUNT_RESULT", "hunt", item_id, f"Konu: {row['hunt_subject']} | Gerekçe: {note[:80]}")
+    return jsonify(dict(updated))
 
 @app.route("/api/hunt/<int:item_id>", methods=["DELETE"])
 @login_required

@@ -173,6 +173,19 @@
 - [ ] Ubuntu test sunucusunda henüz denenmedi — deploy günü doğrulanacak
 - [ ] KPI kartları, Excel export ve aylık rapor yeni durumları (Ön Onay Bekliyor/Reddedildi) henüz yansıtmıyor — kapsam dışı bırakıldı, ayrı bir iyileştirme olarak not edildi
 
+### Faz 5 — Threat Hunt: Aynı Onay Deseni (2026-07-19)
+- [x] Yeni hunt talepleri `Ön Onay Bekliyor` ile açılıyor (Tuning/UC ile aynı desen); Kıdemli Analist/Müdür onaylar (`/validate` → `Açık`) veya gerekçeli reddeder (`/reject-validation` → `Reddedildi`)
+- [x] Yeni ikinci kapı: analist raporu tamamlayıp "Rapor Tamamlandı — Onaya Gönder" seçtiğinde hunt `Sonuç Onayı Bekliyor`'a geçer (eskiden doğrudan `Tamamlandı` seçilebiliyordu); Kıdemli Analist/Müdür sonucu onaylar (`/approve-result` → `Tamamlandı`) veya revizyona gönderir (`/reject-result` → `İnceleniyor`, gerekçe zorunlu)
+- [x] `İptal` yolu bilinçli olarak onay kapısı dışında bırakıldı — vazgeçilen bir hunt'ın kalite onayına ihtiyacı yok
+- [x] `update_hunt` (PUT) aynı LEAVE/ARRIVE kilit desenini kullanıyor (`HUNT_LOCKED_LEAVE`/`HUNT_LOCKED_ARRIVE`)
+- [x] Hunt'tan otomatik oluşturulan UC talepleri zaten Faz 4'te `Ön Onay Bekliyor`'a çekilmişti — hunt'ın kendisi de artık aynı zincirde
+- [x] Ortak "Onayla / Reddet" (validate) modalı hunt için de genişletildi (tune/usecase/hunt üçü de aynı modalı paylaşıyor)
+- [x] Yeni "Hunt Sonuç Onayı" modalı (Tamamlandı ✓ / Revizyona Gönder)
+- [x] Detay panele ön onay + sonuç onayı alanları eklendi
+- [x] **Doğrulandı (preview + API testleri):** tam yaşam döngüsü (oluştur → ön onay/red → üstlen → rapor onaya gönder → onay/revizyon → Tamamlandı), her iki yöndeki bypass denemesi (Ön Onay Bekliyor'dan çıkış, Sonuç Onayı Bekliyor'dan çıkış, Tamamlandı'ya/Reddedildi'ye doğrudan giriş, Reddedildi'den çıkış) doğru şekilde 400 ile reddedildi, düşük onay seviyeli kullanıcı 403 ile reddedildi
+- [ ] Ubuntu test sunucusunda henüz denenmedi — deploy günü doğrulanacak
+- [ ] KPI/Excel/rapor bu modülde de yeni durumları henüz yansıtmıyor (Faz 4'teki notla aynı kapsam dışı bırakma)
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
@@ -192,7 +205,7 @@
 - [x] ~~Audit log tamper-evidence~~ — Faz 2'de hash-zincirleme ile giderildi (koddan doğrulandı); **canlıda (Ubuntu/Gunicorn) henüz doğrulanmadı**
 - [x] ~~Rol yapısı genişletilecek~~ — Faz 3'te `tier` alanı (Müdür/Kıdemli Analist/Analist) eklendi (koddan doğrulandı); onay uçlarını fiilen buna bağlamak **Faz 4/5**'te
 - [x] ~~Tuning & UC otomatik prod geçişi~~ — Faz 4'te ön onay + Q&A'lı son onay ile giderildi (koddan doğrulandı); **canlıda henüz doğrulanmadı**
-- [ ] Threat Hunt: talep açılır açılmaz "gerçek" hunt sayılıyor, ön onay (hipotez onayı) adımı yok — **Faz 5**
+- [x] ~~Threat Hunt ön onay yok~~ — Faz 5'te tuning/UC ile aynı iki kapılı desen eklendi (koddan doğrulandı); **canlıda henüz doğrulanmadı**
 - [ ] Threat Hunt raporları için PDF export yok — **Faz 6**
 - [ ] XSOAR entegrasyonu yok (Needs Tuning → otomatik tuning talebi) — **Faz 7**
 

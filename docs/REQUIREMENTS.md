@@ -28,14 +28,14 @@ Kural gürültüsü / false-positive azaltma taleplerinin yönetimi.
 
 **Alanlar:** Ortam, Kural Adı, Tune Sebebi, Tetiklenme Sıklığı, Analist, Nasıl Tune Edildi, Durum  
 **Görseller:** Kanıt, Çözüm  
-**Durumlar:** Açık → İnceleniyor → Tamamlandı / İptal  
+**Durumlar:** Ön Onay Bekliyor → Açık → İnceleniyor → Tune Edildi → Tune Başarılı (veya Yeniden Tune → Açık) / Tune Edilmedi — ön onay reddedilirse Reddedildi (bkz. "Onay Süreci" altta)  
 
 ### 2. Use-Case
 SIEM use-case geliştirme taleplerinin yönetimi.
 
 **Alanlar:** Ortam (multi-select), Use-Case Tanımı, Kural Adı, Kural Yazarı, Notlar, Durum  
 **Kapanış:** MITRE ATT&CK sınıflandırması (tactic + technique + yöntem notu), "Sınıflandırma yapıldı" checkbox  
-**Durumlar:** Açık → İnceleniyor → Tamamlandı / İptal  
+**Durumlar:** Ön Onay Bekliyor → Açık → İnceleniyor → Test Ediliyor → Prod'da Aktif (veya revizyon → İnceleniyor) / Yazılamaz — ön onay reddedilirse Reddedildi (bkz. "Onay Süreci" altta)  
 
 ### 3. Threat Hunting
 Proaktif tehdit avı taleplerinin ve raporlarının yönetimi.
@@ -50,7 +50,7 @@ Proaktif tehdit avı taleplerinin ve raporlarının yönetimi.
 6. Sonuç (Pozitif / Negatif / Yetersiz Veri)
 7. Rapor Durumu (Taslak / Tamamlandı)
 
-**Durumlar:** Açık → İnceleniyor → Tamamlandı / İptal  
+**Durumlar:** Ön Onay Bekliyor → Açık → İnceleniyor → Sonuç Onayı Bekliyor → Tamamlandı (veya revizyon → İnceleniyor) / İptal — ön onay reddedilirse Reddedildi (bkz. "Onay Süreci" altta). İptal, sonuç onayı gerektirmez.  
 
 ---
 
@@ -83,6 +83,22 @@ Bu iki modülde yukarıdaki tabloya ek olarak **iki onay kapısı** var, ikisi d
 Bu iki durum arasındaki (ve bu durumlara giren/çıkan) geçişler genel
 `PUT` uçlarından değil, sadece `/validate`, `/reject-validation`,
 `/approve` (tune), `/test-approve`, `/test-reject` (UC) uçlarından yapılabilir.
+
+### Onay Süreci — Threat Hunt (2026-07-19, Faz 5)
+
+Tuning/UC ile aynı iki kapılı desen, hunt'a özel isimlerle:
+
+1. **Ön onay:** yeni hunt talepleri `Ön Onay Bekliyor` durumunda açılır.
+   Kıdemli Analist/Müdür onaylarsa `Açık`'a geçer; reddederse (gerekçe
+   zorunlu) `Reddedildi` olur.
+2. **Sonuç onayı:** analist raporu tamamlayıp "Rapor Tamamlandı — Onaya
+   Gönder" seçtiğinde hunt `Sonuç Onayı Bekliyor`'a geçer (artık doğrudan
+   `Tamamlandı` seçilemez). Kıdemli Analist/Müdür sonucu onaylar (→
+   `Tamamlandı`) veya revizyona gönderir (gerekçe zorunlu → `İnceleniyor`).
+
+`İptal` bilinçli olarak bu onay kapısının dışında bırakıldı — bir hunt'tan
+vazgeçmek kalite onayı gerektirmiyor, sadece "Tamamlandı" (başarılı bir
+sonuç raporu) onay ister.
 
 ### Ortam (multi-select)
 - Birden fazla ortam seçilebilir (PROD, DEV, TEST, vb.)
