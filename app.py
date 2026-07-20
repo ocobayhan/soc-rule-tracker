@@ -870,6 +870,66 @@ def get_kpi():
         "hunt_rejection_rate": hunt_rejection_rate,
     })
 
+# Terminal (kapanmış) durumlar — "üzerimdeki bitmemiş işler" listesi bunları hariç tutar.
+_TUNE_TERMINAL = ("Tune Başarılı", "Tune Edilmedi", STATUS_REJECTED)
+_UC_TERMINAL   = ("Prod'da Aktif", "Yazılamaz", STATUS_REJECTED)
+_HUNT_TERMINAL = ("Tamamlandı", "İptal", STATUS_REJECTED)
+# Onay kapısındaki durumlar — bir Kıdemli Analist/Müdür'ün aksiyonunu bekler.
+_TUNE_GATE = (STATUS_PENDING_VALIDATION, "Tune Edildi")
+_UC_GATE   = (STATUS_PENDING_VALIDATION, "Test Ediliyor")
+_HUNT_GATE = (STATUS_PENDING_VALIDATION, STATUS_HUNT_RESULT_PENDING)
+
+@app.route("/api/my-work")
+@login_required
+def get_my_work():
+    """Giriş yapan kullanıcıya özel iş listesi — dashboard'ın en üstünde
+    'bugün ne yapmalıyım' görünümü için:
+      • awaiting_approval: onay kapısındaki tüm talepler (sadece onay yetkisi
+        olan Kıdemli Analist/Müdür'e döner — is_senior).
+      • assigned_to_me: kullanıcının çalışan analist olarak atandığı, henüz
+        kapanmamış talepler.
+    Filtre mantığı tek yerde; hem panel hem sayaçlar aynı kaynaktan beslenir."""
+    db    = get_db()
+    uname = session.get("username", "")
+
+    def norm(rows, typ, title_col, sub_col):
+        # sub: ham kullanıcı adı — Ad Soyad gösterimi arayüzde displayName() ile
+        # yapılır (tek kaynak /api/analysts, bkz. app.js).
+        return [{
+            "type": typ, "id": r["id"],
+            "title": r[title_col] or "—",
+            "sub": r[sub_col] or "",
+            "status": r["status"], "created_at": r["created_at"],
+        } for r in rows]
+
+    def ph(seq):  # SQL IN(...) yer tutucuları
+        return ",".join("?" for _ in seq)
+
+    assigned = []
+    assigned += norm(db.execute(
+        f"SELECT * FROM tune_requests WHERE tuning_analyst=? AND status NOT IN ({ph(_TUNE_TERMINAL)}) ORDER BY created_at DESC",
+        (uname, *_TUNE_TERMINAL)).fetchall(), "tune", "rule_name", "reporter")
+    assigned += norm(db.execute(
+        f"SELECT * FROM usecase_requests WHERE rule_author=? AND status NOT IN ({ph(_UC_TERMINAL)}) ORDER BY created_at DESC",
+        (uname, *_UC_TERMINAL)).fetchall(), "usecase", "usecase_description", "requester")
+    assigned += norm(db.execute(
+        f"SELECT * FROM threat_hunt_requests WHERE assigned_analyst=? AND status NOT IN ({ph(_HUNT_TERMINAL)}) ORDER BY created_at DESC",
+        (uname, *_HUNT_TERMINAL)).fetchall(), "hunt", "hunt_subject", "requester")
+
+    awaiting = []
+    if is_senior():
+        awaiting += norm(db.execute(
+            f"SELECT * FROM tune_requests WHERE status IN ({ph(_TUNE_GATE)}) ORDER BY created_at DESC",
+            _TUNE_GATE).fetchall(), "tune", "rule_name", "reporter")
+        awaiting += norm(db.execute(
+            f"SELECT * FROM usecase_requests WHERE status IN ({ph(_UC_GATE)}) ORDER BY created_at DESC",
+            _UC_GATE).fetchall(), "usecase", "usecase_description", "requester")
+        awaiting += norm(db.execute(
+            f"SELECT * FROM threat_hunt_requests WHERE status IN ({ph(_HUNT_GATE)}) ORDER BY created_at DESC",
+            _HUNT_GATE).fetchall(), "hunt", "hunt_subject", "requester")
+
+    return jsonify({"awaiting_approval": awaiting, "assigned_to_me": assigned})
+
 # ---------------------------------------------------------------------------
 # Tune requests
 # ---------------------------------------------------------------------------

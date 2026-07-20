@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=11.9"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.10"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -85,6 +85,21 @@
         &#128438; Rapor
       </button>
     </div>
+
+    <!-- Bana bekleyen işler -->
+    <div class="mywork" id="mywork-panel">
+      <div class="mywork-col" id="mywork-approval-col">
+        <div class="mywork-hdr">Onayımı Bekleyenler
+          <span class="mywork-count" id="mywork-approval-count">0</span></div>
+        <div class="mywork-list" id="mywork-approval"></div>
+      </div>
+      <div class="mywork-col">
+        <div class="mywork-hdr">Üzerimdeki İşler
+          <span class="mywork-count" id="mywork-assigned-count">0</span></div>
+        <div class="mywork-list" id="mywork-assigned"></div>
+      </div>
+    </div>
+
     <div class="kpi-modules">
 
       <!-- Kural Tuning -->
@@ -1519,6 +1534,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=27"></script>
+<script src="/static/app.js?v=28"></script>
 </body>
 </html>

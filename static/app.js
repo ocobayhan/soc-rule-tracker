@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v27
+   SOC Tracker — Frontend  v28
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -383,7 +383,62 @@ async function loadDashboardTables() {
   } catch (_) {}
 }
 
-function loadDashboard() { loadKPI(); loadDashboardTables(); }
+// ---- Bana bekleyen işler --------------------------------------------------
+const WORK_TYPE_LABEL = { tune: "Tune", usecase: "UC", hunt: "Hunt" };
+const WORK_TYPE_COLOR = { tune: "var(--amber)", usecase: "var(--teal)", hunt: "var(--purple)" };
+
+function renderMyWorkList(elId, items) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!items.length) { el.innerHTML = `<div class="mywork-empty">Bekleyen bir iş yok.</div>`; return; }
+  // Durum-badge class map'i çağrı anında kurulur — TUNE_CLS/UC_CLS/HUNT_CLS
+  // dosyada bu satırdan sonra tanımlı, modül yüklenirken erişilemezler (TDZ).
+  const clsMap = { tune: TUNE_CLS, usecase: UC_CLS, hunt: HUNT_CLS };
+  el.innerHTML = items.map(it => `
+    <div class="mywork-item" onclick="goToItem('${it.type}', ${it.id})" title="Aç: #${it.id}">
+      <span class="mywork-type" style="color:${WORK_TYPE_COLOR[it.type]}">${WORK_TYPE_LABEL[it.type]}</span>
+      <span class="mywork-title" title="${esc(it.title)}">${esc(it.title)}</span>
+      ${badge(it.status, clsMap[it.type])}
+      <span class="mywork-meta">${it.sub ? esc(displayName(it.sub)) : ""} · ${fmtDate(it.created_at)}</span>
+    </div>`).join("");
+}
+
+async function loadMyWork() {
+  const panel = document.getElementById("mywork-panel");
+  if (!panel) return;
+  try {
+    const d = await apiFetch("/api/my-work");
+    // Onay sütunu yalnızca onay yetkisi olanlar (Kıdemli Analist/Müdür) için
+    // anlamlı — değilse tümüyle gizle, yer kaplamasın.
+    const approvalCol = document.getElementById("mywork-approval-col");
+    if (approvalCol) approvalCol.style.display = IS_SENIOR ? "" : "none";
+    renderMyWorkList("mywork-approval", d.awaiting_approval || []);
+    renderMyWorkList("mywork-assigned", d.assigned_to_me || []);
+    const setC = (id, n) => { const e = document.getElementById(id); if (e) e.textContent = n; };
+    setC("mywork-approval-count", (d.awaiting_approval || []).length);
+    setC("mywork-assigned-count", (d.assigned_to_me || []).length);
+  } catch (_) {}
+}
+
+/** Bir modül öğesine git: sekmeyi aç, verisini yükle, detay modalini aç. */
+async function goToItem(type, id) {
+  const map = {
+    tune:    { tab: "tuning",         load: loadTune, open: openTuneDetail },
+    usecase: { tab: "usecase",        load: loadUC,   open: openUCDetail },
+    hunt:    { tab: "threat-hunting", load: loadHunt, open: openHuntDetail },
+  };
+  const m = map[type]; if (!m) return;
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  const btn = document.querySelector(`.nav-btn[data-tab="${m.tab}"]`);
+  if (btn) btn.classList.add("active");
+  const panel = document.getElementById("tab-" + m.tab);
+  if (panel) panel.classList.add("active");
+  await m.load();
+  m.open(id);
+}
+
+function loadDashboard() { loadMyWork(); loadKPI(); loadDashboardTables(); }
 
 // ---------------------------------------------------------------------------
 // Backup (admin only)
