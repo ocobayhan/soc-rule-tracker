@@ -1450,6 +1450,18 @@ const ACTION_CLS = {
   "APPROVE_HUNT_RESULT": "audit-close", "REJECT_HUNT_RESULT": "audit-delete",
   "EXPORT_HUNT_PDF": "audit-edit",
 };
+// Audit Log filtre kategorileri — hangi action'ın hangi kategoriye girdiği
+// app.py'deki AUDIT_CATEGORIES ile eşleşmeli (bkz. docs/audit_logging.md).
+const AUDIT_CATEGORY_LABELS = {
+  "create":         "Oluşturma",
+  "claim":          "Üstlenme / Başlatma",
+  "pre_approval":   "Ön Onay",
+  "final_approval": "Son Onay",
+  "work_done":      "İş Tamamlama",
+  "edit":           "Düzenleme",
+  "delete":         "Silme",
+  "system":         "Sistem / Dışa Aktarım",
+};
 
 async function verifyAuditChain() {
   const box = document.getElementById("audit-verify-result");
@@ -1473,9 +1485,47 @@ async function verifyAuditChain() {
   }
 }
 
+function populateAuditCategoryDropdown() {
+  const sel = document.getElementById("audit-filter-category");
+  if (!sel || sel.dataset.populated) return;
+  sel.insertAdjacentHTML("beforeend", Object.entries(AUDIT_CATEGORY_LABELS)
+    .map(([key, label]) => `<option value="${key}">${esc(label)}</option>`).join(""));
+  sel.dataset.populated = "1";
+}
+
+/** Kullanıcı dropdown'u, o an ekranda GÖRÜNEN kayıtlardaki kullanıcı adlarından
+ * türetilir — filtre uygulanmamışken bu tam listeyi verir, filtre
+ * uygulandıktan sonra dropdown'daki seçenekler daralmaz (mevcut liste korunur). */
+function populateAuditUsernameDropdown(rows) {
+  const sel = document.getElementById("audit-filter-username");
+  if (!sel || sel.dataset.populated) return;
+  const names = [...new Set(rows.map(r => r.username).filter(Boolean))].sort();
+  sel.insertAdjacentHTML("beforeend",
+    names.map(n => {
+      // "?" = write_audit()'in oturumsuz istekler (ör. XSOAR webhook) için
+      // düştüğü varsayılan kullanıcı adı — dropdown'da anlaşılır göster.
+      const label = n === "?" ? "Sistem (oturumsuz — ör. XSOAR webhook)" : displayName(n);
+      return `<option value="${esc(n)}">${esc(label)}</option>`;
+    }).join(""));
+  sel.dataset.populated = "1";
+}
+
+function clearAuditFilters() {
+  document.getElementById("audit-filter-category").value = "";
+  document.getElementById("audit-filter-username").value = "";
+  loadAuditLog();
+}
+
 async function loadAuditLog() {
+  populateAuditCategoryDropdown();
   try {
-    const rows  = await apiFetch("/api/audit");
+    const category = document.getElementById("audit-filter-category")?.value || "";
+    const username = document.getElementById("audit-filter-username")?.value || "";
+    const p = new URLSearchParams({ limit: "1000" });
+    if (category) p.set("category", category);
+    if (username) p.set("username", username);
+    const rows  = await apiFetch(`/api/audit?${p}`);
+    if (!category && !username) populateAuditUsernameDropdown(rows);
     const tbody = document.getElementById("audit-tbody");
     const empty = document.getElementById("audit-empty");
     if (!rows.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
@@ -1486,7 +1536,7 @@ async function loadAuditLog() {
       const time  = r.created_at ? r.created_at.slice(0, 16).replace("T", " ") : "—";
       return `<tr>
         <td class="text-muted" style="font-size:12px;white-space:nowrap">${time}</td>
-        <td style="font-weight:500">${esc(r.username)}</td>
+        <td style="font-weight:500" title="${esc(r.username)}">${esc(displayName(r.username))}</td>
         <td><span class="audit-badge ${cls}">${label}</span></td>
         <td class="text-muted" style="font-size:12px">${esc(r.record_type || "")}</td>
         <td class="text-muted" style="font-size:12px">${r.record_id ? "#"+r.record_id : ""}</td>
@@ -1822,7 +1872,7 @@ function huntActionBtns(r) {
     ? `<button class="btn-icon" title="Düzenle" onclick="openHuntEditModal(${r.id})">&#9998;</button>`
     : "";
   const report = (isAdmin || isMyTask) && r.status === "İnceleniyor"
-    ? `<button class="btn-icon" title="Rapor" onclick="openHuntReportModal(${r.id})" style="color:var(--accent-blue)">&#128196;</button>`
+    ? `<button class="btn-icon" title="Rapor Yaz/Düzenle" onclick="openHuntReportModal(${r.id})" style="color:var(--accent-blue)">&#128221;</button>`
     : "";
   const del = isAdmin
     ? `<button class="btn-icon danger" title="Sil" onclick="deleteHunt(${r.id})">&#x1F5D1;</button>`
@@ -1844,7 +1894,7 @@ function huntActionBtns(r) {
   if (r.status === STATUS_HUNT_RESULT_PENDING && IS_SENIOR)
     return `<button class="btn-action-close" onclick="openHuntResultModal(${r.id})">Sonucu Onayla</button> ${edit}${del}`;
   if (r.status === "Tamamlandı") {
-    const pdf = `<a class="btn-icon" title="PDF İndir" href="/hunt/${r.id}/report/pdf" target="_blank" style="color:var(--red)">&#128196;</a>`;
+    const pdf = `<a class="btn-icon" title="PDF İndir" href="/hunt/${r.id}/report/pdf" target="_blank" style="color:var(--red)">&#8681;</a>`;
     return `${pdf}${edit}${del}`;
   }
   return `${edit}${del}`;

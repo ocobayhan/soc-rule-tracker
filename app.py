@@ -16,6 +16,18 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "soc-rule-tracker-dev-key-change-in-prod")
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB — paste/upload görsel limiti
 
+# Ürün versiyonu (Semantic Versioning — MAJOR.MINOR.PATCH). Bkz. docs/VERSIONING.md
+# için ne zaman hangi rakamın artırılacağı. static/app.js ve styles.css'teki
+# ?v= sayıları BUNUNLA KARIŞTIRILMAMALI — onlar sadece tarayıcı önbelleği
+# temizleme sayaçları, ürün versiyonuyla ilgisi yok.
+APP_VERSION = "0.1.0"
+
+@app.context_processor
+def inject_app_version():
+    """app_version her template'te otomatik erişilebilir olsun diye — her
+    render_template() çağrısına elle eklemeyi unutma riskini ortadan kaldırır."""
+    return {"app_version": APP_VERSION}
+
 _BASE = os.path.dirname(os.path.abspath(__file__))
 DATABASE      = os.environ.get("DATABASE",      os.path.join(_BASE, "tracker.db"))
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(_BASE, "static", "uploads"))
@@ -24,6 +36,22 @@ ALLOWED_EXT  = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 # XSOAR webhook entegrasyonu (Faz 7) — bkz. docs/xsoar_integration.md
 XSOAR_WEBHOOK_TOKEN = os.environ.get("XSOAR_WEBHOOK_TOKEN", "soc-tracker-xsoar-webhook-CHANGE-IN-PRODUCTION")
+
+# Audit Log filtreleme için aktivite sınıflandırması (2026-07-20). Kategori
+# etiketleri (Türkçe) static/app.js'teki AUDIT_CATEGORY_LABELS ile eşleşmeli
+# — burada sadece hangi action'ların hangi kategoriye girdiği tanımlanır.
+AUDIT_CATEGORIES = {
+    "create":         ["CREATE_TUNE", "CREATE_TUNE_XSOAR", "CREATE_UC", "CREATE_HUNT", "CREATE_USER"],
+    "claim":          ["CLAIM_TUNE", "CLAIM_UC", "CLAIM_HUNT", "START_HUNT"],
+    "pre_approval":   ["VALIDATE_TUNE", "VALIDATE_UC", "VALIDATE_HUNT",
+                        "REJECT_VALIDATION_TUNE", "REJECT_VALIDATION_UC", "REJECT_VALIDATION_HUNT"],
+    "final_approval": ["APPROVE_TUNE", "RETRY_TUNE", "TEST_APPROVE_UC", "TEST_REJECT_UC",
+                        "APPROVE_HUNT_RESULT", "REJECT_HUNT_RESULT"],
+    "work_done":      ["CLOSE_TUNE", "CLOSE_UC", "CLOSE_HUNT", "REPORT_HUNT"],
+    "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER"],
+    "delete":         ["DELETE_TUNE", "DELETE_UC", "DELETE_HUNT", "DELETE_USER"],
+    "system":         ["EXPORT_HUNT_PDF", "VERIFY_AUDIT_CHAIN"],
+}
 
 # Onay seviyesi (tier) — role'den (admin/analyst/settings) bağımsız ikinci bir
 # RBAC boyutu. Onay gerektiren işlemler (tune/UC/hunt approve) role'e değil
@@ -2007,10 +2035,24 @@ def delete_user(user_id):
 def get_audit():
     if session.get("role") != "admin":
         return jsonify({"error": "Forbidden"}), 403
-    db    = get_db()
-    limit = min(int(request.args.get("limit", 300)), 1000)
+    db       = get_db()
+    limit    = min(int(request.args.get("limit", 300)), 1000)
+    category = request.args.get("category", "").strip()
+    username = request.args.get("username", "").strip()
+
+    conditions, params = [], []
+    if category in AUDIT_CATEGORIES:
+        actions = AUDIT_CATEGORIES[category]
+        conditions.append(f"action IN ({','.join('?' for _ in actions)})")
+        params.extend(actions)
+    if username:
+        conditions.append("username = ?")
+        params.append(username)
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     rows  = db.execute(
-        "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?", (limit,)
+        f"SELECT * FROM audit_log {where} ORDER BY created_at DESC LIMIT ?",
+        (*params, limit)
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -2310,6 +2352,7 @@ def export_data():
          hunt_prog["hunt_total_hours"]),
         ("", ""),
         ("Dışa Aktarım Tarihi",       date.today().isoformat()),
+        ("Uygulama Versiyonu",        f"v{APP_VERSION}"),
     ]
     for label, val in kpi_rows:
         ws4.append([label, val])

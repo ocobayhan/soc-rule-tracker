@@ -58,6 +58,7 @@
     <a href="/logout" class="nav-btn" style="color:var(--text-2)">
       <span>&#8617;</span> Çıkış
     </a>
+    <div class="text-muted" style="font-size:10px;text-align:center;padding:6px 0 2px;opacity:0.6">v{{ app_version }}</div>
   </div>
 </aside>
 
@@ -359,6 +360,16 @@
       </div>
     </div>
     <div id="audit-verify-result" style="display:none;margin-bottom:12px"></div>
+    <div class="filter-row">
+      <select id="audit-filter-category" class="form-input input-sm">
+        <option value="">Tüm Aktivite Türleri</option>
+      </select>
+      <select id="audit-filter-username" class="form-input input-sm">
+        <option value="">Tüm Kullanıcılar</option>
+      </select>
+      <button class="btn btn-secondary" onclick="loadAuditLog()">Filtrele</button>
+      <button class="btn-ghost-sm" onclick="clearAuditFilters()">Temizle</button>
+    </div>
     <div class="table-wrapper">
       <table class="table">
         <thead><tr>

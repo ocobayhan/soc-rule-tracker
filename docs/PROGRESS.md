@@ -572,6 +572,44 @@ ayrıntısını verebiliriz").
   sayılarının değişmediği kontrol edildi. Test hesabı ve script'leri
   temizlendi.
 
+### Faz M — Versiyonlama, Hunt İkon Çakışması, Audit Log Filtreleme (2026-07-20)
+
+- [x] **Versiyonlama:** `APP_VERSION = "0.1.0"` (`app.py`), Flask
+  `context_processor` ile her template'e otomatik geçiyor. Görünür olduğu
+  yerler: sidebar alt köşesi, login sayfası, aylık rapor'un altbilgisi,
+  Excel'in "KPI Özeti" sayfası. `docs/VERSIONING.md` yazıldı — SemVer
+  mantığı (PATCH: küçük düzeltme, MINOR: yeni özellik/ara versiyon, MAJOR:
+  köklü değişiklik) ve bunun `static/app.js`/`styles.css`'teki `?v=NN`
+  önbellek-temizleme sayaçlarıyla **karıştırılmaması gerektiği** açıklandı
+  — ikisi tamamen bağımsız.
+- [x] **Hunt ikon çakışması:** "Rapor Yaz/Düzenle" (İnceleniyor durumunda)
+  ve "PDF İndir" (Tamamlandı durumunda) butonları **aynı** ikonu (`&#128196;`
+  📄) kullanıyordu, sadece renkleri farklıydı — kullanıcı haklı olarak
+  bunları ayırt edemediğini belirtti. "Rapor Yaz/Düzenle" artık 📝
+  (`&#128221;`), "PDF İndir" artık ⬇ (`&#8681;`) — görsel olarak da,
+  `title`/erişilebilir isim olarak da net bir şekilde ayrışıyor.
+- [x] **Audit Log filtreleme:** Aktivite türü (8 kategori: Oluşturma,
+  Üstlenme/Başlatma, Ön Onay, Son Onay, İş Tamamlama, Düzenleme, Silme,
+  Sistem/Dışa Aktarım — sınıflandırma kullanıcının isteğiyle bana
+  bırakıldı) ve kullanıcı adına göre filtre eklendi. Backend `/api/audit`
+  mevcut Tune/UC/Hunt filtreleme deseniyle (query param) tutarlı;
+  kategori→action listesi `app.py`'deki `AUDIT_CATEGORIES`'te tanımlı.
+  Kullanıcı dropdown'u audit log'daki **gerçek** (o an registered olan
+  değil, geçmişte işlem yapmış — silinen hesaplar dahil) kullanıcı
+  adlarından türetiliyor; `write_audit()`'in oturumsuz istekler (XSOAR
+  webhook gibi) için düştüğü `"?"` değeri dropdown'da "Sistem (oturumsuz
+  — ör. XSOAR webhook)" olarak anlaşılır gösteriliyor. Kullanıcı adı
+  sütunu artık Ad Soyad gösteriyor (ham kullanıcı adı `title` tooltip'inde)
+  — Faz H'de "audit log'a dokunma" kararını burada bilinçli olarak
+  gözden geçirdim: filtrelemenin asıl amacı "hangi analist ne yapmış"
+  olduğu için burada okunabilirlik daha öncelikli.
+- [x] **Uçtan uca doğrulandı:** hem API üzerinden (kategori/kullanıcı
+  filtreleri, geçersiz kategori değerinin filtresiz listeye düşmesi,
+  kombine filtre) hem gerçek tarayıcıda (Claude in Chrome ile) görsel
+  olarak — "Silme" kategorisi seçilince sadece silme aksiyonlarının
+  göründüğü, dropdown etiketlerinin doğru olduğu, ikonların artık farklı
+  olduğu ve versiyon numarasının sidebar'da göründüğü teyit edildi.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)
