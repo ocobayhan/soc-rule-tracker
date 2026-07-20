@@ -704,6 +704,42 @@ ayrıntısını verebiliriz").
   hesap temizlendi, tune sayısı teste başlamadan önceki değere (9) döndü,
   audit hash zinciri geçerli.
 
+### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
+
+Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
+yapılıp doğrulandı ve commit'lendi.
+
+- [x] **Faz P — "Bana Bekleyen İşler" paneli** (dashboard en üstü):
+  *Onayımı Bekleyenler* (onay kapısındaki tüm talepler — tune Ön Onay/Tune
+  Edildi, UC Ön Onay/Test Ediliyor, hunt Ön Onay/Sonuç Onayı; yalnızca
+  `is_senior` olan Kıdemli Analist/Müdür'e gösterilir, değilse sütun gizli)
+  ve *Üzerimdeki İşler* (kullanıcının çalışan analist olarak atandığı,
+  terminal olmayan talepler). Tek kaynak `GET /api/my-work`. Satıra tıklama
+  → `goToItem()` ilgili sekmeyi açıp detay modalini açar.
+- [x] **Faz R — Trend (Son 12 Ay) mini grafikleri:** `GET /api/trends?
+  months=N` (1-24 clamp) → modül başına ay-ay Açılan (`created_at`) vs
+  Kapanan (`completed_at`) + Hunt Saati (`hunt_duration_hours` toplamı).
+  Kapanan = completed_at; üç modülde de başarı/kapanış terminaline geçişte
+  set edildiği doğrulandı. Dashboard'da 4 kompakt inline-SVG sparkline
+  kartı (dış kütüphane yok). Aylık rapor tek ayın fotoğrafıyken bu SOC-CMM
+  "sürekli iyileşme" ekseni için zaman-serisi kanıtı verir. Trend, tek-ay
+  filtresinden bağımsız hep tam geçmişi gösterir.
+- [x] **Faz S — Genel arama** (sidebar, tüm modüller): `GET /api/search?q=`
+  (min 2 karakter, modül başına ≤8) tune/UC/hunt içinde case ID, kural adı,
+  konu, gerekçe, analist üzerinde LIKE arar. Sidebar'daki kutuya yazınca
+  (220ms debounce) `position:fixed` bir sonuç açılır listesi çıkar
+  (sidebar'ın `overflow-y:auto`'suna takılmasın diye konum JS ile
+  hesaplanır); tıklama `goToItem()` ile öğeyi açar. "Bu case daha önce
+  açılmış mı" için mükerrer-case engeliyle örtüşür.
+- [x] **Uçtan uca doğrulandı** (geçici senior/analyst debug hesaplar,
+  `requests` script'leri + gerçek tarayıcı): my-work senior/non-senior
+  gating + assigned filtresi; trends 12 aylık seri DB ile tutarlı (tune
+  opened 9, closed 5, hunt saati 3+8); search tüm modüllerde eşleşme, min-2
+  kuralı, dropdown konumu (sidebar overflow'una takılmıyor), tıklama
+  navigasyonu + detay modali. Yol boyu bir TDZ bug'ı yakalandı (`HUNT_CLS`e
+  modül-eval anında erişim) ve class map'i render anına taşıyarak çözüldü.
+  Test hesapları temizlendi, tune sayısı 9, audit zinciri geçerli.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

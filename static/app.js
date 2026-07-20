@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v29
+   SOC Tracker — Frontend  v30
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -2811,6 +2811,63 @@ async function deleteHunt(id) {
 }
 
 // ---------------------------------------------------------------------------
+// Genel arama (sidebar) — tüm modüllerde arar
+// ---------------------------------------------------------------------------
+let _searchTimer = null;
+function initGlobalSearch() {
+  const input = document.getElementById("global-search");
+  const box   = document.getElementById("search-results");
+  if (!input || !box) return;
+  input.addEventListener("input", () => {
+    clearTimeout(_searchTimer);
+    const q = input.value.trim();
+    if (q.length < 2) { box.style.display = "none"; box.innerHTML = ""; return; }
+    _searchTimer = setTimeout(() => runGlobalSearch(q), 220);
+  });
+  input.addEventListener("keydown", e => {
+    if (e.key === "Escape") { box.style.display = "none"; input.blur(); }
+  });
+  // Dışarı tıklayınca sonuç kutusunu kapat
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".sidebar-search")) box.style.display = "none";
+  });
+}
+
+/** Sonuç kutusunu göster — sidebar'ın overflow'una takılmasın diye
+ * position:fixed, konum arama kutusundan hesaplanır. */
+function showSearchBox(html) {
+  const box = document.getElementById("search-results");
+  const input = document.getElementById("global-search");
+  if (!box || !input) return;
+  const rect = input.getBoundingClientRect();
+  box.style.left = Math.round(rect.left) + "px";
+  box.style.top  = Math.round(rect.bottom + 4) + "px";
+  box.innerHTML = html;
+  box.style.display = "block";
+}
+
+async function runGlobalSearch(q) {
+  try {
+    const d = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
+    if (!d.results.length) { showSearchBox(`<div class="search-empty">Sonuç yok</div>`); return; }
+    showSearchBox(d.results.map(r => `
+      <div class="search-item" onclick="pickSearch('${r.type}', ${r.id})" title="${esc(r.title)}">
+        <span class="search-type" style="color:${WORK_TYPE_COLOR[r.type]}">${WORK_TYPE_LABEL[r.type]}</span>
+        <span class="search-title">${esc(r.title)}</span>
+        <span class="search-status">${esc(r.status)}</span>
+      </div>`).join(""));
+  } catch (_) {}
+}
+
+function pickSearch(type, id) {
+  const box   = document.getElementById("search-results");
+  const input = document.getElementById("global-search");
+  if (box)   box.style.display = "none";
+  if (input) input.value = "";
+  goToItem(type, id);
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 if (HAS_DASHBOARD) {
@@ -2827,3 +2884,4 @@ if (HAS_DASHBOARD) {
     document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
   });
 }
+initGlobalSearch();

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=11.11"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.12"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -21,6 +21,11 @@
       <path d="M8.7 12.3l2.1 2.1 4.5-4.5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     SOC Tracker
+  </div>
+  <div class="sidebar-search">
+    <input type="text" id="global-search" class="sidebar-search-input" autocomplete="off"
+           placeholder="Ara: case, kural, konu…"/>
+    <div class="search-results" id="search-results"></div>
   </div>
   <div class="sidebar-section">
     {% if not is_settings %}
@@ -1540,6 +1545,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=29"></script>
+<script src="/static/app.js?v=30"></script>
 </body>
 </html>

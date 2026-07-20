@@ -982,6 +982,40 @@ def get_trends():
         },
     })
 
+@app.route("/api/search")
+@login_required
+def global_search():
+    """Tüm modüllerde (Tune/UC/Hunt) tek noktadan arama — case ID, kural adı,
+    konu, analist vb. Özellikle 'bu case daha önce açılmış mı' için (mükerrer
+    case engeliyle örtüşür). En az 2 karakter; her modülden en çok 8 sonuç."""
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify({"results": [], "query": q})
+    db, like, LIMIT, results = get_db(), f"%{q}%", 8, []
+
+    def add(rows, typ, title_col, sub_col):
+        for r in rows:
+            results.append({
+                "type": typ, "id": r["id"], "title": r[title_col] or "—",
+                "sub": r[sub_col] or "", "status": r["status"], "created_at": r["created_at"],
+            })
+
+    add(db.execute(
+        "SELECT * FROM tune_requests WHERE rule_name LIKE ? OR tune_reason LIKE ? "
+        "OR reporter LIKE ? OR tuning_analyst LIKE ? OR xsoar_case_id LIKE ? "
+        "ORDER BY created_at DESC LIMIT ?",
+        (like, like, like, like, like, LIMIT)).fetchall(), "tune", "rule_name", "reporter")
+    add(db.execute(
+        "SELECT * FROM usecase_requests WHERE usecase_description LIKE ? OR rule_name LIKE ? "
+        "OR requester LIKE ? OR rule_author LIKE ? ORDER BY created_at DESC LIMIT ?",
+        (like, like, like, like, LIMIT)).fetchall(), "usecase", "usecase_description", "requester")
+    add(db.execute(
+        "SELECT * FROM threat_hunt_requests WHERE hunt_subject LIKE ? OR requester LIKE ? "
+        "OR assigned_analyst LIKE ? OR findings LIKE ? ORDER BY created_at DESC LIMIT ?",
+        (like, like, like, like, LIMIT)).fetchall(), "hunt", "hunt_subject", "requester")
+
+    return jsonify({"results": results, "query": q})
+
 # ---------------------------------------------------------------------------
 # Tune requests
 # ---------------------------------------------------------------------------
