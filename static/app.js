@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v26
+   SOC Tracker — Frontend  v27
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -70,6 +70,37 @@ function esc(str) {
   return String(str)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** data-copy attribute'ündeki metni panoya kopyalar, butonda kısa bir
+ * "Kopyalandı" geri bildirimi gösterir. SOAR case linki gibi, tıklamayla
+ * açıldığında SameSite=Strict yüzünden giriş ekranına düşen ama yeni sekmeye
+ * yapıştırınca çalışan URL'ler için (bkz. tune detay modali). */
+function copyFromAttr(btn) {
+  const text = btn.getAttribute("data-copy") || "";
+  const done = () => {
+    const old = btn.innerHTML;
+    btn.innerHTML = "&#10003; Kopyalandı";
+    setTimeout(() => { btn.innerHTML = old; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  // navigator.clipboard yalnızca güvenli bağlamlarda (https / localhost) çalışır;
+  // düz http üzerinden erişilen kurulumlar için execCommand yedeği.
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    done();
+  } catch (e) { console.error("Kopyalama başarısız", e); }
 }
 
 // ---------------------------------------------------------------------------
@@ -442,7 +473,9 @@ function openTuneDetail(id) {
     ${r.xsoar_case_id ? `<div class="detail-row">
         <span class="detail-label">${r.xsoar_case_missing === "Evet" ? "Case No (SOAR'da yok, manuel)" : "SOAR Case"}</span>
         <span class="detail-value">${r.xsoar_url
-          ? `<a href="${esc(r.xsoar_url)}" target="_blank" rel="noopener">#${esc(r.xsoar_case_id)}</a>`
+          ? `<a href="${esc(r.xsoar_url)}" target="_blank" rel="noopener">#${esc(r.xsoar_case_id)}</a>
+             <button class="btn-copy-inline" data-copy="${esc(r.xsoar_url)}" onclick="copyFromAttr(this)"
+                     title="URL'i kopyala — link tıklamayla SOAR giriş ekranına atarsa, yeni sekmeye yapıştırın">&#128203; Kopyala</button>`
           : esc(r.xsoar_case_id)}</span>
       </div>` : ""}
     ${detailRow("Ortam",             r.environment)}

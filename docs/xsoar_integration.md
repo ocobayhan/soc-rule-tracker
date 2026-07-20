@@ -49,6 +49,13 @@ bir hata döner.
 - Audit log'a `CREATE_TUNE_XSOAR` aksiyonu ile, XSOAR case ID referanslı
   şekilde yazılır.
 - Başarılı yanıt: oluşturulan tune kaydının tamamı (`201`).
+- **Mükerrer case koruması (2026-07-20):** Gönderilen `xsoar_case_id` için
+  zaten aktif (reddedilmemiş) bir tuning talebi varsa, yeni kayıt
+  **açılmaz** — `409` döner ve gövdede `{"existing_id": <mevcut talep ID>,
+  "duplicate": true}` bulunur. Böylece XSOAR playbook'unun aynı case'i iki
+  kez tetiklemesi (retry / çift ateşleme) mükerrer talep yaratmaz. Playbook
+  tarafında `409` + `duplicate:true` yanıtı "zaten var, sorun değil" olarak
+  ele alınabilir. Reddedilmiş bir case için gönderim yine yeni talep açar.
 
 ## Örnek İstek
 
@@ -129,3 +136,13 @@ dayanmasını sağlamak.
   düzenlenebilmeye devam eder (geriye dönük olarak kilitlenmezler).
 - Kapsam sadece Tuning — Use-Case ve Threat Hunt'a bilinçli olarak
   uygulanmadı.
+
+### Mükerrer Case Engeli (2026-07-20)
+
+Aynı `xsoar_case_id` için birden fazla **aktif** tuning talebi açılamaz —
+elle oluşturmada ve düzenlemede de (webhook'la aynı kural) çakışma `409`
+döner ve mevcut talebin ID'si mesajda belirtilir. **Reddedilmiş**
+(`Reddedildi`) talepler istisna: reddedilen bir case bilinçli olarak
+yeniden açılabilir. Kural uygulama seviyesinde (DB UNIQUE kısıtı değil)
+işler; bu özellikten önce oluşmuş olası çift kayıtlar geriye dönük
+kilitlenmez, sadece yeni create/edit'ler denetlenir.

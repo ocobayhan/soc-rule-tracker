@@ -916,6 +916,15 @@ def create_tune():
         xsoar_url_val = xsoar_url_val or None
 
     db  = get_db()
+    # Aynı SOAR case ID altında ikinci bir AKTİF tuning talebi açılmasını
+    # engelle — yanlışlıkla aynı case için mükerrer talep oluşmasın. Reddedilmiş
+    # talepler hariç: reddedilen bir case bilinçli olarak yeniden açılabilir.
+    dup = db.execute(
+        "SELECT id, status FROM tune_requests WHERE xsoar_case_id=? AND status!=? ORDER BY id LIMIT 1",
+        (xsoar_case_id, STATUS_REJECTED),
+    ).fetchone()
+    if dup:
+        return jsonify({"error": f"Bu SOAR Case ID ({xsoar_case_id}) için zaten bir tuning talebi var: #{dup['id']} ({dup['status']}). Aynı case için ikinci talep açılamaz."}), 409
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_id = next_available_id(db, "tune_requests")
     cur = db.execute("""
@@ -978,6 +987,20 @@ def xsoar_create_tune():
 
     webhook_case_id = str(data["xsoar_case_id"]).strip()
     webhook_url = (data.get("xsoar_url") or "").strip() or build_xsoar_url(webhook_case_id) or None
+
+    # Aynı case için mükerrer talep engeli (manuel create_tune ile aynı kural) —
+    # XSOAR playbook'unun aynı case'i iki kez tetiklemesi (retry/çift ateşleme)
+    # ikinci bir kayıt açmasın. Mevcut kaydın ID'si yanıtta döner ki playbook
+    # bunu "zaten var, sorun değil" olarak ele alabilsin.
+    dup = db.execute(
+        "SELECT id FROM tune_requests WHERE xsoar_case_id=? AND status!=? ORDER BY id LIMIT 1",
+        (webhook_case_id, STATUS_REJECTED),
+    ).fetchone()
+    if dup:
+        return jsonify({
+            "error": f"Bu SOAR Case ID için zaten bir tuning talebi var: #{dup['id']}",
+            "existing_id": dup["id"], "duplicate": True,
+        }), 409
 
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_id = next_available_id(db, "tune_requests")
@@ -1109,6 +1132,16 @@ def update_tune(item_id):
         new_url = build_xsoar_url(new_case_id) or None
     else:
         new_url = new_url or None
+
+    # Case ID başka bir aktif talebe ait değil (kendisi hariç, reddedilenler
+    # hariç) — düzenlemeyle de mükerrer case oluşmasın (create_tune ile aynı kural).
+    if new_case_id:
+        dup = db.execute(
+            "SELECT id FROM tune_requests WHERE xsoar_case_id=? AND id!=? AND status!=? ORDER BY id LIMIT 1",
+            (new_case_id, item_id, STATUS_REJECTED),
+        ).fetchone()
+        if dup:
+            return jsonify({"error": f"Bu SOAR Case ID ({new_case_id}) için zaten başka bir tuning talebi var: #{dup['id']}. Aynı case iki talebe atanamaz."}), 409
 
     db.execute("""
         UPDATE tune_requests SET

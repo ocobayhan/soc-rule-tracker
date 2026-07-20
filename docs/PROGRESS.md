@@ -665,6 +665,45 @@ ayrıntısını verebiliriz").
   temizlendi, Dashboard'daki toplam talep sayısının teste başlamadan
   önceki değere (9) döndüğü doğrulandı.
 
+### Faz O — Tekil SOAR Case Kuralı + Case URL Kopyala Butonu (2026-07-20)
+
+- [x] **Aynı SOAR case ID altında mükerrer tuning engeli:** Yanlışlıkla
+  aynı case için ikinci bir tuning talebi açılmasın diye, üç giriş
+  noktasında da (`create_tune`, `update_tune`, XSOAR webhook
+  `xsoar_create_tune`) `xsoar_case_id` çakışması kontrol ediliyor —
+  çakışma varsa `409` + mevcut talebin ID'si dönüyor. **Karar:**
+  reddedilmiş (`Reddedildi`) talepler kontrol dışı — reddedilen bir case
+  bilinçli olarak yeniden açılabilir; sadece aktif bir talep engelliyor.
+  Düzenlemede kaydın kendisi hariç tutuluyor (self-collision yok). Webhook
+  yanıtında `existing_id` + `duplicate:true` dönüyor ki XSOAR playbook'u
+  "zaten var, sorun değil" olarak ele alabilsin (retry/çift-ateşleme
+  koruması). Mevcut veri **grandfather** ediliyor: kural sadece yeni
+  create/edit'lerde uygulanıyor, DB'ye UNIQUE kısıtı eklenmedi (eski veride
+  çift case varsa düzenlemeyi kilitlememek için — uygulama seviyesinde
+  kontrol daha esnek).
+- [x] **SOAR case URL'i için "Kopyala" butonu:** Kullanıcı, case linkine
+  **tıklayınca** XSOAR giriş ekranına düştüğünü ama URL'i **kopyalayıp yeni
+  sekmeye yapıştırınca** case'e sorunsuz gittiğini bildirdi. Kök neden:
+  XSOAR'ın oturum çerezi `SameSite=Strict` — tarayıcı, başka bir siteden
+  (SOC Tracker'dan) tıklanan cross-site bağlantılarda bu çerezi
+  göndermiyor, ama adres çubuğuna yazılan/yapıştırılan URL'de gönderiyor.
+  Bu XSOAR'ın çerez ayarı olduğu için bizim tarafımızdan düzeltilemez;
+  bunun yerine çalışan kopyala-yapıştır akışını **tek tık** yaptık: tune
+  detay modalinde case linkinin yanına 📋 Kopyala butonu eklendi
+  (`copyFromAttr`, güvenli-olmayan http bağlamı için `execCommand`
+  yedeğiyle). Bu, ürünün bir "bug"ı değil — tarayıcı güvenlik davranışı;
+  gerçek çözüm istenirse XSOAR yöneticisinin çerez SameSite ayarını
+  gevşetmesi gerekir (XSOAR'ın CSRF duruşunu zayıflatır, önerilmez).
+- [x] **Uçtan uca doğrulandı** (geçici debug admin, requests script'leri +
+  gerçek tarayıcı): 1. create → 201, aynı case ikinci create → 409;
+  düzenlemeyle çakışma → 409, kendi case'ini koruyan düzenleme → 200;
+  case reddedilince aynı case yeniden create → 201 (red istisnası çalışıyor);
+  webhook mükerrer → 409 + `existing_id`, webhook yeni case → 201. Kopyala
+  butonu doğru URL'i (`data-copy`) taşıyor, link `target=_blank`, JS
+  hatası yok, modalde görünür. Test verileri (case 70001-70003) ve debug
+  hesap temizlendi, tune sayısı teste başlamadan önceki değere (9) döndü,
+  audit hash zinciri geçerli.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

@@ -460,6 +460,17 @@ input, select, textarea { font-family: inherit; }
   font-size: 12px; cursor: pointer;
 }
 .btn-ghost-sm:hover { background: var(--bg-hover); color: var(--text-1); }
+.btn-copy-inline {
+  background: none;
+  color: var(--text-2);
+  border: 0.5px solid var(--border-md);
+  padding: 1px 7px;
+  margin-left: 8px;
+  border-radius: var(--r-sm);
+  font-size: 11px; cursor: pointer;
+  vertical-align: middle;
+}
+.btn-copy-inline:hover { background: var(--bg-hover); color: var(--text-1); }
 .btn-export {
   background: var(--bg-active);
   color: var(--text-1);
