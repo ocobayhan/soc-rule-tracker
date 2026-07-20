@@ -541,6 +541,37 @@ ama hiç kapatılmamıştı.
   çalışıyor; bu geçiş kullanıcıyla birlikte, `docs/BACKUP_RESTORE.md`'deki
   prosedür izlenerek yapılmalı — SSH oturumu kullanıcı ne zaman isterse.
 
+### Faz L — Settings Override'larının Audit Detayına Ayrıntılı Yazılması (2026-07-20)
+
+Kullanıcı, audit hash-zincirinin sadece "audit log'un kendisi değiştirilmedi"
+diye kanıtladığını, asıl veri satırlarının imzalanmadığını netleştirdiğim
+konuşmadan sonra, en azından **settings rolünün bilinçli ID/tarih
+override'larının** ayrıntılı loglanmasını istedi ("değişilen kısmın
+ayrıntısını verebiliriz").
+
+- [x] Tune/UC/Hunt'ın üçünün de `update_*` route'larında aynı desen:
+  override gerçekleşirse (`role=='settings'` VE ID veya tarihlerden biri
+  gerçekten değiştiyse) `write_audit()`'e giden `detail`'e
+  `"MANUEL DÜZENLEME (settings): ID: eski→yeni; Oluşturulma Tarihi:
+  eski→yeni; ..."` şeklinde bir ek yapılıyor. Override yoksa (normal
+  günlük düzenlemeler) `detail` eskisi gibi temiz kalıyor — sadece gerçek
+  override'lar bu ek metni alıyor.
+  - Tune: ID, Oluşturulma Tarihi, Tamamlanma Tarihi
+  - UC: ID, Oluşturulma Tarihi, Tamamlanma Tarihi
+  - Hunt: ID, Oluşturulma Tarihi, Başlangıç Tarihi, Tamamlanma Tarihi,
+    Rapor Güncelleme Tarihi
+- [x] `docs/audit_logging.md`'ye bu desen belgelendi (yeni bir route'a
+  override eklerken izlenecek örnekle birlikte).
+- [x] **Uçtan uca doğrulandı:** geçici bir `settings` rolü test hesabıyla
+  üçünde de gerçek bir ID+tarih override'ı yapılıp geri alındı (round-trip);
+  audit log'da hem override hem geri alma kaydının eski→yeni değerleri
+  doğru gösterdiği teyit edildi; hash zinciri yeni `detail` formatıyla
+  hâlâ geçerli (`verify_audit.py` ile); normal (override içermeyen) bir
+  düzenlemenin `detail`'inin hiç ek metin almadığı ayrıca doğrulandı; tüm
+  kayıtların ID'leri test sonrası orijinal haline döndüğü, tablo satır
+  sayılarının değişmediği kontrol edildi. Test hesabı ve script'leri
+  temizlendi.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

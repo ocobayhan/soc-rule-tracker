@@ -980,7 +980,13 @@ def update_tune(item_id):
         completed_at = None
 
     # Settings role: allow manual date + ID overrides
+    # Bu güçlü bir yetenek (kayıt kimliğini/tarihini elle değiştirebilme),
+    # bu yüzden ne değiştiği audit detayına açıkça yazılıyor (eski→yeni) —
+    # sertifikasyon denetiminde "kimse elle tarih/ID oynamadı" iddiası
+    # denetlenebilsin diye (bkz. docs/audit_logging.md).
+    override_parts = []
     if role == "settings":
+        completed_at_before_override = completed_at
         created_at_val = _parse_date(data.get("created_at")) or row["created_at"]
         completed_at   = _parse_date(data.get("completed_at")) if "completed_at" in data else completed_at
         new_id_val     = int(data["new_id"]) if str(data.get("new_id","")).strip().isdigit() else item_id
@@ -988,6 +994,11 @@ def update_tune(item_id):
             conflict = db.execute("SELECT id FROM tune_requests WHERE id=?", (new_id_val,)).fetchone()
             if conflict:
                 return jsonify({"error": f"ID {new_id_val} zaten kullanımda"}), 409
+            override_parts.append(f"ID: {item_id}→{new_id_val}")
+        if created_at_val != row["created_at"]:
+            override_parts.append(f"Oluşturulma Tarihi: {row['created_at']}→{created_at_val}")
+        if "completed_at" in data and completed_at != completed_at_before_override:
+            override_parts.append(f"Tamamlanma Tarihi: {completed_at_before_override or '—'}→{completed_at or '—'}")
     else:
         created_at_val = row["created_at"]
         new_id_val     = item_id
@@ -1028,6 +1039,8 @@ def update_tune(item_id):
     else:
         a_action = "EDIT_TUNE"
         a_detail = f"Kural: {updated['rule_name']}"
+    if override_parts:
+        a_detail += " | MANUEL DÜZENLEME (settings): " + "; ".join(override_parts)
     write_audit(a_action, "tune", item_id, a_detail)
     return jsonify(dict(updated))
 
@@ -1276,9 +1289,12 @@ def update_usecase(item_id):
     if new_status not in ("Test Ediliyor", "Prod'da Aktif", "Yazılamaz"):
         completed_at = None
 
-    # Settings role: allow manual date + ID overrides
+    # Settings role: allow manual date + ID overrides — ne değiştiği audit
+    # detayına açıkça yazılıyor (bkz. tune'daki aynı desen, docs/audit_logging.md).
     uc_role = session.get("role", "analyst")
+    uc_override_parts = []
     if uc_role == "settings":
+        uc_completed_before = completed_at
         uc_created_at  = _parse_date(data.get("created_at")) or row["created_at"]
         completed_at   = _parse_date(data.get("completed_at")) if "completed_at" in data else completed_at
         uc_new_id      = int(data["new_id"]) if str(data.get("new_id","")).strip().isdigit() else item_id
@@ -1286,6 +1302,11 @@ def update_usecase(item_id):
             conflict = db.execute("SELECT id FROM usecase_requests WHERE id=?", (uc_new_id,)).fetchone()
             if conflict:
                 return jsonify({"error": f"ID {uc_new_id} zaten kullanımda"}), 409
+            uc_override_parts.append(f"ID: {item_id}→{uc_new_id}")
+        if uc_created_at != row["created_at"]:
+            uc_override_parts.append(f"Oluşturulma Tarihi: {row['created_at']}→{uc_created_at}")
+        if "completed_at" in data and completed_at != uc_completed_before:
+            uc_override_parts.append(f"Tamamlanma Tarihi: {uc_completed_before or '—'}→{completed_at or '—'}")
     else:
         uc_created_at  = row["created_at"]
         uc_new_id      = item_id
@@ -1327,6 +1348,8 @@ def update_usecase(item_id):
     else:
         a_action = "EDIT_UC"
         a_detail = f"Tanım: {updated['usecase_description'][:60]}"
+    if uc_override_parts:
+        a_detail += " | MANUEL DÜZENLEME (settings): " + "; ".join(uc_override_parts)
     write_audit(a_action, "usecase", item_id, a_detail)
     return jsonify(dict(updated))
 
@@ -1569,8 +1592,12 @@ def update_hunt(item_id):
     else:
         completed_at = row["completed_at"]
 
-    # Settings role: allow manual date + ID overrides
+    # Settings role: allow manual date + ID overrides — ne değiştiği audit
+    # detayına açıkça yazılıyor (bkz. tune/UC'deki aynı desen, docs/audit_logging.md).
+    hunt_override_parts = []
     if hunt_role == "settings":
+        started_at_before   = started_at
+        completed_at_before = completed_at
         hunt_created_at    = _parse_date(data.get("created_at"))    or row["created_at"]
         started_at         = _parse_date(data.get("started_at"))    if "started_at"    in data else started_at
         completed_at       = _parse_date(data.get("completed_at"))  if "completed_at"  in data else completed_at
@@ -1580,6 +1607,15 @@ def update_hunt(item_id):
             conflict = db.execute("SELECT id FROM threat_hunt_requests WHERE id=?", (hunt_new_id,)).fetchone()
             if conflict:
                 return jsonify({"error": f"ID {hunt_new_id} zaten kullanımda"}), 409
+            hunt_override_parts.append(f"ID: {item_id}→{hunt_new_id}")
+        if hunt_created_at != row["created_at"]:
+            hunt_override_parts.append(f"Oluşturulma Tarihi: {row['created_at']}→{hunt_created_at}")
+        if "started_at" in data and started_at != started_at_before:
+            hunt_override_parts.append(f"Başlangıç Tarihi: {started_at_before or '—'}→{started_at or '—'}")
+        if "completed_at" in data and completed_at != completed_at_before:
+            hunt_override_parts.append(f"Tamamlanma Tarihi: {completed_at_before or '—'}→{completed_at or '—'}")
+        if report_updated_at_override:
+            hunt_override_parts.append(f"Rapor Güncelleme Tarihi: {row['report_updated_at'] or '—'}→{report_updated_at_override}")
     else:
         hunt_created_at            = row["created_at"]
         report_updated_at_override = None
@@ -1689,6 +1725,8 @@ def update_hunt(item_id):
     else:
         a_action = "EDIT_HUNT"
         a_detail = f"Konu: {updated['hunt_subject']}"
+    if hunt_override_parts:
+        a_detail += " | MANUEL DÜZENLEME (settings): " + "; ".join(hunt_override_parts)
     write_audit(a_action, "hunt", item_id, a_detail)
     r = dict(updated)
     r["uc_created_id"] = uc_created_id

@@ -66,6 +66,25 @@ kayıtların **kaybolduğu** anlamına gelmez, sadece zincirleme sırasının bi
 yarış durumuna denk geldiği anlamına gelir. Böyle bir uyarı görülürse önce
 bu ihtimal değerlendirilmeli, otomatik olarak "tampering" varsayılmamalıdır.
 
+## Settings Rolünün ID/Tarih Override'ları (2026-07-20)
+
+`settings` rolündeki kullanıcılar Tuning/Use-Case/Threat Hunt kayıtlarında
+ID ve tarih alanlarını (`created_at`/`completed_at`/`started_at`) elle
+değiştirebilir (düzeltme amaçlı — bkz. ilgili `update_*` route'ları).
+Bu güçlü bir yetenek olduğu için `detail`'e **ayrıca** ne değiştiği eski→yeni
+biçiminde ekleniyor:
+
+```
+"... | MANUEL DÜZENLEME (settings): ID: 9→500; Oluşturulma Tarihi: 2026-07-19 11:25:33→2020-01-01 00:00:00"
+```
+
+Bu sayede audit log'un kendisi hash-zincirle korunsa bile, "bu kayıt manuel
+olarak ne zaman/nasıl düzenlendi" sorusu ayrıca, açıkça denetlenebilir hale
+gelir — genel bir "EDIT_TUNE" satırı bunu göstermezdi. Yeni bir route'a
+override eklerken bu deseni (`override_parts` listesi + eski/yeni
+karşılaştırması, sadece override GERÇEKTEN olduğunda `detail`'e ekleme)
+takip edin.
+
 ## Doğrulama
 
 - **UI:** Audit Log ekranında "Zinciri Doğrula" butonu → `POST /api/audit/verify`
