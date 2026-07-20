@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SOC Tracker UI Kit — Stil Rehberi</title>
+<link rel="stylesheet" href="soc-ui.css"/>
+<style>
+  /* Bu sadece stil rehberinin kendi sayfa düzeni için — soc-ui.css'in bir
+     parçası değil, kopyalamanıza gerek yok. */
+  body { overflow: auto; height: auto; }
+  .guide-section { margin-bottom: 40px; }
+  .guide-section h2 {
+    font-size: 13px; font-weight: 600; color: var(--text-1);
+    text-transform: uppercase; letter-spacing: .06em;
+    margin-bottom: 14px; padding-bottom: 8px; border-bottom: 0.5px solid var(--border);
+  }
+  .guide-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .guide-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+  .swatch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+  .swatch-box { width: 22px; height: 22px; border-radius: var(--r-sm); border: 0.5px solid var(--border-md); }
+  code { font-family: monospace; font-size: 11px; color: var(--text-2); background: var(--bg-tertiary); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <svg class="sidebar-logo-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2.2 4.5 5v6.1c0 5.1 3.3 9.1 7.5 10.7 4.2-1.6 7.5-5.6 7.5-10.7V5L12 2.2z" fill="#5E6AD2"/>
+        <path d="M8.7 12.3l2.1 2.1 4.5-4.5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      UI Kit
+    </div>
+    <div class="sidebar-search">
+      <input type="text" id="demo-search" class="sidebar-search-input" placeholder="Ara: örnek arama kutusu…"/>
+      <div class="search-results" id="demo-search-results"></div>
+    </div>
+    <div class="sidebar-section">
+      <button class="nav-btn active" data-tab="tokens"><span>&#9632;</span> Tokens</button>
+      <button class="nav-btn" data-tab="buttons"><span>&#9632;</span> Butonlar</button>
+      <button class="nav-btn" data-tab="forms"><span>&#9632;</span> Formlar</button>
+      <button class="nav-btn" data-tab="badges"><span>&#9632;</span> Rozetler</button>
+      <button class="nav-btn" data-tab="table"><span>&#9632;</span> Tablo</button>
+      <button class="nav-btn" data-tab="kpi"><span>&#9632;</span> KPI / Panel</button>
+      <button class="nav-btn" data-tab="modal"><span>&#9632;</span> Modal</button>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-user">
+        <div class="sidebar-user-avatar">U</div>
+        <span>demo kullanıcı</span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="page-content">
+
+      <section id="tab-tokens" class="tab-panel active">
+        <div class="page-header"><h1 class="page-title">Design Tokens</h1></div>
+        <div class="guide-section">
+          <h2>Renkler</h2>
+          <div class="guide-swatches">
+            <div class="swatch"><span class="swatch-box" style="background:var(--bg)"></span>--bg</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--bg-secondary)"></span>--bg-secondary</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--bg-active)"></span>--bg-active</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--accent)"></span>--accent</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--green)"></span>--green</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--amber)"></span>--amber</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--red)"></span>--red</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--purple)"></span>--purple</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--blue)"></span>--blue</div>
+            <div class="swatch"><span class="swatch-box" style="background:var(--teal)"></span>--teal</div>
+          </div>
+        </div>
+        <div class="guide-section">
+          <h2>Font &amp; Köşe Yarıçapı</h2>
+          <p style="font-size:12px;color:var(--text-2)">--font: <code>Inter, system-ui, -apple-system, sans-serif</code> · --r-sm: <code>5px</code> · --r: <code>7px</code> · --r-lg: <code>10px</code></p>
+        </div>
+      </section>
+
+      <section id="tab-buttons" class="tab-panel">
+        <div class="page-header"><h1 class="page-title">Butonlar</h1></div>
+        <div class="guide-row">
+          <button class="btn btn-primary">Birincil</button>
+          <button class="btn btn-secondary">İkincil</button>
+          <button class="btn-ghost-sm">Ghost küçük</button>
+          <button class="btn-export">&#8675; Excel</button>
+          <button class="btn-icon">&#9998;</button>
+          <button class="btn-icon danger">&#128465;</button>
+          <button class="btn-icon success">&#10003;</button>
+          <button class="btn-icon" disabled>&#9998;</button>
+        </div>
+        <div class="guide-row">
+          <span class="text-muted" style="font-size:12px">Kopyala butonu:</span>
+          <button class="btn-copy-inline" data-copy="https://example.com/case/123" onclick="copyFromAttr(this)">&#128203; Kopyala</button>
+        </div>
+      </section>
+
+      <section id="tab-forms" class="tab-panel">
+        <div class="page-header"><h1 class="page-title">Formlar</h1></div>
+        <div class="form-grid" style="max-width:520px">
+          <div class="form-group">
+            <label class="form-label">Kural İsmi</label>
+            <input class="form-input" placeholder="örn. Suspicious PowerShell"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ortam</label>
+            <select class="form-input"><option>PROD</option><option>DEV</option></select>
+          </div>
+          <div class="form-group form-col-2">
+            <label class="form-label">Açıklama</label>
+            <textarea class="form-input form-textarea" placeholder="Ayrıntı yazın…"></textarea>
+          </div>
+          <div class="form-group form-col-2">
+            <div class="form-error">Bu alan zorunludur.</div>
+          </div>
+        </div>
+        <div class="guide-section" style="margin-top:20px">
+          <h2>Etiket / Çoklu Seçim</h2>
+          <div class="tag-list">
+            <span class="tag">PROD <span class="tag-remove">&times;</span></span>
+            <span class="tag">DEV <span class="tag-remove">&times;</span></span>
+            <input class="tag-input" placeholder="+ ekle"/>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-badges" class="tab-panel">
+        <div class="page-header"><h1 class="page-title">Rozetler</h1></div>
+        <div class="guide-row">
+          <span class="badge badge-success">Başarılı</span>
+          <span class="badge badge-warning">Bekliyor</span>
+          <span class="badge badge-danger">Reddedildi</span>
+          <span class="badge badge-info">İnceleniyor</span>
+          <span class="badge badge-accent">Vurgulu</span>
+          <span class="badge badge-neutral">Nötr</span>
+        </div>
+      </section>
+
+      <section id="tab-table" class="tab-panel">
+        <div class="page-header"><h1 class="page-title">Tablo (sürükle-genişlet kolonlar)</h1></div>
+        <div class="table-wrapper">
+          <table class="table table-fixed" id="demo-table">
+            <colgroup><col style="width:160px"/><col style="width:120px"/><col style="width:100px"/><col style="width:300px"/></colgroup>
+            <thead><tr><th>İsim</th><th>Analist</th><th>Durum</th><th>Detay</th></tr></thead>
+            <tbody>
+              <tr><td>Suspicious PowerShell</td><td>admin</td><td><span class="badge badge-warning">Bekliyor</span></td><td class="text-muted">Örnek satır — kolon kenarlarını sürükleyin</td></tr>
+              <tr><td>DNS Tunneling</td><td>lowtier</td><td><span class="badge badge-success">Tamamlandı</span></td><td class="text-muted">İkinci örnek satır</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tab-kpi" class="tab-panel">
+        <div class="page-header"><h1 class="page-title">KPI ve Panel Desenleri</h1></div>
+        <div class="kpi-modules">
+          <div class="kpi-module">
+            <div class="kpi-module-hdr">
+              <div class="kpi-module-name"><span class="kpi-module-dot" style="background:var(--amber)"></span>Modül A</div>
+              <span class="kpi-module-total">12 toplam</span>
+            </div>
+            <div class="kpi-module-stats">
+              <div class="kpi-stat"><div class="kpi-stat-val">3</div><div class="kpi-stat-lbl">Açık</div></div>
+              <div class="kpi-stat"><div class="kpi-stat-val" style="color:var(--green)">9</div><div class="kpi-stat-lbl">Başarılı</div></div>
+            </div>
+            <div class="kpi-module-rate">
+              <div class="kpi-rate-track"><div class="kpi-rate-fill" style="width:75%"></div></div>
+              <span class="kpi-rate-label">Başarı oranı: <strong>75%</strong></span>
+            </div>
+          </div>
+        </div>
+        <div class="mywork" style="margin-top:20px">
+          <div class="mywork-col">
+            <div class="mywork-hdr">Onayımı Bekleyenler <span class="mywork-count">2</span></div>
+            <div class="mywork-list">
+              <div class="mywork-item"><span class="mywork-type" style="color:var(--amber)">Tune</span><span class="mywork-title">Örnek talep</span><span class="badge badge-warning">Bekliyor</span></div>
+            </div>
+          </div>
+          <div class="mywork-col">
+            <div class="mywork-hdr">Üzerimdeki İşler <span class="mywork-count">0</span></div>
+            <div class="mywork-list"><div class="mywork-empty">Bekleyen bir iş yok.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-modal" class="tab-panel">
+        <div class="page-header"><h1 class="page-title">Modal</h1></div>
+        <button class="btn btn-primary" onclick="openModal('demo-modal')">Modal Aç</button>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="demo-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Örnek Modal</span>
+      <button class="modal-close" onclick="closeModal('demo-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="detail-row"><span class="detail-label">Alan 1</span><span class="detail-value">Değer</span></div>
+        <div class="detail-row"><span class="detail-label">Alan 2</span><span class="detail-value">Değer</span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('demo-modal')">Kapat</button>
+      <button class="btn btn-primary">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<script src="soc-ui.js"></script>
+<script>
+  initTabNav();
+  document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
+</script>
+</body>
+</html>
