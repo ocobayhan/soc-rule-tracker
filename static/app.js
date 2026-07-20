@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v28
+   SOC Tracker — Frontend  v29
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -438,7 +438,66 @@ async function goToItem(type, id) {
   m.open(id);
 }
 
-function loadDashboard() { loadMyWork(); loadKPI(); loadDashboardTables(); }
+// ---- Trend (son 12 ay) mini grafikleri ------------------------------------
+function _sparkPath(values, w, h, pad, max) {
+  const n = values.length;
+  if (!n) return "";
+  const dx = (w - pad * 2) / Math.max(1, n - 1);
+  return values.map((v, i) => {
+    const x = pad + i * dx;
+    const y = h - pad - (v / max) * (h - pad * 2);
+    return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+}
+
+function trendCard(title, months, series) {
+  const w = 280, h = 76, pad = 8;
+  const max = Math.max(1, ...series.flatMap(s => s.values));
+  const lines = series.map(s =>
+    `<path d="${_sparkPath(s.values, w, h, pad, max)}" fill="none" stroke="${s.color}"
+       stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>`).join("");
+  const dots = series.map(s => {
+    const n = s.values.length, dx = (w - pad * 2) / Math.max(1, n - 1);
+    const x = pad + (n - 1) * dx, y = h - pad - (s.values[n - 1] / max) * (h - pad * 2);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.4" fill="${s.color}"/>`;
+  }).join("");
+  const legend = series.map(s =>
+    `<span class="trend-leg"><span class="trend-dot" style="background:${s.color}"></span>${s.name}
+       <strong>${s.values[s.values.length - 1]}</strong></span>`).join("");
+  return `<div class="trend-card">
+    <div class="trend-title">${title}</div>
+    <svg viewBox="0 0 ${w} ${h}" class="trend-svg" preserveAspectRatio="none">${lines}${dots}</svg>
+    <div class="trend-legend">${legend}</div>
+    <div class="trend-range">${months[0]} → ${months[months.length - 1]}</div>
+  </div>`;
+}
+
+async function loadTrends() {
+  const box = document.getElementById("trend-cards");
+  if (!box) return;
+  try {
+    const d = await apiFetch("/api/trends?months=12");
+    const m = d.months;
+    box.innerHTML =
+      trendCard("Kural Tuning", m, [
+        { name: "Açılan",  values: d.tune.opened,    color: "var(--amber)" },
+        { name: "Kapanan", values: d.tune.closed,    color: "var(--green)" },
+      ]) +
+      trendCard("Use-Case", m, [
+        { name: "Açılan",  values: d.usecase.opened, color: "var(--teal)" },
+        { name: "Kapanan", values: d.usecase.closed, color: "var(--green)" },
+      ]) +
+      trendCard("Threat Hunt", m, [
+        { name: "Açılan",  values: d.hunt.opened,    color: "var(--purple)" },
+        { name: "Kapanan", values: d.hunt.closed,    color: "var(--green)" },
+      ]) +
+      trendCard("Hunt Saati", m, [
+        { name: "Saat",    values: d.hunt.hours,     color: "var(--blue)" },
+      ]);
+  } catch (_) {}
+}
+
+function loadDashboard() { loadMyWork(); loadKPI(); loadTrends(); loadDashboardTables(); }
 
 // ---------------------------------------------------------------------------
 // Backup (admin only)

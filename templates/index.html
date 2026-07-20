@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=11.10"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.11"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -196,6 +196,12 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- Trend (son 12 ay) -->
+    <div class="trend-section">
+      <div class="section-title">Trend — Son 12 Ay (Açılan / Kapanan)</div>
+      <div class="trend-cards" id="trend-cards"></div>
     </div>
 
     <div class="dashboard-row">
@@ -1534,6 +1540,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=28"></script>
+<script src="/static/app.js?v=29"></script>
 </body>
 </html>

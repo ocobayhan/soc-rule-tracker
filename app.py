@@ -930,6 +930,58 @@ def get_my_work():
 
     return jsonify({"awaiting_approval": awaiting, "assigned_to_me": assigned})
 
+def _last_n_months(n):
+    """Bugünden geriye n ayın 'YYYY-MM' listesi (eskiden yeniye sıralı)."""
+    y, m = date.today().year, date.today().month
+    out = []
+    for _ in range(n):
+        out.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+    return list(reversed(out))
+
+def _month_series(db, table, date_col, months, value_expr="COUNT(*)"):
+    """date_col ayına göre gruplanmış değerleri, months listesindeki her ay
+    için sırayla döndürür (o ayda kayıt yoksa 0)."""
+    rows = db.execute(
+        f"SELECT strftime('%Y-%m', {date_col}) mo, {value_expr} v FROM {table} "
+        f"WHERE {date_col} IS NOT NULL AND {date_col} != '' GROUP BY mo"
+    ).fetchall()
+    by = {r["mo"]: (r["v"] or 0) for r in rows}
+    return [by.get(mo, 0) for mo in months]
+
+@app.route("/api/trends")
+@login_required
+def get_trends():
+    """Son N ayın (varsayılan 12) ay-ay Açılan/Kapanan talep sayıları + Hunt
+    saati. Açılan = created_at; Kapanan = completed_at (üç modülde de başarı/
+    kapanış terminaline geçildiğinde set ediliyor — bkz. approve/complete
+    route'ları). SOC-CMM 'sürekli iyileşme' ekseni için trend kanıtı."""
+    db = get_db()
+    try:
+        n = min(max(int(request.args.get("months", 12)), 1), 24)
+    except (ValueError, TypeError):
+        n = 12
+    months = _last_n_months(n)
+    return jsonify({
+        "months": months,
+        "tune": {
+            "opened": _month_series(db, "tune_requests", "created_at", months),
+            "closed": _month_series(db, "tune_requests", "completed_at", months),
+        },
+        "usecase": {
+            "opened": _month_series(db, "usecase_requests", "created_at", months),
+            "closed": _month_series(db, "usecase_requests", "completed_at", months),
+        },
+        "hunt": {
+            "opened": _month_series(db, "threat_hunt_requests", "created_at", months),
+            "closed": _month_series(db, "threat_hunt_requests", "completed_at", months),
+            "hours":  _month_series(db, "threat_hunt_requests", "completed_at", months,
+                                    value_expr="COALESCE(SUM(hunt_duration_hours),0)"),
+        },
+    })
+
 # ---------------------------------------------------------------------------
 # Tune requests
 # ---------------------------------------------------------------------------

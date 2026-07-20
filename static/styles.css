@@ -893,6 +893,30 @@ input, select, textarea { font-family: inherit; }
 .mywork-meta { font-size: 11px; color: var(--text-3); white-space: nowrap; flex-shrink: 0; }
 @media (max-width: 900px) { .mywork { grid-template-columns: 1fr; } }
 
+/* ---- Trend mini grafikleri ---- */
+.trend-section { margin-bottom: 18px; }
+.trend-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 4px;
+}
+.trend-card {
+  background: var(--bg-1);
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--r);
+  padding: 10px 12px;
+}
+.trend-title { font-size: 12px; font-weight: 500; color: var(--text-1); margin-bottom: 6px; }
+.trend-svg { width: 100%; height: 60px; display: block; }
+.trend-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.trend-leg { font-size: 11px; color: var(--text-2); display: inline-flex; align-items: center; gap: 4px; }
+.trend-leg strong { color: var(--text-1); }
+.trend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.trend-range { font-size: 10px; color: var(--text-3); margin-top: 4px; }
+@media (max-width: 1100px) { .trend-cards { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px)  { .trend-cards { grid-template-columns: 1fr; } }
+
 /* ============================================================ FREQUENCY BADGE */
 .freq-badge {
   display: inline-block;
