@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v25
+   SOC Tracker — Frontend  v26
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1426,6 +1426,8 @@ const ACTION_TR = {
   "TEST_APPROVE_UC":"UC test onaylandı",
   "TEST_REJECT_UC": "UC test reddedildi",
   "VERIFY_AUDIT_CHAIN": "Audit zinciri doğrulandı",
+  "EDIT_SETTING":       "Sistem ayarı değiştirildi",
+  "EXPORT_AUDIT_LOG":   "Audit log Excel olarak indirildi",
   "VALIDATE_TUNE":          "Tune talebi onaylandı (ön onay)",
   "REJECT_VALIDATION_TUNE": "Tune talebi reddedildi (ön onay)",
   "VALIDATE_UC":            "UC talebi onaylandı (ön onay)",
@@ -1445,6 +1447,8 @@ const ACTION_CLS = {
   "EDIT_TUNE":   "audit-edit",   "EDIT_UC":   "audit-edit",   "EDIT_HUNT":   "audit-edit",   "EDIT_USER":   "audit-edit",  "REPORT_HUNT": "audit-edit",
   "DELETE_TUNE": "audit-delete", "DELETE_UC": "audit-delete", "DELETE_USER": "audit-delete", "DELETE_HUNT": "audit-delete",
   "VERIFY_AUDIT_CHAIN": "audit-edit",
+  "EDIT_SETTING": "audit-edit",
+  "EXPORT_AUDIT_LOG": "audit-edit",
   "VALIDATE_TUNE": "audit-claim", "VALIDATE_UC": "audit-claim", "VALIDATE_HUNT": "audit-claim",
   "REJECT_VALIDATION_TUNE": "audit-delete", "REJECT_VALIDATION_UC": "audit-delete", "REJECT_VALIDATION_HUNT": "audit-delete",
   "APPROVE_HUNT_RESULT": "audit-close", "REJECT_HUNT_RESULT": "audit-delete",
@@ -1546,6 +1550,16 @@ async function loadAuditLog() {
   } catch (e) { console.error(e); }
 }
 
+function exportAuditLog() {
+  const category = document.getElementById("audit-filter-category")?.value || "";
+  const username = document.getElementById("audit-filter-username")?.value || "";
+  const p = new URLSearchParams();
+  if (category) p.set("category", category);
+  if (username) p.set("username", username);
+  const qs = p.toString();
+  window.location.href = `/api/audit/export${qs ? "?" + qs : ""}`;
+}
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
@@ -1561,6 +1575,33 @@ async function loadSettings() {
   await loadUsersList();
   loadBackupList();
   loadUserStats();
+  loadXsoarUrlTemplate();
+}
+
+async function loadXsoarUrlTemplate() {
+  const input = document.getElementById("xsoar-url-template-input");
+  if (!input) return;
+  try {
+    const r = await apiFetch("/api/settings/xsoar-url-template");
+    input.value = r.value || "";
+  } catch (e) { console.error(e); }
+}
+
+async function saveXsoarUrlTemplate() {
+  const input = document.getElementById("xsoar-url-template-input");
+  const msg   = document.getElementById("xsoar-url-template-msg");
+  const value = input.value.trim();
+  msg.style.display = "none";
+  try {
+    await apiFetch("/api/settings/xsoar-url-template", { method: "PUT", body: JSON.stringify({ value }) });
+    msg.textContent = "Kaydedildi.";
+    msg.style.color = "var(--green)";
+    msg.style.display = "block";
+  } catch (e) {
+    msg.textContent = e.message;
+    msg.style.color = "var(--red)";
+    msg.style.display = "block";
+  }
 }
 
 async function loadUserStats() {

@@ -610,6 +610,61 @@ ayrıntısını verebiliriz").
   göründüğü, dropdown etiketlerinin doğru olduğu, ikonların artık farklı
   olduğu ve versiyon numarasının sidebar'da göründüğü teyit edildi.
 
+### Faz N — XSOAR Case URL Şablonu, Audit Log İndirme + Genişletilebilir Kolonlar (2026-07-20)
+
+- [x] **SOAR Case URL şablonu:** Ayarlar > XSOAR Entegrasyonu'na yeni bir
+  alan eklendi — kullanıcı bir kez `https://xsoar-soc.diasteknoloji.com/
+  Custom/caseinfoid/[CASENO]` gibi bir şablon tanımlıyor, sonrasında Tuning
+  talebi açarken/düzenlerken **case URL'i elle kopyalamak yerine sadece
+  case numarası** yeterli oluyor. Genel amaçlı `app_settings` (key/value)
+  tablosu + `get_app_setting`/`set_app_setting` yardımcıları eklendi —
+  ilk gerçek kullanım alanı bu, ama ileride başka tekil ayarlar için de
+  kullanılabilir. `build_xsoar_url(case_id)`, şablondaki `[CASENO]`'yu
+  URL-encode edilmiş case numarasıyla değiştiriyor; `PUT /api/settings/
+  xsoar-url-template` yer tutucusu doğruluyor (yoksa `400`).
+  Otomatik URL oluşturma üç noktaya eklendi — **elle girilen bir URL her
+  zaman önceliklidir**, sadece boş bırakılıp case "SOAR'da bulunamadı"
+  olarak işaretlenmemişse devreye giriyor: manuel Tuning oluşturma
+  (`POST /api/tune`), manuel Tuning düzenleme (`PUT /api/tune/<id>`), XSOAR
+  webhook'u (`POST /api/integrations/xsoar/tune`). Bkz.
+  `docs/xsoar_integration.md`.
+- [x] **Audit Log Excel indirme:** `GET /api/audit/export` — o an ekranda
+  seçili kategori/kullanıcı filtresini aynen uyguluyor (`_audit_filter_where`
+  yardımcı fonksiyonu `/api/audit` ile paylaşılıyor, filtre mantığı iki
+  yerde asla sapmıyor — Faz B'nin dersi burada da geçerli). İndirme kendi
+  `EXPORT_AUDIT_LOG` aksiyonuyla audit log'a yazılıyor (kim, ne zaman, hangi
+  filtreyle indirdi — sertifikasyon kanıtı için önemli, "kim baktı"
+  izlenebilir).
+- [x] **Audit Log kolonları genişletilip daraltılabiliyor:** tablo
+  `table-fixed` + 6 kolonluk `<colgroup>`'a çevrildi, Tune/UC/Hunt
+  tablolarında zaten var olan `makeColumnsResizable()` mekanizması hiç
+  değiştirilmeden otomatik uygulanıyor (sayfa başlangıcında tüm
+  `.table-fixed` tablolara jenerik uygulanıyor zaten).
+- [x] **Gerçek bug yakalandı ve düzeltildi:** `_audit_filter_where`
+  yardımcı fonksiyonunu ayrı bir fonksiyona çıkarırken (refactor sırasında)
+  `@app.route("/api/audit")` + `@login_required` dekoratörleri yanlışlıkla
+  `_audit_filter_where`'in üzerine yapışmış kalmıştı, asıl route handler'ı
+  olması gereken `get_audit()` hiç dekoratörsüz/route'suz kalmıştı. Sonuç:
+  Flask, parametresiz çağrılan `_audit_filter_where()`'i view function
+  olarak çalıştırıyor, `category`/`username` argümanları eksik olduğu için
+  her istekte `500` dönüyordu — audit log sayfası hiç yüklenmiyordu.
+  Gerçek tarayıcıda (Claude in Chrome) test ederken tabloda hiç satır
+  görünmemesi + konsolda "Sunucu hatası" üzerine Flask loglarından kök
+  nedeni bulundu; dekoratörler doğru fonksiyona (`get_audit`) taşındı.
+- [x] **Uçtan uca doğrulandı** (geçici debug admin hesabıyla, hem doğrudan
+  `requests` script'leriyle hem gerçek tarayıcıda): şablon kaydet/yükle/
+  geçersiz-değer reddi; case ID + boş URL ile oluşturma → otomatik URL;
+  elle girilen URL'in **geçersiz kılınmadığı**; "case bulunamadı"
+  işaretlenince otomatik URL **oluşturulmadığı**; düzenlemede case ID
+  değişince URL'in yeniden üretildiği; XSOAR webhook'unun aynı şablona
+  düştüğü; Excel indirmenin kategori/kullanıcı filtresine göre farklı
+  satır sayısı döndürdüğü (içerik açılıp doğrulandı); indirme sonrası
+  audit zincirinin (`verify_audit.py`) hâlâ geçerli olduğu; kolon
+  resize handle'larının doğru sütunlara (ilk/son hariç) eklendiği.
+  Test için oluşturulan geçici Tuning kayıtları ve debug admin hesabı
+  temizlendi, Dashboard'daki toplam talep sayısının teste başlamadan
+  önceki değere (9) döndüğü doğrulandı.
+
 ### Hunt Raporu Modalı Geliştirmeleri (2026-06-11)
 - [x] Öneriler / bulgular için liste yapısı (recommendations/vuln lists)
 - [x] Hunt bulgusundan otomatik Use-Case talebi oluşturma (`source_hunt_id` bağlantısı)

@@ -34,7 +34,7 @@ Anahtar eksik/yanlışsa `401` döner.
 | `rule_name` | ✅ | Tune edilmesi gereken SIEM kuralının adı. |
 | `environment` | ✅ | Ortam (örn. `PROD`, `DEV`) — mevcut ortamlar listesindeki bir isimle eşleşmeli. |
 | `analyst_comment` | ✅ | Playbook'u ilerleten analistin tune gerekçesi. `tune_reason` alanına yazılır. |
-| `xsoar_url` | opsiyonel | Incident'a doğrudan tıklanabilir link. Verilirse detay ekranında case ID bir link olarak gösterilir. |
+| `xsoar_url` | opsiyonel | Incident'a doğrudan tıklanabilir link. Verilirse detay ekranında case ID bir link olarak gösterilir. Boş bırakılırsa ve Ayarlar'da bir URL şablonu tanımlıysa, `xsoar_case_id`'den otomatik oluşturulur (bkz. aşağıdaki "SOAR Case URL Şablonu" bölümü). |
 | `requested_by` | opsiyonel | Talebi XSOAR tarafında ilerleten analistin **SOC Tracker'daki kullanıcı adı** (Ad Soyad değil). Eşleşen bir kullanıcı bulunursa `reporter` o kullanıcı olur — kişi bazlı istatistiklerde (`/api/stats/users`, Excel "Kullanıcı Aktivitesi" sayfası) bu talep artık doğru analiste sayılır. Eşleşmezse (yazım hatası, tracker'da olmayan biri) istek yine kabul edilir, `reporter` genel `"XSOAR Entegrasyonu"` etiketine düşer — hiçbir istek bu yüzden reddedilmez. |
 
 Eksik zorunlu alan varsa `400` ve hangi alan(lar)ın eksik olduğunu belirten
@@ -80,6 +80,32 @@ tarafındaki ekiple birlikte yapılmalı.
 integrations/xsoar/<modül>` ucu + `api_key_required` decorator'ının
 yeniden kullanılması) ileride Use-Case ve Threat Hunt için de
 uygulanabilir.
+
+## SOAR Case URL Şablonu (2026-07-20)
+
+Çoğu kurulumda SOAR incident URL'leri sondaki case numarası dışında hep
+aynıdır. Bunun için Ayarlar > XSOAR Entegrasyonu ekranında bir kere bir
+şablon tanımlanabilir, örn.:
+
+```
+https://xsoar-soc.example.com/Custom/caseinfoid/[CASENO]
+```
+
+`[CASENO]` yer tutucusu zorunludur (`PUT /api/settings/xsoar-url-template`
+bunu doğrular, yoksa `400` döner) — kaydedilirken `xsoar_case_id` URL-encode
+edilerek yerine konur.
+
+Şablon tanımlıysa, aşağıdaki üç noktada **`xsoar_url` boş bırakıldığında**
+(ve case "SOAR'da bulunamadı" olarak işaretlenmediğinde) otomatik
+oluşturulur — elle girilen bir URL her zaman şablona göre önceliklidir:
+
+- Manuel Tuning talebi oluşturma (`POST /api/tune`)
+- Manuel Tuning talebi düzenleme (`PUT /api/tune/<id>`)
+- Bu webhook (`POST /api/integrations/xsoar/tune`) — `xsoar_url` gönderilmezse
+
+Şablon, `app_settings` tablosunda `xsoar_url_template` anahtarıyla saklanır
+(`get_app_setting`/`set_app_setting`, `app.py`). Değişiklikler audit log'a
+`EDIT_SETTING` aksiyonuyla, eski→yeni değer detayında yazılır.
 
 ## Manuel Tuning Taleplerinde SOAR Case Zorunluluğu (2026-07-19)
 

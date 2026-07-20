@@ -50,7 +50,7 @@ AUDIT_CATEGORIES = {
     "work_done":      ["CLOSE_TUNE", "CLOSE_UC", "CLOSE_HUNT", "REPORT_HUNT"],
     "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER"],
     "delete":         ["DELETE_TUNE", "DELETE_UC", "DELETE_HUNT", "DELETE_USER"],
-    "system":         ["EXPORT_HUNT_PDF", "VERIFY_AUDIT_CHAIN"],
+    "system":         ["EXPORT_HUNT_PDF", "VERIFY_AUDIT_CHAIN", "EDIT_SETTING", "EXPORT_AUDIT_LOG"],
 }
 
 # Onay seviyesi (tier) — role'den (admin/analyst/settings) bağımsız ikinci bir
@@ -223,6 +223,16 @@ def init_db():
             name   TEXT NOT NULL,
             tactic TEXT NOT NULL,
             url    TEXT DEFAULT ''
+        )
+    """)
+
+    # Genel amaçlı basit key-value ayar deposu (2026-07-20) — ör. XSOAR case
+    # URL şablonu. Yeni bir ortam değişkeni/deploy gerektirmeden, Ayarlar
+    # sayfasından canlıda değiştirilebilen tekil değerler için.
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT
         )
     """)
 
@@ -464,6 +474,33 @@ def get_hunt_program_stats(month=None):
         "hunt_total_hours": hours_row["s"],
     }
 
+def get_app_setting(key, default=None):
+    db = get_db()
+    row = db.execute("SELECT value FROM app_settings WHERE key=?", (key,)).fetchone()
+    return row["value"] if row and row["value"] is not None else default
+
+def set_app_setting(key, value):
+    db = get_db()
+    db.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (key, value),
+    )
+    db.commit()
+
+def build_xsoar_url(case_id):
+    """XSOAR_URL_TEMPLATE ayarı tanımlıysa, case ID'den tam case URL'i
+    oluşturur (bkz. Ayarlar > XSOAR Entegrasyonu, docs/xsoar_integration.md).
+    Şablon yoksa veya case_id boşsa None döner — çağıran yer bu durumda
+    kullanıcının kendi girdiği (varsa) URL'i korumalı."""
+    if not case_id:
+        return None
+    template = get_app_setting("xsoar_url_template")
+    if not template or "[CASENO]" not in template:
+        return None
+    from urllib.parse import quote
+    return template.replace("[CASENO]", quote(str(case_id), safe=""))
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -660,6 +697,25 @@ def list_analysts():
 def api_user_stats():
     return jsonify(get_user_activity_stats())
 
+@app.route("/api/settings/xsoar-url-template", methods=["GET"])
+@login_required
+@settings_required
+def get_xsoar_url_template_setting():
+    return jsonify({"value": get_app_setting("xsoar_url_template", "") or ""})
+
+@app.route("/api/settings/xsoar-url-template", methods=["PUT"])
+@login_required
+@settings_required
+def set_xsoar_url_template_setting():
+    value = (request.json or {}).get("value", "").strip()
+    if value and "[CASENO]" not in value:
+        return jsonify({"error": "Şablon [CASENO] yer tutucusunu içermelidir, örn: https://.../caseinfoid/[CASENO]"}), 400
+    old_value = get_app_setting("xsoar_url_template", "") or ""
+    set_app_setting("xsoar_url_template", value)
+    write_audit("EDIT_SETTING", "app_settings", None,
+                f"XSOAR Case URL Şablonu: {old_value or '—'} → {value or '—'}")
+    return jsonify({"value": value})
+
 # ---------------------------------------------------------------------------
 # MITRE ATT&CK cache
 # ---------------------------------------------------------------------------
@@ -849,6 +905,16 @@ def create_tune():
     if session.get("role") == "analyst":
         data["reporter"] = session.get("username")
 
+    # Case linki girilmemişse ve gerçek bir SOAR case'iyse (manuel/case-yok
+    # değilse), Ayarlar'daki şablondan otomatik oluştur (bkz. build_xsoar_url).
+    xsoar_case_id  = str(data["xsoar_case_id"]).strip()
+    xsoar_missing  = bool(data.get("xsoar_case_missing"))
+    xsoar_url_val  = (data.get("xsoar_url") or "").strip()
+    if not xsoar_url_val and not xsoar_missing:
+        xsoar_url_val = build_xsoar_url(xsoar_case_id) or None
+    else:
+        xsoar_url_val = xsoar_url_val or None
+
     db  = get_db()
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_id = next_available_id(db, "tune_requests")
@@ -869,9 +935,9 @@ def create_tune():
         data.get("evidence_image","") or None,
         data.get("resolution_image","") or None,
         now, None, now,
-        str(data["xsoar_case_id"]).strip(),
-        (data.get("xsoar_url") or "").strip() or None,
-        "Evet" if data.get("xsoar_case_missing") else "Hayır",
+        xsoar_case_id,
+        xsoar_url_val,
+        "Evet" if xsoar_missing else "Hayır",
     ))
     db.commit()
     new_row = db.execute("SELECT * FROM tune_requests WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -910,6 +976,9 @@ def xsoar_create_tune():
         if match:
             reporter = match["username"]
 
+    webhook_case_id = str(data["xsoar_case_id"]).strip()
+    webhook_url = (data.get("xsoar_url") or "").strip() or build_xsoar_url(webhook_case_id) or None
+
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     new_id = next_available_id(db, "tune_requests")
     cur = db.execute("""
@@ -924,7 +993,7 @@ def xsoar_create_tune():
         str(data["analyst_comment"]).strip(),
         "", "", "", STATUS_PENDING_VALIDATION, None, None,
         now, None, now,
-        str(data["xsoar_case_id"]).strip(), (data.get("xsoar_url") or "").strip() or None,
+        webhook_case_id, webhook_url,
     ))
     db.commit()
     new_row = db.execute("SELECT * FROM tune_requests WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1031,6 +1100,16 @@ def update_tune(item_id):
         created_at_val = row["created_at"]
         new_id_val     = item_id
 
+    # Case linki boşsa ve gerçek bir SOAR case'iyse, Ayarlar'daki şablondan
+    # otomatik oluştur (bkz. build_xsoar_url, create_tune'daki aynı desen).
+    new_case_id = str(data.get("xsoar_case_id", row["xsoar_case_id"] or "")).strip() or None
+    new_missing = "Evet" if data.get("xsoar_case_missing", row["xsoar_case_missing"] == "Evet") else "Hayır"
+    new_url     = (data.get("xsoar_url", row["xsoar_url"]) or "").strip()
+    if not new_url and new_missing == "Hayır":
+        new_url = build_xsoar_url(new_case_id) or None
+    else:
+        new_url = new_url or None
+
     db.execute("""
         UPDATE tune_requests SET
           id=?,reporter=?,environment=?,rule_name=?,tune_reason=?,trigger_frequency=?,
@@ -1051,9 +1130,9 @@ def update_tune(item_id):
         new_status,
         data.get("evidence_image",    row["evidence_image"]) or None,
         data.get("resolution_image",  row["resolution_image"]) or None,
-        str(data.get("xsoar_case_id", row["xsoar_case_id"] or "")).strip() or None,
-        (data.get("xsoar_url", row["xsoar_url"]) or "").strip() or None,
-        "Evet" if data.get("xsoar_case_missing", row["xsoar_case_missing"] == "Evet") else "Hayır",
+        new_case_id,
+        new_url,
+        new_missing,
         created_at_val, completed_at, tuned_at, approval_deadline, now, item_id
     ))
     db.commit()
@@ -2030,6 +2109,21 @@ def delete_user(user_id):
 # ---------------------------------------------------------------------------
 # Audit log
 # ---------------------------------------------------------------------------
+def _audit_filter_where(category, username):
+    """category/username query param'larından WHERE cümlesi + parametre listesi
+    üretir — /api/audit ve /api/audit/export arasında paylaşılır, filtre
+    mantığı iki yerde asla sapmaz (bkz. Faz B'deki ders)."""
+    conditions, params = [], []
+    if category in AUDIT_CATEGORIES:
+        actions = AUDIT_CATEGORIES[category]
+        conditions.append(f"action IN ({','.join('?' for _ in actions)})")
+        params.extend(actions)
+    if username:
+        conditions.append("username = ?")
+        params.append(username)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    return where, params
+
 @app.route("/api/audit")
 @login_required
 def get_audit():
@@ -2039,22 +2133,67 @@ def get_audit():
     limit    = min(int(request.args.get("limit", 300)), 1000)
     category = request.args.get("category", "").strip()
     username = request.args.get("username", "").strip()
-
-    conditions, params = [], []
-    if category in AUDIT_CATEGORIES:
-        actions = AUDIT_CATEGORIES[category]
-        conditions.append(f"action IN ({','.join('?' for _ in actions)})")
-        params.extend(actions)
-    if username:
-        conditions.append("username = ?")
-        params.append(username)
-
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    where, params = _audit_filter_where(category, username)
     rows  = db.execute(
         f"SELECT * FROM audit_log {where} ORDER BY created_at DESC LIMIT ?",
         (*params, limit)
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+@app.route("/api/audit/export")
+@login_required
+def export_audit():
+    """Audit Log'u (o an ekrandaki kategori/kullanıcı filtresiyle) Excel
+    olarak indirir. /api/export'taki Excel yardımcılarını (openpyxl) yeniden
+    kullanır."""
+    if session.get("role") != "admin":
+        return jsonify({"error": "Forbidden"}), 403
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        return jsonify({"error": "Excel dışa aktarım için openpyxl kurulu değil"}), 500
+
+    db       = get_db()
+    category = request.args.get("category", "").strip()
+    username = request.args.get("username", "").strip()
+    where, params = _audit_filter_where(category, username)
+    rows = db.execute(
+        f"SELECT * FROM audit_log {where} ORDER BY created_at DESC", params
+    ).fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Audit Log"
+    headers = ["Zaman", "Kullanıcı", "İşlem", "Tip", "Kayıt ID", "Detay"]
+    hdr_font = Font(bold=True, color="FFFFFF")
+    hdr_fill = PatternFill("solid", fgColor="5E6AD2")
+    hdr_align = Alignment(horizontal="left", vertical="center")
+    for ci, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=ci, value=h)
+        c.font, c.fill, c.alignment = hdr_font, hdr_fill, hdr_align
+    ws.freeze_panes = "A2"
+
+    for r in rows:
+        ws.append([
+            r["created_at"], r["username"], r["action"],
+            r["record_type"] or "", r["record_id"] or "", r["detail"] or "",
+        ])
+    for col in ws.columns:
+        width = max((len(str(c.value)) for c in col if c.value), default=8)
+        ws.column_dimensions[get_column_letter(col[0].column)].width = min(max(width + 2, 8), 80)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    write_audit("EXPORT_AUDIT_LOG", "audit", None,
+                f"{len(rows)} kayıt indirildi" + (f" | kategori: {category}" if category else "")
+                + (f" | kullanıcı: {username}" if username else ""))
+    return send_file(
+        buf, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True, download_name=f"audit_log_{date.today().isoformat()}.xlsx",
+    )
 
 @app.route("/api/audit/verify", methods=["POST"])
 @login_required

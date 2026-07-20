@@ -357,6 +357,7 @@
       <div style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="verifyAuditChain()">Zinciri Doğrula</button>
         <button class="btn btn-secondary" onclick="loadAuditLog()">Yenile</button>
+        <button class="btn btn-export" onclick="exportAuditLog()" title="Ekrandaki filtreyle Excel indir">&#8675; Excel</button>
       </div>
     </div>
     <div id="audit-verify-result" style="display:none;margin-bottom:12px"></div>
@@ -371,13 +372,21 @@
       <button class="btn-ghost-sm" onclick="clearAuditFilters()">Temizle</button>
     </div>
     <div class="table-wrapper">
-      <table class="table">
+      <table class="table table-fixed">
+        <colgroup>
+          <col style="width:140px"/>
+          <col style="width:140px"/>
+          <col style="width:180px"/>
+          <col style="width:90px"/>
+          <col style="width:70px"/>
+          <col style="width:300px"/>
+        </colgroup>
         <thead><tr>
-          <th style="width:140px">Zaman</th>
-          <th style="width:120px">Kullanıcı</th>
-          <th style="width:160px">İşlem</th>
-          <th style="width:80px">Tip</th>
-          <th style="width:60px">ID</th>
+          <th>Zaman</th>
+          <th>Kullanıcı</th>
+          <th>İşlem</th>
+          <th>Tip</th>
+          <th>ID</th>
           <th>Detay</th>
         </tr></thead>
         <tbody id="audit-tbody"></tbody>
@@ -489,6 +498,22 @@
           <code>docs/xsoar_integration.md</code> — bu dosyayı entegrasyonu
           kuracak ekiple paylaşabilirsiniz.
         </p>
+
+        <div class="detail-section-title" style="margin-top:16px">SOAR Case URL Şablonu</div>
+        <p style="margin:6px 0 8px">
+          SOAR'daki incident URL'lerinin sonundaki case numarası dışında hep
+          aynı olduğu durumlar için: şablonu bir kere burada tanımlayın,
+          analistler Tuning talebi açarken artık tam URL'i kopyalamak yerine
+          sadece <strong>case numarasını</strong> girsin — link otomatik
+          oluşur. <code>[CASENO]</code> yer tutucusu, girilen case numarasıyla
+          değiştirilir.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="xsoar-url-template-input" class="form-input input-sm" style="flex:1"
+                 placeholder="https://xsoar-soc.diasteknoloji.com/Custom/caseinfoid/[CASENO]"/>
+          <button class="btn btn-primary" onclick="saveXsoarUrlTemplate()">Kaydet</button>
+        </div>
+        <div id="xsoar-url-template-msg" style="display:none;font-size:11px;margin-top:6px"></div>
 
         <div class="detail-section-title" style="margin-top:16px">Şu an kapsamı</div>
         <p style="margin:6px 0 0">
@@ -632,7 +657,7 @@
           <input class="form-input" id="tune-xsoar-case-id" type="text" placeholder="örn. INC-12345"/>
         </div>
         <div class="form-group" id="tune-xsoar-url-group">
-          <label class="form-label">SOAR Case Linki</label>
+          <label class="form-label">SOAR Case Linki <span class="text-muted" style="font-weight:400">(boş bırakılırsa case no'dan otomatik oluşturulur)</span></label>
           <input class="form-input" id="tune-xsoar-url" type="url" placeholder="https://…"/>
         </div>
         <div class="form-group form-col-2">
@@ -715,7 +740,7 @@
           <input class="form-input" id="edit-tune-xsoar-case-id" type="text" placeholder="örn. INC-12345"/>
         </div>
         <div class="form-group" id="edit-tune-xsoar-url-group">
-          <label class="form-label">SOAR Case Linki</label>
+          <label class="form-label">SOAR Case Linki <span class="text-muted" style="font-weight:400">(boş bırakılırsa case no'dan otomatik oluşturulur)</span></label>
           <input class="form-input" id="edit-tune-xsoar-url" type="url" placeholder="https://…"/>
         </div>
         <div class="form-group form-col-2">
@@ -1494,6 +1519,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=25"></script>
+<script src="/static/app.js?v=26"></script>
 </body>
 </html>
