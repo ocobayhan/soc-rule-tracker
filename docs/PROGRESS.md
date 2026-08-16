@@ -756,6 +756,16 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
   `subprocess.run`'da `FileNotFoundError` veriyordu) — dev restart talimatı
   buna göre not edilmeli. Test hesabı temizlendi, audit zinciri geçerli
   (209 kayıt, 185 zincirli).
+- [x] **Renk uyumu (2026-08-16, takip):** Kullanıcı logoyla birlikte mavi
+  vurgu rengini (`--accent: #5E6AD2`) sevmedi — logonun arka planıyla
+  (`#1A1A1A`, dosyadan piksel örneklenerek doğrulandı) uyumlu olması için
+  `--accent` bu tona çevrildi. Bu tek değişken; bölüm başlıkları, header alt
+  çizgisi ve ortam etiketleri (`.tag`) hepsi ondan besleniyor — tek yerden
+  değişip her yerde tutarlı oldu. `.tag`'in eski maviye sabitlenmiş rgba
+  arka planı da (`rgba(94,106,210,...)` → `rgba(26,26,26,...)`) ayrıca
+  güncellendi (CSS değişkeni değil, elle yazılmış rgba olduğu için otomatik
+  takip etmiyordu). PDF yeniden üretilip PNG'ye çevrilerek görsel doğrulandı,
+  test hesabı temizlendi, audit zinciri geçerli (210 kayıt, 186 zincirli).
 - [x] **Uçtan uca doğrulandı** (geçici debug admin, requests + PyMuPDF ile
   PDF sayfalarını PNG'ye render edip görsel inceleme): eski formatlı 4
   tamamlanmış hunt (id 1,4,6,7) hâlâ hatasız PDF üretiyor (geriye dönük
