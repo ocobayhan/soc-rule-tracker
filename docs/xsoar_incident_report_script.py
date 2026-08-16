@@ -119,41 +119,46 @@ def file_to_data_uri(file_bytes, mime="image/png"):
 # XSOAR Automation — Arguments sekmesinde tanımlanacak alanlar
 # ---------------------------------------------------------------------------
 # Bu script'i XSOAR'da bir Automation olarak kaydederken, "Arguments" sekmesine
-# aşağıdaki alanları ekleyin (isim/açıklama/zorunlu — Value sütununu DOLDURMAYIN,
-# o playbook'ta bu automation'ı bir task olarak kullandığınızda, o task'ın kendi
-# ekranında doldurulur, genelde ${incident.xxx} ile):
+# aşağıdaki alanları ekleyin (Value sütununu DOLDURMAYIN — o, playbook'ta bu
+# automation'ı bir task olarak kullandığınızda o task'ın kendi ekranında
+# doldurulur, genelde ${incident.xxx} ile):
 #
-#   case_id        | Zorunlu değil | Varsayılan değer alanına: ${incident.id}
-#   title          | Zorunlu değil | Varsayılan değer alanına: ${incident.name}
-#   environment    | ZORUNLU       | örn. playbook'ta sabit "PROD" ya da bir custom field
-#   sections       | ZORUNLU       | JSON dizi metni — bkz. aşağıdaki not
-#   requested_by   | Zorunlu değil | Varsayılan değer alanına: ${incident.owner}
-#   api_key        | ZORUNLU       | Type: Credentials — düz metin YAZMAYIN, bir
-#                  |               | XSOAR Credentials (secret) seçin
+#   case_id          | Zorunlu değil | Varsayılan: ${incident.id}
+#   title            | Zorunlu değil | Varsayılan: ${incident.name}
+#   environment      | ZORUNLU       | örn. sabit "PROD" ya da bir custom field
+#   summary          | Zorunlu değil | "Olay Özeti" bölümünün metni
+#   findings         | Zorunlu değil | "Bulgular" bölümünün metni
+#   impact           | Zorunlu değil | "Etki" bölümünün metni
+#   actions_taken    | Zorunlu değil | "Alınan Aksiyonlar" bölümünün metni
+#   recommendations  | Zorunlu değil | "Öneriler" bölümünün metni
+#   requested_by     | Zorunlu değil | Varsayılan: ${incident.owner}
+#   api_key          | ZORUNLU       | Type: Credentials — düz metin YAZMAYIN
 #
-# 'sections' için: playbook task'ının bu argümana verdiği DEĞER, şuna benzer bir
-# JSON metni olmalı (bunu genelde bir önceki "Set a value in context" veya küçük
-# bir yardımcı script ile oluşturursunuz):
-#   [{"heading": "Olay Özeti", "text": "..."}, {"heading": "Etki", "text": "..."}]
-# JSON yazmak istemiyorsanız aşağıdaki main() bunu tolere eder: 'sections' geçerli
-# JSON değilse, tek bölümlük bir rapor olarak (başlık "Olay Özeti", metin = girdiğiniz
-# düz metnin tamamı) otomatik sarmalanır — küçük/basit raporlar için JSON'a hiç
-# gerek kalmaz.
+# Her satır JSON DEĞİL — normal düz metin kutusu. Argümanı boş bırakırsanız o
+# bölüm rapora hiç girmez (örn. sadece summary+findings doldurup diğer üçünü
+# boş bırakırsanız, raporda sadece "Olay Özeti" ve "Bulgular" görünür).
+# Sıra ve başlık metinleri SECTION_ARGS listesinden geliyor — yeni bir bölüm
+# eklemek/başlığı Türkçeleştirmek/sırayı değiştirmek isterseniz sadece o
+# listeyi düzenlemeniz yeterli, main()'e dokunmanız gerekmez.
 
-import json
+SECTION_ARGS = [
+    ("summary",         "Olay Özeti"),
+    ("findings",        "Bulgular"),
+    ("impact",          "Etki"),
+    ("actions_taken",   "Alınan Aksiyonlar"),
+    ("recommendations", "Öneriler"),
+]
 
 
 def main():
     args = demisto.args()  # noqa: F821
     incident = demisto.incident()  # noqa: F821
 
-    sections_raw = args.get("sections", "")
-    try:
-        sections = json.loads(sections_raw)
-        if not isinstance(sections, list):
-            raise ValueError
-    except (ValueError, TypeError):
-        sections = [{"heading": "Olay Özeti", "text": sections_raw}]
+    sections = []
+    for arg_name, heading in SECTION_ARGS:
+        text = (args.get(arg_name) or "").strip()
+        if text:
+            sections.append({"heading": heading, "text": text})
 
     ok, result = send_incident_report(
         api_key=args.get("api_key"),
