@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=11.12"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.13"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -252,27 +252,35 @@
       </select>
       <button class="btn btn-secondary" onclick="loadTune()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearTuneFilters()">Temizle</button>
+      <div class="col-toggle-wrap">
+        <button class="btn-ghost-sm" onclick="toggleColumnPanel('tune', this)">&#9776; Kolonlar</button>
+        <div class="col-toggle-panel" id="tune-col-panel" style="display:none"></div>
+      </div>
     </div>
     <div class="table-wrapper">
-      <table class="table table-fixed">
+      <table class="table table-fixed" id="tune-table">
         <colgroup>
           <col class="col-dot"/><col class="col-id"/>
-          <col class="col-name"/><col class="col-env"/>
+          <col class="col-name"/><col style="width:90px"/><col class="col-env"/>
           <col class="col-person"/><col class="col-reason"/><col class="col-freq"/>
           <col class="col-analyst"/><col class="col-status"/>
           <col class="col-date"/><col class="col-date"/><col class="col-act"/>
         </colgroup>
-        <thead><tr>
+        <thead>
+        <tr>
           <th></th>
           <th class="th-sortable" id="th-tune-id" onclick="sortTune('id')"># <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-tune-rule_name" onclick="sortTune('rule_name')">Kural İsmi <span class="sort-arrow"></span></th>
+          <th>Case No</th>
           <th>Ortam</th><th>Raporlayan</th>
           <th>Tune Nedeni</th><th>Sıklık</th><th>Tune Eden</th>
           <th class="th-sortable" id="th-tune-status" onclick="sortTune('status')">Durum <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-tune-created_at" onclick="sortTune('created_at')">Raporlandı <span class="sort-arrow"></span></th>
           <th>Tamamlandı</th>
           <th>İşlem</th>
-        </tr></thead>
+        </tr>
+        <tr id="tune-filter-row" class="col-filter-row"></tr>
+        </thead>
         <tbody id="tune-tbody"></tbody>
       </table>
       <div id="tune-empty" class="empty-state" style="display:none">Henüz tuning talebi yok.</div>
@@ -301,9 +309,13 @@
       </select>
       <button class="btn btn-secondary" onclick="loadUC()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearUCFilters()">Temizle</button>
+      <div class="col-toggle-wrap">
+        <button class="btn-ghost-sm" onclick="toggleColumnPanel('uc', this)">&#9776; Kolonlar</button>
+        <div class="col-toggle-panel" id="uc-col-panel" style="display:none"></div>
+      </div>
     </div>
     <div class="table-wrapper">
-      <table class="table table-fixed">
+      <table class="table table-fixed" id="uc-table">
         <colgroup>
           <col class="col-dot"/><col class="col-id"/>
           <col class="col-desc"/><col class="col-env"/>
@@ -311,7 +323,8 @@
           <col class="col-analyst"/><col class="col-status"/>
           <col class="col-date"/><col class="col-date"/><col class="col-act"/>
         </colgroup>
-        <thead><tr>
+        <thead>
+        <tr>
           <th></th>
           <th class="th-sortable" id="th-uc-id" onclick="sortUC('id')"># <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-uc-usecase_description" onclick="sortUC('usecase_description')">Use-Case <span class="sort-arrow"></span></th>
@@ -321,7 +334,9 @@
           <th class="th-sortable" id="th-uc-created_at" onclick="sortUC('created_at')">Talep Tarihi <span class="sort-arrow"></span></th>
           <th>Yazılma Tarihi</th>
           <th>İşlem</th>
-        </tr></thead>
+        </tr>
+        <tr id="uc-filter-row" class="col-filter-row"></tr>
+        </thead>
         <tbody id="uc-tbody"></tbody>
       </table>
       <div id="uc-empty" class="empty-state" style="display:none">Henüz use-case talebi yok.</div>
@@ -349,6 +364,10 @@
       </select>
       <button class="btn btn-secondary" onclick="loadHunt()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearHuntFilters()">Temizle</button>
+      <div class="col-toggle-wrap">
+        <button class="btn-ghost-sm" onclick="toggleColumnPanel('hunt', this)">&#9776; Kolonlar</button>
+        <div class="col-toggle-panel" id="hunt-col-panel" style="display:none"></div>
+      </div>
     </div>
     <div class="table-wrapper">
       <table class="table table-fixed" id="hunt-table">
@@ -359,7 +378,8 @@
           <col class="col-status"/>
           <col class="col-date"/><col class="col-date"/><col class="col-act"/>
         </colgroup>
-        <thead><tr>
+        <thead>
+        <tr>
           <th></th>
           <th class="th-sortable" id="th-hunt-id" onclick="sortHunt('id')"># <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-hunt-hunt_subject" onclick="sortHunt('hunt_subject')">Hunt Konusu <span class="sort-arrow"></span></th>
@@ -368,7 +388,9 @@
           <th class="th-sortable" id="th-hunt-created_at" onclick="sortHunt('created_at')">Talep Tarihi <span class="sort-arrow"></span></th>
           <th>Tamamlandı</th>
           <th>İşlem</th>
-        </tr></thead>
+        </tr>
+        <tr id="hunt-filter-row" class="col-filter-row"></tr>
+        </thead>
         <tbody id="hunt-tbody"></tbody>
       </table>
       <div id="hunt-empty" class="empty-state" style="display:none">Henüz hunt talebi yok.</div>
@@ -1543,6 +1565,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=31"></script>
+<script src="/static/app.js?v=32"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v31
+   SOC Tracker — Frontend  v32
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -700,6 +700,140 @@ function updateSortUI(prefix, activeCol, dir) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Tablo kolonları: göster/gizle + kolona göre filtre (Tune/UC/Hunt ortak)
+// ---------------------------------------------------------------------------
+const _tableColumns = {};                        // tableKey -> columns config
+const _colFilters    = { tune: {}, uc: {}, hunt: {} };
+
+/** columns: [{ index, key, label, filterType: 'text'|'select' }] — index,
+ * <colgroup>/<thead>/<tbody><tr> içindeki 0-based sütun sırası. İlk (durum
+ * noktası) ve son (İşlem) kolonlar bilinçli olarak listede yok — diğer
+ * tablolardaki gibi (bkz. makeColumnsResizable) hep görünür kalırlar. */
+function initTableColumns(tableKey, columns) {
+  _tableColumns[tableKey] = columns;
+  applyColumnVisibility(tableKey);
+}
+
+function _colStorageKey(tableKey) { return `soc_cols_${tableKey}`; }
+
+function getHiddenCols(tableKey) {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(_colStorageKey(tableKey)) || "[]"));
+  } catch { return new Set(); }
+}
+
+function applyColumnVisibility(tableKey) {
+  const columns = _tableColumns[tableKey];
+  const table = document.getElementById(`${tableKey}-table`);
+  if (!table || !columns) return;
+  const hidden = getHiddenCols(tableKey);
+  const ths = table.querySelectorAll("thead tr:first-child th");
+  const filterCells = document.querySelectorAll(`#${tableKey}-filter-row td`);
+  columns.forEach(c => {
+    const show = !hidden.has(c.key);
+    if (ths[c.index])         ths[c.index].style.display = show ? "" : "none";
+    if (filterCells[c.index]) filterCells[c.index].style.display = show ? "" : "none";
+  });
+  applyColumnVisibilityToBody(tableKey);
+}
+
+function applyColumnVisibilityToBody(tableKey) {
+  const columns = _tableColumns[tableKey];
+  const table = document.getElementById(`${tableKey}-table`);
+  if (!table || !columns) return;
+  const hidden = getHiddenCols(tableKey);
+  table.querySelectorAll("tbody tr").forEach(tr => {
+    columns.forEach(c => {
+      const td = tr.children[c.index];
+      if (td) td.style.display = hidden.has(c.key) ? "none" : "";
+    });
+  });
+}
+
+/** Sonuç/panel kutularını bir tetikleyici elemente göre position:fixed
+ * konumlandırır — üst konteynerin overflow'una takılmaz (bkz. sidebar arama
+ * kutusu, aynı yaklaşım). */
+function positionFixedBox(box, anchorEl, gap = 4) {
+  if (!box || !anchorEl) return;
+  const rect = anchorEl.getBoundingClientRect();
+  box.style.left = Math.round(rect.left) + "px";
+  box.style.top  = Math.round(rect.bottom + gap) + "px";
+}
+
+function toggleColumnPanel(tableKey, btn) {
+  const panel = document.getElementById(`${tableKey}-col-panel`);
+  if (!panel) return;
+  const opening = panel.style.display !== "block";
+  document.querySelectorAll(".col-toggle-panel").forEach(p => p.style.display = "none");
+  if (!opening) return;
+  const columns = _tableColumns[tableKey] || [];
+  const hidden = getHiddenCols(tableKey);
+  panel.innerHTML = columns.map(c => `
+    <label class="col-toggle-item">
+      <input type="checkbox" ${hidden.has(c.key) ? "" : "checked"}
+             onchange="onColumnToggle('${tableKey}','${c.key}',this.checked)"/>
+      ${esc(c.label)}
+    </label>`).join("");
+  positionFixedBox(panel, btn);
+  panel.style.display = "block";
+}
+document.addEventListener("click", e => {
+  if (!e.target.closest(".col-toggle-wrap")) {
+    document.querySelectorAll(".col-toggle-panel").forEach(p => p.style.display = "none");
+  }
+});
+
+function onColumnToggle(tableKey, key, checked) {
+  const hidden = getHiddenCols(tableKey);
+  if (checked) hidden.delete(key); else hidden.add(key);
+  localStorage.setItem(_colStorageKey(tableKey), JSON.stringify([...hidden]));
+  applyColumnVisibility(tableKey);
+}
+
+/** Kolona göre filtre satırını (thead altındaki ikinci <tr>) yeniden kurar —
+ * her veri yüklemesinde (loadTune/loadUC/loadHunt) çağrılır ki select
+ * tipindeki kolonların seçenekleri o anki veriden türesin. Filtrenin kendisi
+ * (_colFilters) veri yeniden yüklenene kadar korunur. */
+function buildColumnFilterRow(tableKey, rows) {
+  const columns = _tableColumns[tableKey];
+  const row = document.getElementById(`${tableKey}-filter-row`);
+  if (!row || !columns) return;
+  const current = _colFilters[tableKey];
+  row.innerHTML = `<td></td>` + columns.map(c => {
+    if (c.filterType === "select") {
+      const values = [...new Set(rows.map(r => r[c.key]).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b), "tr"));
+      const sel = current[c.key] || "";
+      return `<td><select class="col-filter-input" onchange="onColumnFilterInput('${tableKey}','${c.key}',this.value)">
+        <option value="">Tümü</option>
+        ${values.map(v => `<option value="${esc(v)}" ${v === sel ? "selected" : ""}>${esc(v)}</option>`).join("")}
+      </select></td>`;
+    }
+    return `<td><input type="text" class="col-filter-input" placeholder="Filtrele…"
+      value="${esc(current[c.key] || "")}"
+      oninput="onColumnFilterInput('${tableKey}','${c.key}',this.value)"/></td>`;
+  }).join("") + `<td></td>`;
+  applyColumnVisibility(tableKey);
+}
+
+function onColumnFilterInput(tableKey, key, value) {
+  _colFilters[tableKey][key] = value.trim().toLowerCase();
+  if (tableKey === "tune") renderTuneRows();
+  if (tableKey === "uc")   renderUCRows();
+  if (tableKey === "hunt") renderHuntRows();
+}
+
+function matchesColumnFilters(tableKey, row) {
+  const columns = _tableColumns[tableKey] || [];
+  const filters = _colFilters[tableKey];
+  return columns.every(c => {
+    const val = filters[c.key];
+    if (!val) return true;
+    const cell = row[c.key];
+    return cell != null && String(cell).toLowerCase().includes(val);
+  });
+}
+
 function sortTune(col) {
   tuneSortDir = tuneSortCol === col ? tuneSortDir * -1 : 1;
   tuneSortCol = col;
@@ -744,11 +878,25 @@ function tuneActionBtns(r) {
   return `${edit}${del}`;
 }
 
+const TUNE_COLUMNS = [
+  { index: 1,  key: "id",              label: "#",           filterType: "text" },
+  { index: 2,  key: "rule_name",       label: "Kural İsmi",   filterType: "text" },
+  { index: 3,  key: "xsoar_case_id",   label: "Case No",      filterType: "text" },
+  { index: 4,  key: "environment",     label: "Ortam",        filterType: "select" },
+  { index: 5,  key: "reporter",        label: "Raporlayan",   filterType: "text" },
+  { index: 6,  key: "tune_reason",     label: "Tune Nedeni",  filterType: "text" },
+  { index: 7,  key: "trigger_frequency", label: "Sıklık",     filterType: "select" },
+  { index: 8,  key: "tuning_analyst",  label: "Tune Eden",    filterType: "text" },
+  { index: 9,  key: "status",          label: "Durum",        filterType: "select" },
+  { index: 10, key: "created_at",      label: "Raporlandı",   filterType: "text" },
+  { index: 11, key: "completed_at",    label: "Tamamlandı",   filterType: "text" },
+];
+
 function renderTuneRows() {
   const TUNE_FIELDS = ["rule_name","tune_reason","reporter","environment","tuning_analyst","how_tuned"];
-  const visible = tuneSearch
-    ? tuneRows.filter(r => TUNE_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(tuneSearch)))
-    : tuneRows;
+  const visible = tuneRows
+    .filter(r => !tuneSearch || TUNE_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(tuneSearch)))
+    .filter(r => matchesColumnFilters("tune", r));
   const sorted = clientSort(visible, tuneSortCol, tuneSortDir);
   updateSortUI("tune", tuneSortCol, tuneSortDir);
   const tbody = document.getElementById("tune-tbody");
@@ -761,6 +909,7 @@ function renderTuneRows() {
     <td class="td-truncate" title="${esc(r.rule_name)}">
       <span class="cell-link" onclick="openTuneDetail(${r.id})" style="cursor:pointer">${esc(r.rule_name)}</span>
     </td>
+    <td class="td-truncate" style="font-size:11px" title="${esc(r.xsoar_case_id || '')}${r.xsoar_case_missing==='Evet' ? ' — case bulunamadı' : ''}">${r.xsoar_case_id ? esc(r.xsoar_case_id) : '<span class="text-muted">—</span>'}</td>
     <td class="td-truncate" title="${esc(r.environment)}">${esc(r.environment)}</td>
     <td class="td-truncate" title="${esc(r.reporter)}">${esc(displayName(r.reporter))}</td>
     <td class="td-truncate" title="${esc(r.tune_reason)}">${esc(r.tune_reason)}</td>
@@ -771,6 +920,7 @@ function renderTuneRows() {
     <td class="text-muted">${fmtDate(r.completed_at)}</td>
     <td style="white-space:nowrap">${tuneActionBtns(r)}</td>
   </tr>`).join("");
+  applyColumnVisibilityToBody("tune");
 }
 
 async function loadTune() {
@@ -783,6 +933,7 @@ async function loadTune() {
   if (status) p.set("status", status);
   try {
     tuneRows = await apiFetch(`/api/tune?${p}`);
+    buildColumnFilterRow("tune", tuneRows);
     renderTuneRows();
   } catch (e) { console.error(e); }
 }
@@ -1211,11 +1362,23 @@ function ucActionBtns(r) {
   return `${edit}${del}`;
 }
 
+const UC_COLUMNS = [
+  { index: 1,  key: "id",                   label: "#",             filterType: "text" },
+  { index: 2,  key: "usecase_description",  label: "Use-Case",      filterType: "text" },
+  { index: 3,  key: "environment",          label: "Ortam",         filterType: "select" },
+  { index: 4,  key: "requester",            label: "Talep Eden",    filterType: "text" },
+  { index: 5,  key: "rule_name",            label: "Yazılan Kural", filterType: "text" },
+  { index: 6,  key: "rule_author",          label: "Analist",       filterType: "text" },
+  { index: 7,  key: "status",               label: "Durum",         filterType: "select" },
+  { index: 8,  key: "created_at",           label: "Talep Tarihi",  filterType: "text" },
+  { index: 9,  key: "completed_at",         label: "Yazılma Tarihi",filterType: "text" },
+];
+
 function renderUCRows() {
   const UC_FIELDS = ["usecase_description","requester","environment","rule_name","rule_author","notes"];
-  const visible = ucSearch
-    ? ucRows.filter(r => UC_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(ucSearch)))
-    : ucRows;
+  const visible = ucRows
+    .filter(r => !ucSearch || UC_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(ucSearch)))
+    .filter(r => matchesColumnFilters("uc", r));
   const sorted = clientSort(visible, ucSortCol, ucSortDir);
   updateSortUI("uc", ucSortCol, ucSortDir);
   const tbody = document.getElementById("uc-tbody");
@@ -1238,6 +1401,7 @@ function renderUCRows() {
     <td class="text-muted">${fmtDate(r.completed_at)}</td>
     <td style="white-space:nowrap">${ucActionBtns(r)}</td>
   </tr>`).join("");
+  applyColumnVisibilityToBody("uc");
 }
 
 async function loadUC() {
@@ -1250,6 +1414,7 @@ async function loadUC() {
   if (status) p.set("status", status);
   try {
     ucRows = await apiFetch(`/api/usecase?${p}`);
+    buildColumnFilterRow("uc", ucRows);
     renderUCRows();
   } catch (e) { console.error(e); }
 }
@@ -2087,11 +2252,21 @@ function huntActionBtns(r) {
   return `${edit}${del}`;
 }
 
+const HUNT_COLUMNS = [
+  { index: 1, key: "id",               label: "#",            filterType: "text" },
+  { index: 2, key: "hunt_subject",     label: "Hunt Konusu",  filterType: "text" },
+  { index: 3, key: "requester",        label: "Talep Eden",   filterType: "text" },
+  { index: 4, key: "assigned_analyst", label: "Analist",      filterType: "text" },
+  { index: 5, key: "status",           label: "Durum",        filterType: "select" },
+  { index: 6, key: "created_at",       label: "Talep Tarihi", filterType: "text" },
+  { index: 7, key: "completed_at",     label: "Tamamlandı",   filterType: "text" },
+];
+
 function renderHuntRows() {
   const HUNT_FIELDS = ["hunt_subject","requester","assigned_analyst","environment","notes"];
-  const visible = huntSearch
-    ? huntRows.filter(r => HUNT_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(huntSearch)))
-    : huntRows;
+  const visible = huntRows
+    .filter(r => !huntSearch || HUNT_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(huntSearch)))
+    .filter(r => matchesColumnFilters("hunt", r));
   const sorted = clientSort(visible, huntSortCol, huntSortDir);
   updateSortUI("hunt", huntSortCol, huntSortDir);
   const tbody = document.getElementById("hunt-tbody");
@@ -2111,6 +2286,7 @@ function renderHuntRows() {
     <td class="text-muted">${fmtDate(r.completed_at)}</td>
     <td style="white-space:nowrap">${huntActionBtns(r)}</td>
   </tr>`).join("");
+  applyColumnVisibilityToBody("hunt");
 }
 
 async function loadHunt() {
@@ -2121,6 +2297,7 @@ async function loadHunt() {
   if (status) p.set("status", status);
   try {
     huntRows = await apiFetch(`/api/hunt?${p}`);
+    buildColumnFilterRow("hunt", huntRows);
     renderHuntRows();
   } catch (e) { console.error(e); }
 }
@@ -2962,18 +3139,30 @@ function pickSearch(type, id) {
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
+// Kolon göster/gizle + kolona göre filtre — Tune/UC/Hunt tabloları rol
+// gözetmeksizin DOM'da her zaman var (IS_SETTINGS/HAS_DASHBOARD sadece hangi
+// sekmenin ilk açıldığını belirliyor), o yüzden her iki init dalında da
+// çağrılır.
+function _initAllTableColumns() {
+  initTableColumns("tune", TUNE_COLUMNS);
+  initTableColumns("uc",   UC_COLUMNS);
+  initTableColumns("hunt", HUNT_COLUMNS);
+}
+
 if (HAS_DASHBOARD) {
   loadDropdownData().then(() => {
     loadDashboard();
     setupAllPaste();
     // Attach column resizers (tables are in static HTML, always present)
     document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
+    _initAllTableColumns();
   });
 } else {
   loadDropdownData().then(() => {
     loadSettings();
     setupAllPaste();
     document.querySelectorAll(".table-fixed").forEach(makeColumnsResizable);
+    _initAllTableColumns();
   });
 }
 initGlobalSearch();

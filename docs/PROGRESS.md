@@ -787,6 +787,37 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
   temizlendi, baseline sayılar (tune 9, UC 4, hunt 7) korundu, audit zinciri
   bu testten etkilenmedi (ham SQL insert, write_audit çağrılmadı).
 
+### Faz V — Tune/UC/Hunt: Case No Kolonu, Kolon Göster/Gizle, Kolona Göre Filtre (2026-08-16)
+
+- [x] **Case No kolonu (Tune tablosu):** `xsoar_case_id` artık Kural İsmi'nden
+  sonra ayrı bir kolon — düz metin (link değil; Faz O'daki SameSite=Strict
+  gerekçesiyle, detay modalindeki 📋 Kopyala butonu zaten çözümü sağlıyor).
+- [x] **Kolon göster/gizle (Tune+UC+Hunt, üçü de):** Her tabloya "☰ Kolonlar"
+  butonu — açılan panelde her kolon için checkbox, seçim `localStorage`'da
+  (`soc_cols_tune`/`soc_cols_uc`/`soc_cols_hunt`) kalıcı. Tek bir jenerik
+  mekanizma (`initTableColumns`/`applyColumnVisibility`/`toggleColumnPanel`,
+  `static/app.js`) üç tabloya da `columns` config dizisiyle uygulandı — kod
+  tekrarı yok.
+- [x] **Kolona göre filtre:** `<thead>` altına ikinci bir satır (`col-filter-row`)
+  — durum/ortam/sıklık gibi zaten sınırlı değer kümesi olan kolonlarda o anki
+  veriden türeyen bir `<select>`, diğerlerinde serbest metin `<input>`. Tamamen
+  client-side (`matchesColumnFilters`), mevcut global arama + sıralama
+  zincirine (`tuneSearch`/`clientSort`) ek bir `.filter()` olarak eklendi —
+  yeni bir backend endpoint'i gerekmedi (tablolar zaten tüm veriyi tek
+  seferde çekip client-side işliyordu).
+- [x] **Uçtan uca doğrulandı** (geçici debug admin, gerçek tarayıcı + DOM
+  durumu üzerinden): Case No kolonu doğru pozisyonda render oluyor; kolon
+  gizleme hem `<th>` hem `<td>`'leri doğru gizliyor VE sayfa yeniden
+  yüklendiğinde (tam navigasyon, sadece JS state değil) `localStorage`'dan
+  geri geliyor; kolona göre metin filtresi (Case No'da "789" → 9 satırdan
+  1'e indi) ve select filtresi (Durum="Tune Başarılı" → 5 satır, hepsi doğru
+  durumda) doğru çalışıyor; global arama + kolon filtresi birlikte
+  uygulanınca doğru kesişim kümesi çıkıyor (regresyon yok); "Kolonlar"
+  panelinin gerçek checkbox tıklamasıyla açılıp kapandığı, dışarı tıklayınca
+  kapandığı doğrulandı. UC (11 filtre hücresi) ve Hunt (9 filtre hücresi)
+  tabloları da aynı mekanizmayla doğru kuruldu. Test hesabı temizlendi,
+  audit zinciri etkilenmedi.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

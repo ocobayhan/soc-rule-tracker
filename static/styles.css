@@ -419,6 +419,42 @@ input, select, textarea { font-family: inherit; }
 }
 .search-input::placeholder { color: var(--text-3); }
 
+/* ============================================================ KOLON GÖSTER/GİZLE + KOLONA GÖRE FİLTRE */
+.col-toggle-wrap { position: relative; display: inline-block; }
+.col-toggle-panel {
+  display: none;
+  position: fixed;
+  z-index: 200;
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--r);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+  padding: 6px;
+}
+.col-toggle-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: var(--r-sm);
+  font-size: 12px; color: var(--text-1); cursor: pointer;
+}
+.col-toggle-item:hover { background: var(--bg-hover); }
+.col-toggle-item input { accent-color: var(--accent); cursor: pointer; }
+.col-filter-row td { padding: 4px 10px 8px; border-bottom: 0.5px solid var(--border); }
+.col-filter-input {
+  width: 100%;
+  background: var(--bg);
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--r-sm);
+  color: var(--text-1);
+  font-size: 11px;
+  padding: 3px 6px;
+  outline: none;
+}
+.col-filter-input:focus { border-color: var(--accent); }
+.col-filter-input::placeholder { color: var(--text-3); }
+
 /* ============================================================ FORMS */
 .form-input {
   width: 100%;
