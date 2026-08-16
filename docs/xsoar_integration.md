@@ -213,12 +213,22 @@ curl -X POST https://<sunucu>:9897/api/integrations/xsoar/incident-report/image 
   }'
 ```
 
-## Kapsam Dışı (v1)
+## PDF Export (2026-08-16)
 
-PDF export bu ilk sürümde yok — Hunt raporunun PDF deseni (Montserrat font,
-sabit görsel sınırları, `WEASYPRINT_EXE` yerel yedek yolu) doğrudan yeniden
-kullanılabilir hale geldiğinde, ayrı ve küçük bir takip fazı olarak
-eklenecek.
+Onaylanmış (`Onaylandı`) bir olay raporu, `GET /incident-reports/<id>/report/pdf`
+(oturum gerektirir, webhook'un konusu değil — SOC Tracker arayüzündeki "PDF
+İndir" butonu bunu çağırır) ile Hunt raporuyla aynı desende (Montserrat
+font, kurum logosu, sabit görsel sınırları) PDF'e çevrilebilir. Her görsel
+kendi "Görsel N" etiketiyle render olur (yukarıdaki `order` alanıyla aynı),
+böylece bölüm metinlerindeki görsel atıfları PDF'te de doğru karşılığını
+bulur.
+
+## Python Örnek Script'i
+
+Hazır, uçtan uca test edilmiş bir Python script'i için
+`docs/xsoar_incident_report_script.py` dosyasına bakın — hem ana rapor
+oluşturma hem sonradan görsel ekleme webhook'unu kapsar, XSOAR
+automation/playbook script adımına uyarlanabilir şekilde yazıldı.
 
 ## SOAR Case URL Şablonu (2026-07-20)
 
