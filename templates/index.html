@@ -404,11 +404,13 @@
   <section id="tab-incident" class="tab-panel">
     <div class="page-header">
       <h1 class="page-title">Olay Raporları</h1>
+      <button class="btn btn-primary" onclick="openIncidentCreateModal()">+ Yeni Olay Raporu</button>
     </div>
     <p class="text-muted" style="font-size:12px;margin:-8px 0 12px">
       XSOAR'da "incident" olarak kapatılan case'ler için playbook webhook'unun
-      oluşturduğu raporlar. Taslak durumundakiler düzenlenebilir; bir Kıdemli
-      Analist/Müdür onaylar veya reddeder.
+      oluşturduğu raporlar, veya elle açılan olay raporları. Taslak
+      durumundakiler düzenlenebilir; bir Kıdemli Analist/Müdür onaylar veya
+      reddeder.
     </p>
     <div class="filter-bar">
       <div class="search-wrap">
@@ -1537,7 +1539,7 @@
 <div id="incident-edit-modal" class="modal-overlay" style="display:none">
   <div class="modal modal-wide">
     <div class="modal-header">
-      <h2 class="modal-title">Olay Raporunu Düzenle</h2>
+      <h2 class="modal-title" id="incident-edit-modal-title">Olay Raporunu Düzenle</h2>
       <button class="modal-close" onclick="closeIncidentEditModal()">&#x2715;</button>
     </div>
     <div class="modal-body">
@@ -1689,6 +1691,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=35"></script>
+<script src="/static/app.js?v=36"></script>
 </body>
 </html>

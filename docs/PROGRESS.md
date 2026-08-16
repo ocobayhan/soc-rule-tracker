@@ -937,6 +937,44 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
   etiketinin hayatta kaldığı (sıradan sayıya dönüşmediği) DOM/API durumu
   üzerinden teyit edildi. Test verileri (2 rapor, 7 görsel dosyası, debug
   hesap) temizlendi, audit zinciri geçerli (222 kayıt, 198 zincirli).
+- [x] **Takip (2026-08-16): PDF export + manuel oluşturma.** Faz W'nin
+  bilinçli olarak v1 dışı bıraktığı iki parça şimdi eklendi:
+  - **PDF export** (`GET /incident-reports/<id>/report/pdf`, sadece
+    `Onaylandı` durumundaki raporlar için): Hunt'ın PDF altyapısı
+    (Montserrat font, DiAS logosu, `.report-img` sabit görsel sınırı,
+    `WEASYPRINT_EXE` yerel yedek yolu) doğrudan yeniden kullanıldı — bu
+    sırada `hunt_report_pdf()` içine gömülü olan `_font_uri`/logo hesaplama
+    ve WeasyPrint/`WEASYPRINT_EXE` deneme-yanılma bloğu modül seviyesine
+    (`_pdf_font_uri`/`_pdf_logo_uri`/`_render_pdf_bytes`) çıkarılıp iki PDF
+    route'unda da ortak kullanılır hale getirildi (kod tekrarı yok). Yeni
+    şablon `templates/incident_report_print.html` — bölümler + görsel
+    galerisi, **her görselin altında "Görsel N" etiketi** (kullanıcının asıl
+    isteği: rapor metni görsellere numarayla atıf yapıyor, PDF'te de aynı
+    numaralandırma görünmeli — ekrandaki `img.order` mantığıyla birebir
+    aynı, madde-halinde-array-index değil).
+  - **Manuel oluşturma** (`POST /api/incident-reports`, `login_required`):
+    bir analist artık "+ Yeni Olay Raporu" ile XSOAR'dan bağımsız da bir
+    olay raporu açabiliyor — SOAR Case No burada opsiyonel (elle açılan bir
+    olay bir case'e hiç bağlı olmayabilir; verilirse yine mükerrer-case
+    kontrolünden geçer). Diğer tüm modüllerle tutarlı olarak **aynı Taslak →
+    onay akışından geçer** — manuel oluşturma onay kapısını atlamaz. Aynı
+    düzenleme modali (bölüm ekle/çıkar + paste-ile-görsel-ekle) create/edit
+    ikili modda çalışacak şekilde genişletildi (`incident-edit-id` boşsa
+    `POST`, doluysa `PUT`) — yeni bir modal yazılmadı.
+  - Yeni audit action'ları: `CREATE_INCIDENT` (create), `EXPORT_INCIDENT_PDF`
+    (system).
+  - **Doğrulandı:** requests ile manuel oluşturma (case id'li/id'siz, mükerrer
+    case 409, başlıksız 400); Taslak bir rapor için PDF isteği 400; rapor
+    onaylanıp PDF üretildi, PyMuPDF ile PNG'ye çevrilip görsel olarak
+    incelendi — logo, rapor/onay bilgileri, bölümler, ve "Görsel 1"/"Görsel
+    2" etiketli galeri hepsi doğru render oluyor (2 sayfa). Gerçek tarayıcı +
+    gerçek giriş ile: "+ Yeni Olay Raporu" modali doğru boş state'te açılıyor,
+    form doldurup Kaydet'e basınca gerçekten `POST` ile yeni kayıt oluşuyor
+    ve tabloda görünüyor; PDF indirme linki hem tablo satırında hem detay
+    modali footer'ında SADECE Onaylandı satırlarda görünüyor (Taslak
+    satırlarda yok) DOM durumu üzerinden teyit edildi. `app.js` versiyonu
+    `v36`'ya yükseltildi. Test verileri (3 rapor, 2 görsel dosyası, debug
+    hesap) temizlendi, audit zinciri geçerli (228 kayıt, 204 zincirli).
 
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 

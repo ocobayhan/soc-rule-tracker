@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<title>Olay Raporu #{{ r.id }} — {{ r.title }}</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #FFFFFF;
+  --surface: #F7F8FA;
+  --border: #E5E7EB;
+  --text-1: #111827;
+  --text-2: #6B7280;
+  --text-3: #9CA3AF;
+  --accent: #1A1A1A;
+  --green:  #2DB27D;
+  --amber:  #F59E0B;
+  --red:    #EF4444;
+  --purple: #8B5CF6;
+}
+@font-face { font-family: "Montserrat"; src: url("{{ font_regular_uri }}");  font-weight: 400; }
+@font-face { font-family: "Montserrat"; src: url("{{ font_medium_uri }}");   font-weight: 500; }
+@font-face { font-family: "Montserrat"; src: url("{{ font_semibold_uri }}"); font-weight: 600; }
+@font-face { font-family: "Montserrat"; src: url("{{ font_bold_uri }}");     font-weight: 700; }
+html { font-size: 12px; }
+body {
+  font-family: "Montserrat", "DejaVu Sans", Arial, sans-serif;
+  color: var(--text-1);
+  line-height: 1.5;
+}
+@page {
+  margin: 18mm 14mm;
+  @bottom-center {
+    content: "Sayfa " counter(page) " / " counter(pages);
+    font-size: 9px;
+    color: #9CA3AF;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--accent);
+}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.header-logo { height: 42px; width: auto; border-radius: 4px; }
+.header-title { font-size: 18px; font-weight: 700; color: var(--text-1); }
+.header-subject { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.header-meta { text-align: right; font-size: 10px; color: var(--text-3); }
+.header-meta strong { color: var(--text-2); }
+
+.badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 600;
+  padding: 3px 10px; border-radius: 10px;
+  margin-left: 6px;
+}
+.badge-done { background: rgba(45,178,125,0.14); color: var(--green); }
+
+.section { margin-bottom: 22px; break-inside: avoid; }
+.section-title {
+  font-size: 12px; font-weight: 700; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.03em;
+  margin-bottom: 8px; padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+.sub-title {
+  font-size: 12px; font-weight: 600; color: var(--text-1);
+  margin-bottom: 4px;
+}
+.row { display: flex; padding: 4px 0; font-size: 11px; }
+.row-label { width: 160px; flex-shrink: 0; color: var(--text-2); font-weight: 500; }
+.row-value { color: var(--text-1); white-space: pre-wrap; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+
+.text-block {
+  font-size: 11px; white-space: pre-wrap;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 12px; margin-top: 4px;
+}
+.report-body-block { margin-bottom: 14px; }
+.report-body-block:last-child { margin-bottom: 0; }
+
+/* Hunt raporundaki 420×280 üst sınırıyla aynı desen — küçük görsel doğal
+   boyutunda kalır, büyük görsel orantılı küçülür. */
+.report-img {
+  display: block;
+  max-width: 420px;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.image-grid { display: flex; flex-wrap: wrap; gap: 16px; }
+.image-item { text-align: center; }
+.image-caption { font-size: 10.5px; font-weight: 600; color: var(--text-2); margin-top: 4px; }
+
+.footer {
+  margin-top: 30px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 9px; color: var(--text-3);
+}
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      {% if logo_uri %}<img class="header-logo" src="{{ logo_uri }}">{% endif %}
+      <div>
+        <div class="header-title">Olay Raporu — #{{ r.id }}</div>
+        <div class="header-subject">{{ r.title }}</div>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div><strong>Durum:</strong> <span class="badge badge-done">{{ r.status }}</span></div>
+      <div style="margin-top:4px">Oluşturulma: {{ generated }}</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Rapor Bilgileri</div>
+    <div class="grid-2">
+      <div>
+        <div class="row"><span class="row-label">Case No</span><span class="row-value">{{ "#" + r.xsoar_case_id if r.xsoar_case_id else "—" }}</span></div>
+        <div class="row"><span class="row-label">Ortam</span><span class="row-value">{{ r.environment or "—" }}</span></div>
+      </div>
+      <div>
+        <div class="row"><span class="row-label">Raporlayan</span><span class="row-value">{{ r.reporter }}</span></div>
+        <div class="row"><span class="row-label">Tarih</span><span class="row-value">{{ fmt(r.created_at) }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Onay Bilgileri</div>
+    <div class="grid-2">
+      <div>
+        <div class="row"><span class="row-label">Onaylayan</span><span class="row-value">{{ r.validated_by or "—" }}</span></div>
+        <div class="row"><span class="row-label">Onay Tarihi</span><span class="row-value">{{ fmt(r.validated_at) if r.validated_at else "—" }}</span></div>
+      </div>
+      <div>
+        {% if r.validation_note %}<div class="row"><span class="row-label">Onay Notu</span><span class="row-value">{{ r.validation_note }}</span></div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if sections %}
+  <div class="section">
+    <div class="section-title">Olay Detayları</div>
+    {% for s in sections %}
+    <div class="report-body-block">
+      {% if s.heading %}<div class="sub-title">{{ s.heading }}</div>{% endif %}
+      {% if s.text %}<div class="text-block">{{ s.text }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if image_items %}
+  <div class="section">
+    <div class="section-title">Görseller</div>
+    <div class="image-grid">
+      {% for img in image_items %}
+      {% if img.uri %}
+      <div class="image-item">
+        <img class="report-img" src="{{ img.uri }}"/>
+        <div class="image-caption">Görsel {{ img.order }}</div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    SOC Tracker — Bu rapor {{ generated }} tarihinde otomatik üretilmiştir. Olay Raporu #{{ r.id }}.
+  </div>
+
+</body>
+</html>

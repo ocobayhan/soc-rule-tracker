@@ -42,7 +42,7 @@ XSOAR_WEBHOOK_TOKEN = os.environ.get("XSOAR_WEBHOOK_TOKEN", "soc-tracker-xsoar-w
 # — burada sadece hangi action'ların hangi kategoriye girdiği tanımlanır.
 AUDIT_CATEGORIES = {
     "create":         ["CREATE_TUNE", "CREATE_TUNE_XSOAR", "CREATE_UC", "CREATE_HUNT", "CREATE_USER",
-                        "CREATE_INCIDENT_XSOAR"],
+                        "CREATE_INCIDENT_XSOAR", "CREATE_INCIDENT"],
     "claim":          ["CLAIM_TUNE", "CLAIM_UC", "CLAIM_HUNT", "START_HUNT"],
     "pre_approval":   ["VALIDATE_TUNE", "VALIDATE_UC", "VALIDATE_HUNT",
                         "REJECT_VALIDATION_TUNE", "REJECT_VALIDATION_UC", "REJECT_VALIDATION_HUNT"],
@@ -53,7 +53,7 @@ AUDIT_CATEGORIES = {
     "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER", "EDIT_INCIDENT",
                         "ADD_INCIDENT_IMAGE_XSOAR"],
     "delete":         ["DELETE_TUNE", "DELETE_UC", "DELETE_HUNT", "DELETE_USER", "DELETE_INCIDENT"],
-    "system":         ["EXPORT_HUNT_PDF", "VERIFY_AUDIT_CHAIN", "EDIT_SETTING", "EXPORT_AUDIT_LOG"],
+    "system":         ["EXPORT_HUNT_PDF", "EXPORT_INCIDENT_PDF", "VERIFY_AUDIT_CHAIN", "EDIT_SETTING", "EXPORT_AUDIT_LOG"],
 }
 
 # Onay seviyesi (tier) — role'den (admin/analyst/settings) bağımsız ikinci bir
@@ -1392,6 +1392,63 @@ def xsoar_add_incident_image():
                 f"Başlık: {row['title']} | XSOAR Case: {case_id} | Görsel: {label} (toplam {len(images)})")
 
     new_row = db.execute("SELECT * FROM incident_reports WHERE id=?", (row["id"],)).fetchone()
+    return jsonify(dict(new_row)), 201
+
+@app.route("/api/incident-reports", methods=["POST"])
+@login_required
+def create_incident_report():
+    """Manuel olay raporu oluşturma — XSOAR webhook'undan bağımsız, bir analist
+    doğrudan SOC Tracker'dan da bir olay raporu başlatabilir. Diğer tüm
+    modüllerle tutarlı olarak aynı Taslak → onay akışından geçer; manuel
+    oluşturma onay kapısını atlamaz. SOAR case no opsiyonel (elle açılan bir
+    rapor bir case'e hiç bağlı olmayabilir)."""
+    import json
+    data  = request.json or {}
+    title = str(data.get("title", "")).strip()
+    if not title:
+        return jsonify({"error": "Başlık zorunludur"}), 400
+
+    sections = [
+        {"heading": str(s.get("heading", "")).strip(), "text": str(s.get("text", "")).strip()}
+        for s in (data.get("sections") or [])
+        if isinstance(s, dict) and (str(s.get("heading", "")).strip() or str(s.get("text", "")).strip())
+    ]
+    if not sections:
+        return jsonify({"error": "En az bir dolu bölüm gerekli"}), 400
+
+    images = [
+        {"order": im.get("order"), "filename": im.get("filename")}
+        for im in (data.get("images") or [])
+        if isinstance(im, dict) and im.get("filename")
+    ]
+
+    case_id = str(data.get("xsoar_case_id", "")).strip() or None
+    db = get_db()
+    if case_id:
+        dup = db.execute(
+            "SELECT id FROM incident_reports WHERE xsoar_case_id=? AND status!=? ORDER BY id LIMIT 1",
+            (case_id, STATUS_REJECTED),
+        ).fetchone()
+        if dup:
+            return jsonify({
+                "error": f"Bu SOAR Case ID için zaten bir olay raporu var: #{dup['id']}",
+                "existing_id": dup["id"], "duplicate": True,
+            }), 409
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    cur = db.execute("""
+        INSERT INTO incident_reports
+          (xsoar_case_id, xsoar_url, title, environment, reporter,
+           sections, images, status, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+    """, (
+        case_id, build_xsoar_url(case_id) if case_id else None,
+        title, str(data.get("environment", "")).strip(), session.get("username", ""),
+        json.dumps(sections), json.dumps(images), "Taslak", now, now,
+    ))
+    db.commit()
+    new_row = db.execute("SELECT * FROM incident_reports WHERE id=?", (cur.lastrowid,)).fetchone()
+    write_audit("CREATE_INCIDENT", "incident", new_row["id"], f"Başlık: {new_row['title']}")
     return jsonify(dict(new_row)), 201
 
 @app.route("/api/incident-reports", methods=["GET"])
@@ -3164,13 +3221,49 @@ def monthly_report():
 # ---------------------------------------------------------------------------
 def _hunt_pdf_image_uri(filename):
     """Yüklenen bir görsel dosya adını WeasyPrint'in doğrudan diskten okuyabileceği
-    file:// URI'sine çevirir. Dosya yoksa None döner (şablon görseli atlar)."""
+    file:// URI'sine çevirir. Dosya yoksa None döner (şablon görseli atlar).
+    Hunt ve Olay Raporu PDF'lerinin ikisi de kullanıyor — UPLOAD_FOLDER ortak."""
     if not filename:
         return None
     path = os.path.join(UPLOAD_FOLDER, filename)
     if not os.path.exists(path):
         return None
     return "file:///" + os.path.abspath(path).replace(os.sep, "/")
+
+def _pdf_font_uri(filename):
+    path = os.path.join(app.root_path, "static", "fonts", filename)
+    return "file:///" + os.path.abspath(path).replace(os.sep, "/")
+
+def _pdf_logo_uri():
+    path = os.path.join(app.root_path, "static", "logo_dias.jpg")
+    return ("file:///" + os.path.abspath(path).replace(os.sep, "/")) if os.path.exists(path) else None
+
+def _render_pdf_bytes(html):
+    """HTML string'ini PDF bytes'a çevirir. Native WeasyPrint (Linux/Docker,
+    production) çalışmazsa, yerel Windows geliştirmede WEASYPRINT_EXE ortam
+    değişkeni taşınabilir bir yedeğe işaret ediyorsa ona düşer. İkisi de
+    yoksa RuntimeError fırlatır — çağıran route bunu 500'e çevirir."""
+    try:
+        from weasyprint import HTML
+        return HTML(string=html).write_pdf()
+    except (ImportError, OSError) as e:
+        weasyprint_exe = os.environ.get("WEASYPRINT_EXE", "")
+        if not weasyprint_exe or not os.path.exists(weasyprint_exe):
+            app.logger.error(f"[pdf] WeasyPrint yüklenemedi: {e}")
+            raise RuntimeError("PDF oluşturma sunucuda kullanılamıyor (WeasyPrint kurulu değil/yüklenemedi).")
+        import subprocess, tempfile
+        fd_html, html_path = tempfile.mkstemp(suffix=".html")
+        pdf_path = html_path[:-5] + ".pdf"
+        try:
+            with os.fdopen(fd_html, "w", encoding="utf-8") as f:
+                f.write(html)
+            subprocess.run([weasyprint_exe, html_path, pdf_path], check=True, timeout=30)
+            with open(pdf_path, "rb") as f:
+                return f.read()
+        finally:
+            os.remove(html_path)
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
 
 @app.route("/hunt/<int:item_id>/report/pdf")
 @login_required
@@ -3213,17 +3306,10 @@ def hunt_report_pdf(item_id):
 
     linked_uc = db.execute("SELECT id FROM usecase_requests WHERE source_hunt_id=?", (item_id,)).fetchone()
 
-    def _font_uri(filename):
-        path = os.path.join(app.root_path, "static", "fonts", filename)
-        return "file:///" + os.path.abspath(path).replace(os.sep, "/")
-
-    _logo_path = os.path.join(app.root_path, "static", "logo_dias.jpg")
-    logo_uri = ("file:///" + os.path.abspath(_logo_path).replace(os.sep, "/")) if os.path.exists(_logo_path) else None
-
     html = render_template(
         "hunt_report_print.html",
         r=row,
-        logo_uri=logo_uri,
+        logo_uri=_pdf_logo_uri(),
         mitre_entries=mitre_entries,
         ioc_list=ioc_list,
         env_list=env_list,
@@ -3236,46 +3322,87 @@ def hunt_report_pdf(item_id):
         affected_assets_image_uri=_hunt_pdf_image_uri(row["affected_assets_image"]),
         detection_detail_image_uri=_hunt_pdf_image_uri(row["detection_detail_image"]),
         recommendations_image_uri=_hunt_pdf_image_uri(row["recommendations_image"]),
-        font_regular_uri=_font_uri("Montserrat-Regular.ttf"),
-        font_medium_uri=_font_uri("Montserrat-Medium.ttf"),
-        font_semibold_uri=_font_uri("Montserrat-SemiBold.ttf"),
-        font_bold_uri=_font_uri("Montserrat-Bold.ttf"),
+        font_regular_uri=_pdf_font_uri("Montserrat-Regular.ttf"),
+        font_medium_uri=_pdf_font_uri("Montserrat-Medium.ttf"),
+        font_semibold_uri=_pdf_font_uri("Montserrat-SemiBold.ttf"),
+        font_bold_uri=_pdf_font_uri("Montserrat-Bold.ttf"),
         fmt=_fmt,
         generated=datetime.now().strftime("%d.%m.%Y %H:%M"),
     )
 
     try:
-        from weasyprint import HTML
-        pdf_bytes = HTML(string=html).write_pdf()
-    except (ImportError, OSError) as e:
-        # Yerel Windows geliştirmede WeasyPrint'in native kütüphaneleri (Pango/Cairo)
-        # bulunamaz — production (Linux/Docker) bu satıra hiç düşmez. Sadece
-        # WEASYPRINT_EXE env var'ı taşınabilir bir weasyprint.exe'ye işaret ediyorsa
-        # ona düşülür; yoksa temiz bir hata döner. Bkz. docs/PROGRESS.md Faz 6.
-        weasyprint_exe = os.environ.get("WEASYPRINT_EXE", "")
-        if not weasyprint_exe or not os.path.exists(weasyprint_exe):
-            app.logger.error(f"[hunt-pdf] WeasyPrint yüklenemedi: {e}")
-            return jsonify({"error": "PDF oluşturma sunucuda kullanılamıyor (WeasyPrint kurulu değil/yüklenemedi)."}), 500
-        import subprocess
-        import tempfile
-        fd_html, html_path = tempfile.mkstemp(suffix=".html")
-        pdf_path = html_path[:-5] + ".pdf"
-        try:
-            with os.fdopen(fd_html, "w", encoding="utf-8") as f:
-                f.write(html)
-            subprocess.run([weasyprint_exe, html_path, pdf_path], check=True, timeout=30)
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-        finally:
-            os.remove(html_path)
-            if os.path.exists(pdf_path):
-                os.remove(pdf_path)
+        pdf_bytes = _render_pdf_bytes(html)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
     write_audit("EXPORT_HUNT_PDF", "hunt", item_id, f"Konu: {row['hunt_subject']}")
     return send_file(
         BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=True,
         download_name=f"hunt_{item_id}_raporu.pdf",
+    )
+
+@app.route("/incident-reports/<int:item_id>/report/pdf")
+@login_required
+def incident_report_pdf(item_id):
+    """Onaylanmış bir olay raporunu PDF olarak üretir. Sadece status ==
+    'Onaylandı' için — Hunt PDF export'uyla (Faz 6) aynı altyapı/desen."""
+    db  = get_db()
+    row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != "Onaylandı":
+        return jsonify({"error": "Sadece 'Onaylandı' durumundaki olay raporları için PDF alınabilir."}), 400
+
+    import json as _j
+
+    try:
+        sections = _j.loads(row["sections"] or "[]")
+        if not isinstance(sections, list):
+            sections = []
+    except Exception:
+        sections = []
+    try:
+        images = _j.loads(row["images"] or "[]")
+        if not isinstance(images, list):
+            images = []
+    except Exception:
+        images = []
+    # Galeri sırayı korur (webhook'un ekleniş sırası) — sıralanmaz; her
+    # görselin altında kendi "order" etiketi (1, 1a...) yazar ki bölüm
+    # metinlerindeki "Görsel N" atıfları PDF'te doğru görsele karşılık gelsin.
+    image_items = [
+        {"uri": _hunt_pdf_image_uri(im.get("filename")), "order": im.get("order")}
+        for im in images if isinstance(im, dict) and im.get("filename")
+    ]
+
+    def _fmt(v):
+        return v[:10] if v else ""
+
+    html = render_template(
+        "incident_report_print.html",
+        r=row,
+        sections=sections,
+        image_items=image_items,
+        logo_uri=_pdf_logo_uri(),
+        font_regular_uri=_pdf_font_uri("Montserrat-Regular.ttf"),
+        font_medium_uri=_pdf_font_uri("Montserrat-Medium.ttf"),
+        font_semibold_uri=_pdf_font_uri("Montserrat-SemiBold.ttf"),
+        font_bold_uri=_pdf_font_uri("Montserrat-Bold.ttf"),
+        fmt=_fmt,
+        generated=datetime.now().strftime("%d.%m.%Y %H:%M"),
+    )
+
+    try:
+        pdf_bytes = _render_pdf_bytes(html)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    write_audit("EXPORT_INCIDENT_PDF", "incident", item_id, f"Başlık: {row['title']}")
+    return send_file(
+        BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"olay_raporu_{item_id}.pdf",
     )
 
 # ---------------------------------------------------------------------------

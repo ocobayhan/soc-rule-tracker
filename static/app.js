@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v35
+   SOC Tracker — Frontend  v36
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1761,7 +1761,9 @@ const ACTION_TR = {
   "REJECT_HUNT_RESULT":     "Hunt sonucu revizyona gönderildi",
   "EXPORT_HUNT_PDF":        "Hunt raporu PDF olarak indirildi",
   "CREATE_INCIDENT_XSOAR":  "Olay raporu oluşturuldu (XSOAR)",
+  "CREATE_INCIDENT":        "Olay raporu oluşturuldu",
   "ADD_INCIDENT_IMAGE_XSOAR": "Olay raporuna görsel eklendi (XSOAR)",
+  "EXPORT_INCIDENT_PDF":    "Olay raporu PDF olarak indirildi",
   "EDIT_INCIDENT":          "Olay raporu düzenlendi",
   "APPROVE_INCIDENT":       "Olay raporu onaylandı",
   "REJECT_INCIDENT":        "Olay raporu reddedildi",
@@ -1783,7 +1785,9 @@ const ACTION_CLS = {
   "APPROVE_HUNT_RESULT": "audit-close", "REJECT_HUNT_RESULT": "audit-delete",
   "EXPORT_HUNT_PDF": "audit-edit",
   "CREATE_INCIDENT_XSOAR": "audit-create",
+  "CREATE_INCIDENT": "audit-create",
   "ADD_INCIDENT_IMAGE_XSOAR": "audit-edit",
+  "EXPORT_INCIDENT_PDF": "audit-edit",
   "EDIT_INCIDENT": "audit-edit",
   "APPROVE_INCIDENT": "audit-close",
   "REJECT_INCIDENT": "audit-delete",
@@ -3220,6 +3224,9 @@ function incidentActionBtns(r) {
       btns += `<button class="btn-action-close" onclick="openValidateModal('incident', ${r.id})">Onayla / Reddet</button> `;
     }
   }
+  if (r.status === "Onaylandı") {
+    btns += `<a class="btn-icon" title="PDF İndir" href="/incident-reports/${r.id}/report/pdf" target="_blank" style="color:var(--red)">&#8681;</a> `;
+  }
   if (USER_ROLE === "admin") {
     btns += `<button class="btn-icon danger" onclick="deleteIncident(${r.id})" title="Sil">&#128465;</button>`;
   }
@@ -3313,9 +3320,27 @@ async function handleIncidentImagePaste(e) {
   }
 }
 
+function openIncidentCreateModal() {
+  document.getElementById("incident-edit-modal-title").textContent = "Yeni Olay Raporu";
+  document.getElementById("incident-edit-id").value       = "";
+  document.getElementById("incident-edit-title").value    = "";
+  document.getElementById("incident-edit-env").value      = "";
+  document.getElementById("incident-edit-case-id").value  = "";
+
+  _incidentSections = [{ heading: "", text: "" }];
+  renderIncidentSections();
+  _incidentImages = [];
+  renderIncidentGallery();
+
+  document.getElementById("incident-edit-image-paste").value = "";
+  document.getElementById("incident-edit-modal-error").style.display = "none";
+  document.getElementById("incident-edit-modal").style.display = "flex";
+}
+
 function openIncidentEditModal(id) {
   const r = incidentRows.find(x => x.id === id); if (!r) return;
   if (r.status !== "Taslak") { alert("Sadece Taslak durumundaki olay raporları düzenlenebilir."); return; }
+  document.getElementById("incident-edit-modal-title").textContent = "Olay Raporunu Düzenle";
   document.getElementById("incident-edit-id").value       = id;
   document.getElementById("incident-edit-title").value    = r.title || "";
   document.getElementById("incident-edit-env").value      = r.environment || "";
@@ -3359,7 +3384,11 @@ async function saveIncidentEdit() {
     })),
   };
   try {
-    await apiFetch(`/api/incident-reports/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    if (id) {
+      await apiFetch(`/api/incident-reports/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    } else {
+      await apiFetch("/api/incident-reports", { method: "POST", body: JSON.stringify(payload) });
+    }
     closeIncidentEditModal();
     loadIncidents();
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
@@ -3416,6 +3445,9 @@ async function openIncidentDetail(id) {
     footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
       <button class="btn btn-secondary" onclick="closeIncidentDetailModal();openIncidentEditModal(${r.id})">Düzenle</button>` +
       (IS_SENIOR ? `<button class="btn btn-primary" onclick="closeIncidentDetailModal();openValidateModal('incident', ${r.id})">Onayla / Reddet</button>` : "");
+  } else if (r.status === "Onaylandı") {
+    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
+      <a class="btn btn-primary" href="/incident-reports/${r.id}/report/pdf" target="_blank">&#128424; PDF İndir</a>`;
   } else {
     footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>`;
   }

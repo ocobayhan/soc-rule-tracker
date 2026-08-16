@@ -54,14 +54,14 @@ Proaktif tehdit avı taleplerinin ve raporlarının yönetimi.
 **Durumlar:** Ön Onay Bekliyor → Açık → İnceleniyor → Sonuç Onayı Bekliyor → Tamamlandı (veya revizyon → İnceleniyor) / İptal — ön onay reddedilirse Reddedildi (bkz. "Onay Süreci" altta). İptal, sonuç onayı gerektirmez.  
 
 ### 4. Olay Raporu (Incident Report) — 2026-08-16 (Faz W)
-XSOAR'da bir case bir playbook tarafından "incident" olarak kapatıldığında oluşturulan, küçük/minik kapsamlı olay raporlarının yönetimi. Diğer üç modülden farklı olarak yalnızca XSOAR webhook ile açılır (elle "yeni kayıt" oluşturma yok) ve RBAC gate'i yok (Tune/UC/Hunt gibi tüm giriş yapmış kullanıcılara açık).
+XSOAR'da bir case bir playbook tarafından "incident" olarak kapatıldığında oluşturulan, veya bir analistin doğrudan SOC Tracker'dan elle açtığı, küçük/minik kapsamlı olay raporlarının yönetimi. RBAC gate'i yok (Tune/UC/Hunt gibi tüm giriş yapmış kullanıcılara açık).
 
-**Alanlar:** Başlık, Ortam, Raporlayan, Case No (`xsoar_case_id`/`xsoar_url`)  
+**Alanlar:** Başlık, Ortam, Raporlayan, Case No (`xsoar_case_id`/`xsoar_url`, opsiyonel — elle açılan bir rapor bir case'e bağlı olmayabilir)  
 **Bölümler:** Sabit alan listesi yok — `sections` bir `{heading, text}` dizisi, başlıkları playbook/analist serbestçe belirler (yapılandırılmış ama esnek bir "olay raporu" formatı)  
-**Görseller:** Sıralı bir galeri (`images`, `sections`'dan bağımsız) — "Görsel 1, Görsel 2…" diye webhook'taki gönderim sırasına göre numaralanır, tek çağrıda hepsi birden gönderilir  
-**Durumlar:** Taslak (webhook ile açılır, düzenlenebilir) → Onaylandı / Reddedildi (zorunlu gerekçe notuyla) — bkz. "Onay Süreci" altta, Hunt'ın sonuç-onayı kapısıyla aynı mantık ("bitmiş içerik iyi mi")  
-**XSOAR entegrasyonu:** Webhook ile otomatik rapor açılır (`xsoar_case_id`, `title`, `environment`, `sections`, opsiyonel `images`/`requested_by`) — bkz. `docs/xsoar_integration.md`, "Olay Raporu Webhook'u" bölümü  
-**Kapsam dışı (v1):** PDF export yok — ayrı bir takip fazında eklenecek
+**Görseller:** Sıralı bir galeri (`images`, `sections`'dan bağımsız) — "Görsel 1, Görsel 2…" diye sırayla numaralanır; hem ekranda hem PDF çıktısında aynı etiketle görünür ki bölüm metinlerindeki "Görsel N" atıfları doğru görsele karşılık gelsin  
+**Durumlar:** Taslak (webhook veya elle açılır, düzenlenebilir) → Onaylandı / Reddedildi (zorunlu gerekçe notuyla) — bkz. "Onay Süreci" altta, Hunt'ın sonuç-onayı kapısıyla aynı mantık ("bitmiş içerik iyi mi")  
+**XSOAR entegrasyonu:** Webhook ile otomatik rapor açılır (`xsoar_case_id`, `title`, `environment`, `sections`, opsiyonel `images`/`requested_by`), ayrıca mevcut bir rapora sonradan tek tek görsel eklemek için ayrı bir webhook — bkz. `docs/xsoar_integration.md`, "Olay Raporu Webhook'u" bölümü  
+**PDF export:** Sadece Onaylandı raporlar için — Hunt'ın PDF altyapısıyla (logo, Montserrat font, sabit görsel sınırı) aynı desen
 
 ---
 
