@@ -1286,15 +1286,13 @@
         </div>
       </div>
 
-      <!-- Bulgular -->
+      <!-- Bulgular: numaralı liste, her madde kendi metni + görseliyle -->
       <div class="form-group form-col-2" style="margin-top:8px;margin-bottom:0">
-        <label class="form-label">Bulgular
-          <span class="paste-hint">— Ctrl+V ile görsel ekleyebilirsiniz</span>
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Bulgular <span class="paste-hint">— her madde için ayrı metin + görsel (Ctrl+V)</span></span>
+          <button type="button" class="btn btn-sm" onclick="addFinding()" style="padding:2px 10px;font-size:12px">+ Ekle</button>
         </label>
-        <textarea class="form-input form-textarea" id="report-hunt-findings"
-                  placeholder="Neler bulundu? Detaylar, analizler, gözlemler…"></textarea>
-        <div id="report-hunt-findings-preview" class="paste-preview-area"></div>
-        <input type="hidden" id="report-hunt-findings-image"/>
+        <div id="finding-list" style="display:flex;flex-direction:column;gap:8px;margin-top:4px"></div>
       </div>
 
       <!-- Detection Önerisi -->
@@ -1545,6 +1543,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=30"></script>
+<script src="/static/app.js?v=31"></script>
 </body>
 </html>

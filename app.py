@@ -281,6 +281,12 @@ def init_db():
             db.execute(f"ALTER TABLE threat_hunt_requests ADD COLUMN {col} TEXT DEFAULT {default}")
     if not _col_exists(db, "threat_hunt_requests", "discovered_vulnerabilities"):
         db.execute("ALTER TABLE threat_hunt_requests ADD COLUMN discovered_vulnerabilities TEXT DEFAULT '[]'")
+    # Bulgular artık numaralı, her maddesi kendi görseline sahip bir liste
+    # (2026-08-16) — eski tekil findings/findings_image kolonları, bu
+    # özellikten önce yazılmış raporlar için olduğu gibi korunuyor (rapor/PDF
+    # şablonu findings_items boşsa onlara düşer, bkz. hunt_report_print.html).
+    if not _col_exists(db, "threat_hunt_requests", "findings_items"):
+        db.execute("ALTER TABLE threat_hunt_requests ADD COLUMN findings_items TEXT DEFAULT '[]'")
     if not _col_exists(db, "threat_hunt_requests", "affected_assets_image"):
         db.execute("ALTER TABLE threat_hunt_requests ADD COLUMN affected_assets_image TEXT")
     if not _col_exists(db, "threat_hunt_requests", "detection_detail_image"):
@@ -1858,7 +1864,7 @@ def update_hunt(item_id):
         if not is_assigned:
             for f in ("hunt_environment", "scope", "scope_image",
                       "mitre_techniques", "has_findings",
-                      "findings", "findings_image", "ioc_list", "affected_assets", "affected_assets_image", "severity",
+                      "findings", "findings_image", "findings_items", "ioc_list", "affected_assets", "affected_assets_image", "severity",
                       "detection_suggestion", "detection_detail", "detection_detail_image",
                       "recommendations", "recommendations_image",
                       "related_requests", "hunt_result", "report_status"):
@@ -1908,7 +1914,7 @@ def update_hunt(item_id):
         hunt_new_id                = item_id
 
     report_fields = ("hunt_environment", "scope", "mitre_techniques", "has_findings",
-                     "findings", "ioc_list", "affected_assets", "severity",
+                     "findings", "findings_items", "ioc_list", "affected_assets", "severity",
                      "detection_suggestion", "detection_detail", "recommendations",
                      "discovered_vulnerabilities",
                      "hunt_result", "report_status", "related_requests",
@@ -1952,7 +1958,7 @@ def update_hunt(item_id):
           hunt_subject=?, requester=?, assigned_analyst=?, notes=?, status=?,
           hunt_environment=?, scope=?, scope_image=?,
           mitre_techniques=?, has_findings=?,
-          findings=?, findings_image=?, ioc_list=?, affected_assets=?, affected_assets_image=?, severity=?,
+          findings=?, findings_image=?, findings_items=?, ioc_list=?, affected_assets=?, affected_assets_image=?, severity=?,
           detection_suggestion=?, detection_detail=?, detection_detail_image=?,
           recommendations=?, recommendations_image=?,
           discovered_vulnerabilities=?,
@@ -1965,7 +1971,7 @@ def update_hunt(item_id):
         sv("hunt_subject"), sv("requester"), sv("assigned_analyst"), sv("notes"), new_status,
         sv("hunt_environment"), sv("scope"), nv("scope_image"),
         jv("mitre_techniques"), sv("has_findings", "Hayır"),
-        sv("findings"), nv("findings_image"), jv("ioc_list"), sv("affected_assets"), nv("affected_assets_image"), sv("severity"),
+        sv("findings"), nv("findings_image"), jv("findings_items", "[]"), jv("ioc_list"), sv("affected_assets"), nv("affected_assets_image"), sv("severity"),
         sv("detection_suggestion", "Hayır"), sv("detection_detail"), nv("detection_detail_image"),
         sv("recommendations"), nv("recommendations_image"),
         jv("discovered_vulnerabilities", "[]"),
@@ -2842,10 +2848,23 @@ def hunt_report_pdf(item_id):
     recommendations = [v for v in _parse_list("recommendations") if str(v).strip()]
     vulnerabilities = [v for v in _parse_list("discovered_vulnerabilities") if str(v).strip()]
 
+    # Bulgular: yeni numaralı-liste formatı (her maddenin kendi metni + görseli).
+    # findings_items boşsa (bu özellikten önce tamamlanmış eski raporlar) şablon
+    # eski tekil findings/findings_image alanlarına düşer.
+    finding_items = [
+        {"text": str(it.get("text") or "").strip(), "image_uri": _hunt_pdf_image_uri(it.get("image"))}
+        for it in _parse_list("findings_items") if isinstance(it, dict)
+        and (str(it.get("text") or "").strip() or it.get("image"))
+    ]
+
     def _fmt(v):
         return v[:10] if v else ""
 
     linked_uc = db.execute("SELECT id FROM usecase_requests WHERE source_hunt_id=?", (item_id,)).fetchone()
+
+    def _font_uri(filename):
+        path = os.path.join(app.root_path, "static", "fonts", filename)
+        return "file:///" + os.path.abspath(path).replace(os.sep, "/")
 
     html = render_template(
         "hunt_report_print.html",
@@ -2855,12 +2874,17 @@ def hunt_report_pdf(item_id):
         env_list=env_list,
         recommendations=recommendations,
         vulnerabilities=vulnerabilities,
+        finding_items=finding_items,
         linked_uc_id=linked_uc["id"] if linked_uc else None,
         scope_image_uri=_hunt_pdf_image_uri(row["scope_image"]),
         findings_image_uri=_hunt_pdf_image_uri(row["findings_image"]),
         affected_assets_image_uri=_hunt_pdf_image_uri(row["affected_assets_image"]),
         detection_detail_image_uri=_hunt_pdf_image_uri(row["detection_detail_image"]),
         recommendations_image_uri=_hunt_pdf_image_uri(row["recommendations_image"]),
+        font_regular_uri=_font_uri("Montserrat-Regular.ttf"),
+        font_medium_uri=_font_uri("Montserrat-Medium.ttf"),
+        font_semibold_uri=_font_uri("Montserrat-SemiBold.ttf"),
+        font_bold_uri=_font_uri("Montserrat-Bold.ttf"),
         fmt=_fmt,
         generated=datetime.now().strftime("%d.%m.%Y %H:%M"),
     )

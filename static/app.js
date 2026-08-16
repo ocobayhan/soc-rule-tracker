@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v30
+   SOC Tracker — Frontend  v31
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1938,7 +1938,6 @@ function setupAllPaste() {
   // Hunt report paste targets
   setupPaste("report-hunt-scope",            "report-hunt-scope-preview",            "report-hunt-scope-image");
   setupPaste("report-hunt-affected-assets",  "report-hunt-affected-assets-preview",  "report-hunt-affected-assets-image");
-  setupPaste("report-hunt-findings",         "report-hunt-findings-preview",         "report-hunt-findings-image");
   setupPaste("report-hunt-detection-detail", "report-hunt-detection-detail-preview", "report-hunt-detection-detail-image");
   setupPaste("report-hunt-recommendations-paste", "report-hunt-recommendations-preview", "report-hunt-recommendations-image");
 }
@@ -2553,6 +2552,73 @@ function addVulnerability() {
 }
 function removeVulnerability(i) { _huntVulnerabilities.splice(i, 1); renderVulnerabilities(); }
 
+// ---------------------------------------------------------------------------
+// Hunt — Bulgular (numaralı liste, her madde kendi metni + görseliyle)
+// ---------------------------------------------------------------------------
+let _huntFindings = [];
+
+function renderFindings() {
+  const list = document.getElementById("finding-list");
+  if (!list) return;
+  list.innerHTML = _huntFindings.map((f, i) => `
+    <div class="mitre-entry">
+      <div class="mitre-entry-header">
+        <span style="font-size:12px;font-weight:600;color:var(--text-2)">${i + 1}. Bulgu</span>
+        <button type="button" class="btn-icon danger" style="margin-left:auto;font-size:11px"
+                onclick="removeFinding(${i})">&#x2715;</button>
+      </div>
+      <textarea class="form-input form-textarea" style="margin-top:6px;min-height:56px"
+        placeholder="Bu bulgunun açıklaması…"
+        oninput="_huntFindings[${i}].text=this.value"
+        onpaste="handleFindingPaste(event, ${i})">${esc(f.text)}</textarea>
+      <div id="finding-preview-${i}" class="paste-preview-area"></div>
+    </div>`).join("");
+  _huntFindings.forEach((_, i) => renderFindingPreview(i));
+}
+
+function addFinding() {
+  _huntFindings.push({ text: "", image: null });
+  renderFindings();
+  const els = document.querySelectorAll("#finding-list textarea");
+  if (els.length) els[els.length - 1].focus();
+}
+
+function removeFinding(i) { _huntFindings.splice(i, 1); renderFindings(); }
+
+async function handleFindingPaste(e, i) {
+  const items = Array.from(e.clipboardData?.items || []);
+  const img   = items.find(it => it.type.startsWith("image/"));
+  if (!img) return;
+  e.preventDefault();
+  try {
+    const blob     = img.getAsFile();
+    const filename = await uploadBlob(blob);
+    _huntFindings[i].image = filename;
+    renderFindingPreview(i);
+  } catch (err) {
+    console.error("Paste upload failed:", err);
+    alert("Görsel yüklenemedi: " + err.message);
+  }
+}
+
+function renderFindingPreview(i) {
+  const area = document.getElementById(`finding-preview-${i}`);
+  const f = _huntFindings[i];
+  if (!area || !f) return;
+  if (!f.image) { area.innerHTML = ""; return; }
+  const url = `/static/uploads/${f.image}`;
+  area.innerHTML = `
+    <div class="paste-thumb-wrap">
+      <img class="paste-thumb" src="${url}" onclick="openLightbox('${url}')" title="Büyütmek için tıklayın"/>
+      <button class="paste-thumb-remove" type="button" onclick="removeFindingImage(${i})">&#x2715;</button>
+    </div>`;
+}
+
+function removeFindingImage(i) {
+  if (_huntFindings[i]) _huntFindings[i].image = null;
+  renderFindingPreview(i);
+}
+
 function toggleUcCreateFields() {
   const cb = document.getElementById("report-create-uc");
   const fields = document.getElementById("uc-create-fields");
@@ -2608,7 +2674,19 @@ async function openHuntReportModal(id) {
   renderIOCList();
 
   document.getElementById("report-hunt-affected-assets").value = r.affected_assets || "";
-  document.getElementById("report-hunt-findings").value        = r.findings || "";
+
+  // Bulgular listesi — findings_items boşsa ve eski tekil findings/
+  // findings_image doluysa (bu özellikten önce açılmış rapor), tek seferlik
+  // olarak yeni liste formatına aktarılır (ilk madde olarak).
+  try {
+    _huntFindings = JSON.parse(r.findings_items || "[]");
+    if (!Array.isArray(_huntFindings)) _huntFindings = [];
+  } catch { _huntFindings = []; }
+  if (!_huntFindings.length && (r.findings || r.findings_image)) {
+    _huntFindings = [{ text: r.findings || "", image: r.findings_image || null }];
+  }
+  renderFindings();
+
   document.getElementById("report-hunt-detection-suggest").value = r.detection_suggestion || "Hayır";
   document.getElementById("report-hunt-detection-detail").value  = r.detection_detail || "";
   toggleDetectionDetail();
@@ -2656,7 +2734,6 @@ async function openHuntReportModal(id) {
   [
     ["scope",           "scope_image"],
     ["affected-assets", "affected_assets_image"],
-    ["findings",        "findings_image"],
     ["detection-detail","detection_detail_image"],
     ["recommendations", "recommendations_image"],
   ].forEach(([htmlKey, apiKey]) => {
@@ -2684,8 +2761,11 @@ async function saveHuntReport() {
     ioc_list:                 _huntIOCList,
     affected_assets:          document.getElementById("report-hunt-affected-assets").value.trim(),
     affected_assets_image:    document.getElementById("report-hunt-affected-assets-image").value || null,
-    findings:                 document.getElementById("report-hunt-findings").value.trim(),
-    findings_image:           document.getElementById("report-hunt-findings-image").value || null,
+    // findings: eski tekil metin alanı, sadece /api/search'te aranabilirlik
+    // için madde metinlerinin birleşimiyle güncel tutuluyor — gerçek veri
+    // artık findings_items'ta (bkz. hunt_report_print.html render mantığı).
+    findings:                 _huntFindings.filter(f => (f.text||"").trim() || f.image).map(f => f.text||"").join("\n"),
+    findings_items:           JSON.stringify(_huntFindings.filter(f => (f.text||"").trim() || f.image)),
     detection_suggestion:     detectionSuggest,
     detection_detail:         document.getElementById("report-hunt-detection-detail").value.trim(),
     detection_detail_image:   document.getElementById("report-hunt-detection-detail-image").value || null,
@@ -2756,6 +2836,19 @@ async function openHuntDetail(id) {
     const recHtml  = recList.length  ? recList.map((v, i)  => `<div style="padding:4px 0;border-bottom:1px solid var(--border-subtle, rgba(255,255,255,.06))"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
     const vulnHtml = vulnList.length ? vulnList.map((v, i) => `<div style="padding:4px 0;border-bottom:1px solid var(--border-subtle, rgba(255,255,255,.06))"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
 
+    // Bulgular: yeni numaralı-liste formatı; findings_items boşsa (eski
+    // rapor) tekil findings/findings_image alanlarına düşülür.
+    let findingItems = [];
+    try { findingItems = JSON.parse(r.findings_items || "[]"); if (!Array.isArray(findingItems)) findingItems = []; } catch {}
+    findingItems = findingItems.filter(f => (f.text||"").trim() || f.image);
+    const findingsHtml = findingItems.length
+      ? findingItems.map((f, i) => `<div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-3);font-weight:600;margin-bottom:2px">${i+1}. Bulgu</div>
+          ${f.text ? `<div class="detail-value" style="white-space:pre-wrap">${esc(f.text)}</div>` : ""}
+          ${f.image ? detailImgRow("", [f.image]) : ""}
+        </div>`).join("")
+      : (r.findings ? `${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : "");
+
     let body = `
       <div class="detail-section">
         ${detailRow("Durum", r.status)}
@@ -2780,14 +2873,13 @@ async function openHuntDetail(id) {
         <div class="detail-row"><span class="detail-label">Rapor Durumu</span><span class="detail-value">${reportBadge}</span></div>
         ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="badge ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
         ${r.linked_uc_id ? `<div class="detail-row"><span class="detail-label">Bağlı Use-Case</span><span class="detail-value"><span class="badge status-done" style="cursor:pointer" onclick="closeHuntDetailModal();openUCDetail(${r.linked_uc_id})">UC #${r.linked_uc_id}</span></span></div>` : ""}
-        ${r.has_findings === "Evet" ? `<div class="detail-row"><span class="detail-label">Bulgu</span><span class="detail-value"><span class="badge status-done">Evet</span></span></div>` : ""}
         ${r.severity ? detailRow("Şiddet", r.severity) : ""}
         ${mitreBadges ? `<div class="detail-row"><span class="detail-label">MITRE ATT&amp;CK</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${mitreBadges}</span></div>` : ""}
         ${mitreDetail ? `<div style="padding:8px 0">${mitreDetail}</div>` : ""}
         ${r.scope ? `<div class="detail-section-title" style="margin-top:12px">Hedef &amp; Kapsam</div>${detailRow("", r.scope)}${r.scope_image ? detailImgRow("Görsel", [r.scope_image]) : ""}` : ""}
         ${iocBadges ? `<div class="detail-row"><span class="detail-label">IOC Listesi</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${iocBadges}</span></div>` : ""}
         ${r.affected_assets ? `${detailRow("Etkilenen Varlıklar", r.affected_assets)}${r.affected_assets_image ? detailImgRow("Görsel", [r.affected_assets_image]) : ""}` : ""}
-        ${r.findings ? `<div class="detail-section-title" style="margin-top:12px">Bulgular</div>${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : ""}
+        ${findingsHtml ? `<div class="detail-section-title" style="margin-top:12px">Bulgular</div>${findingsHtml}` : ""}
         ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title" style="margin-top:12px">Detection Önerisi</div>${detailRow("", r.detection_detail)}${r.detection_detail_image ? detailImgRow("Görsel", [r.detection_detail_image]) : ""}` : ""}
         ${vulnHtml ? `<div class="detail-section-title" style="margin-top:12px">Keşfedilen Güvenlik Açıkları</div><div style="font-size:13px;line-height:1.6">${vulnHtml}</div>` : ""}
         ${recHtml  ? `<div class="detail-section-title" style="margin-top:12px">Güvenlik Önerileri</div><div style="font-size:13px;line-height:1.6">${recHtml}</div>${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}

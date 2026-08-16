@@ -18,9 +18,17 @@
   --red:    #EF4444;
   --purple: #8B5CF6;
 }
+/* Montserrat (SIL Open Font License, static/fonts/OFL.txt) — Gotham lisanslı
+   değil, gömülemez; Gotham'a görsel olarak en yakın ücretsiz font seçildi.
+   DejaVu Sans, font dosyası herhangi bir sebeple yüklenemezse (ve Türkçe
+   karakter desteği için) yedek olarak kalıyor. */
+@font-face { font-family: "Montserrat"; src: url("{{ font_regular_uri }}");  font-weight: 400; }
+@font-face { font-family: "Montserrat"; src: url("{{ font_medium_uri }}");   font-weight: 500; }
+@font-face { font-family: "Montserrat"; src: url("{{ font_semibold_uri }}"); font-weight: 600; }
+@font-face { font-family: "Montserrat"; src: url("{{ font_bold_uri }}");     font-weight: 700; }
 html { font-size: 12px; }
 body {
-  font-family: "DejaVu Sans", Arial, sans-serif;
+  font-family: "Montserrat", "DejaVu Sans", Arial, sans-serif;
   color: var(--text-1);
   line-height: 1.5;
 }
@@ -77,7 +85,24 @@ body {
   background: rgba(94,106,210,0.12); color: var(--accent);
   border-radius: 8px; padding: 2px 8px; margin: 2px 4px 2px 0;
 }
-.report-img { max-width: 100%; max-height: 260px; margin-top: 6px; border: 1px solid var(--border); border-radius: 4px; }
+/* Rapordaki TÜM görseller (kapsam/bulgu/detection/öneri) aynı sınırı
+   paylaşır — biri postacı pulu kadar küçük, diğeri neredeyse sayfa
+   genişliğinde görünmesin diye. En-boy oranı bozulmadan (object-fit:contain)
+   en çok 420×280px içine sığar; küçük görseller olduğu gibi kalır. */
+.report-img {
+  display: block;
+  max-width: 420px;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.finding-block { margin-bottom: 12px; }
+.finding-block:last-child { margin-bottom: 0; }
+.finding-num { font-size: 10.5px; font-weight: 700; color: var(--text-2); margin-bottom: 3px; }
 
 table.mitre-table { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-top: 4px; }
 table.mitre-table th, table.mitre-table td {
@@ -173,10 +198,22 @@ ol.list-block li { padding: 2px 0; }
 
   <div class="section">
     <div class="section-title">Bulgular</div>
-    <div class="row"><span class="row-label">Bulgu Var Mı?</span><span class="row-value">{{ r.has_findings }}</span></div>
-    {% if r.has_findings == "Evet" %}
-      {% if r.findings %}<div class="text-block">{{ r.findings }}</div>{% endif %}
+    {% if finding_items %}
+      {% for f in finding_items %}
+      <div class="finding-block">
+        <div class="finding-num">{{ loop.index }}. Bulgu</div>
+        {% if f.text %}<div class="text-block">{{ f.text }}</div>{% endif %}
+        {% if f.image_uri %}<img class="report-img" src="{{ f.image_uri }}"/>{% endif %}
+      </div>
+      {% endfor %}
+    {% elif r.findings %}
+      {# Bu özellikten önce tamamlanmış eski raporlar — tekil alan biçimi #}
+      <div class="text-block">{{ r.findings }}</div>
       {% if findings_image_uri %}<img class="report-img" src="{{ findings_image_uri }}"/>{% endif %}
+    {% else %}
+      <div class="row-value" style="color:var(--text-3)">Bulgu saptanmadı.</div>
+    {% endif %}
+    {% if r.has_findings == "Evet" %}
       <div class="row" style="margin-top:6px"><span class="row-label">Şiddet</span><span class="row-value">{{ r.severity or "—" }}</span></div>
       {% if ioc_list %}
       <div class="row"><span class="row-label">IOC Listesi</span><span class="row-value">{% for ioc in ioc_list %}<span class="tag">{{ ioc }}</span>{% endfor %}</span></div>

@@ -704,6 +704,69 @@ ayrıntısını verebiliriz").
   hesap temizlendi, tune sayısı teste başlamadan önceki değere (9) döndü,
   audit hash zinciri geçerli.
 
+### Faz T — Hunt Raporu: Numaralı Bulgu Listesi, Sabit Görsel Sınırı, Montserrat Font (2026-08-16)
+
+Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
+
+- [x] **"Bulgu Var Mı? Evet" satırı kaldırıldı:** PDF'te ve detay modalinde
+  bu Q&A tarzı fazlalık satır yerine, bulgular artık "Bulgular" başlığının
+  altında doğrudan yazılıyor — hiç bulgu yoksa "Bulgu saptanmadı." yazıyor.
+- [x] **Bulgular artık numaralı bir liste, her maddenin kendi metni + kendi
+  görseli var:** Yeni `findings_items` kolonu (JSON: `[{text, image}, ...]`).
+  Formda "+ Ekle" her tıklamada yeni bir "N. Bulgu" kartı açıyor (MITRE
+  teknik girişleriyle aynı `.mitre-entry` görseli), her kartın kendi
+  metin kutusu + Ctrl+V ile yapıştırılan kendi görseli var. **Geriye dönük
+  uyumluluk:** eski tekil `findings`/`findings_image` kolonları silinmedi —
+  bu özellikten önce tamamlanmış raporlar hâlâ eski formatlarıyla doğru
+  render oluyor (PDF şablonu `findings_items` boşsa eskiye düşüyor); formu
+  ilk kez bu özellikle açan eski bir rapor, mevcut tek metnini/görselini
+  otomatik olarak listenin ilk maddesine taşıyor (analist Kaydet'e basınca
+  kalıcılaşıyor). `findings` kolonu artık madde metinlerinin birleşimiyle
+  otomatik güncelleniyor — `/api/search` ve Excel export'un hiçbir kod
+  değişikliği gerektirmeden çalışmaya devam etmesi için (tek kaynak orada
+  hâlâ o kolon).
+- [x] **Rapordaki tüm görseller için sabit, tutarlı bir üst sınır:**
+  `max-width:420px; max-height:280px` (en-boy oranı bozulmadan,
+  `object-fit:contain`) — kapsam/bulgu/detection/öneri görsellerinin
+  hepsi aynı kuralı paylaşıyor. Bu bir ZORLAMA değil bir TAVAN: sınırın
+  altındaki küçük görseller kendi doğal boyutunda kalıyor, büyük görseller
+  en-boy oranını koruyarak bu kutuya sığacak şekilde küçülüyor — hiçbiri
+  gerilmiyor/bozulmuyor (1600×1200 bir test görseliyle canlı doğrulandı,
+  bkz. aşağıdaki doğrulama notu).
+- [x] **Font: Montserrat.** Gotham istenmişti ama ücretli/lisanslı bir font
+  (Hoefler&Co.) — internetten indirip gömmek telif ihlali olurdu, kullanıcı
+  lisanslı dosya sağlayamayınca en yakın ücretsiz alternatif seçildi
+  (kullanıcı onayıyla). Google Fonts'un resmi OFL deposundaki değişken
+  fontundan (`fonttools varLib.instancer`) 4 statik ağırlık (400/500/600/700)
+  üretilip `static/fonts/`'a kondu — SIL Open Font License (`static/fonts/
+  OFL.txt`), ticari kullanım dahil serbest. WeasyPrint'in değişken font
+  desteğindeki olası tutarsızlıkları baştan elemek için bilinçli olarak
+  statik ağırlıklar tercih edildi. `@font-face` ile `file://` üzerinden
+  gömülüyor (görsellerle aynı desen), DejaVu Sans/Arial yedek olarak kalıyor.
+  Türkçe karakter kapsamı (ğşıöüçĞŞİÖÜÇ) doğrulandı.
+- [ ] **Kurum logosu — bekliyor.** Kullanıcı bir logo görseli paylaştı ama
+  bu araç setinde sohbete yapıştırılan bir görseli doğrudan dosyaya kaydetme
+  imkanı yok — kullanıcının dosyayı `static/`'e koyması veya yolunu vermesi
+  gerekiyor. Header'a eklenmesi ayrı, küçük bir takip işi.
+- [x] **Uçtan uca doğrulandı** (geçici debug admin, requests + PyMuPDF ile
+  PDF sayfalarını PNG'ye render edip görsel inceleme): eski formatlı 4
+  tamamlanmış hunt (id 1,4,6,7) hâlâ hatasız PDF üretiyor (geriye dönük
+  uyumluluk kırılmadı); yeni 3 maddelik (2'si görselli) bir bulgu listesi
+  oluşturulup Tamamlandı'ya kadar götürüldü, PDF'te "BULGULAR" başlığı
+  altında "1. Bulgu/2. Bulgu/3. Bulgu" doğru numaralandırılmış, her görsel
+  kendi maddesinin altında, Montserrat fontu ve Türkçe karakterler
+  (ğşıöüçĞŞİÖÜÇ) doğru render oluyor (görsel olarak PNG'ye çevrilip
+  incelendi); finding 1'in görseli 1600×1200 oversized bir görselle
+  değiştirilip PDF'teki gerçek gömülü görsel boyutu ölçüldü — 420×280 üst
+  sınırına en-boy oranı korunarak sığdığı, finding 2'nin küçük (300×200)
+  görselinin ise doğal boyutunda kaldığı (büyütülmediği) doğrulandı.
+  `/api/search` ve Excel export'un `findings` türetilmiş metniyle hâlâ
+  çalıştığı doğrulandı. Tarayıcıda rapor formu açılıp mevcut 3 madde doğru
+  yüklendiği (metin + görsel önizleme), "+ Ekle"nin yeni madde ekleyip
+  odaklandığı, "×"in doğru maddeyi sildiği DOM durumu üzerinden teyit
+  edildi, konsol hatasız. Test verileri (hunt, görseller, debug hesap)
+  temizlendi, hunt sayısı 7'ye döndü, audit hash zinciri geçerli.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
