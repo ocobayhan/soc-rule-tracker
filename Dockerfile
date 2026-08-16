@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # Timezone ve locale
 ENV TZ=Europe/Istanbul
