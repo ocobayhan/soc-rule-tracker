@@ -3142,9 +3142,13 @@ def hunt_report_pdf(item_id):
         path = os.path.join(app.root_path, "static", "fonts", filename)
         return "file:///" + os.path.abspath(path).replace(os.sep, "/")
 
+    _logo_path = os.path.join(app.root_path, "static", "logo_dias.jpg")
+    logo_uri = ("file:///" + os.path.abspath(_logo_path).replace(os.sep, "/")) if os.path.exists(_logo_path) else None
+
     html = render_template(
         "hunt_report_print.html",
         r=row,
+        logo_uri=logo_uri,
         mitre_entries=mitre_entries,
         ioc_list=ioc_list,
         env_list=env_list,

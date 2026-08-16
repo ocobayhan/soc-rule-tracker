@@ -744,10 +744,18 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
   statik ağırlıklar tercih edildi. `@font-face` ile `file://` üzerinden
   gömülüyor (görsellerle aynı desen), DejaVu Sans/Arial yedek olarak kalıyor.
   Türkçe karakter kapsamı (ğşıöüçĞŞİÖÜÇ) doğrulandı.
-- [ ] **Kurum logosu — bekliyor.** Kullanıcı bir logo görseli paylaştı ama
-  bu araç setinde sohbete yapıştırılan bir görseli doğrudan dosyaya kaydetme
-  imkanı yok — kullanıcının dosyayı `static/`'e koyması veya yolunu vermesi
-  gerekiyor. Header'a eklenmesi ayrı, küçük bir takip işi.
+- [x] **Kurum logosu (2026-08-16, takip):** Kullanıcı DiAS logosunu
+  `static/logo_dias.jpg`'e koydu. `hunt_report_pdf()`'e `_font_uri` ile aynı
+  `file://` URI deseniyle bir `logo_uri` context değişkeni eklendi (dosya
+  yoksa `None` — şablon `{% if %}` ile atlıyor, hata vermiyor); header'da
+  başlığın solunda 42px yükseklikte, en-boy oranı korunarak render ediliyor.
+  PyMuPDF ile PDF sayfası PNG'ye çevrilip görsel olarak konumu/boyutu
+  doğrulandı — mevcut header düzeniyle (başlık/durum rozeti/tarih) hizalı,
+  taşma yok. Restart sırasında `WEASYPRINT_EXE`'nin göreli yol yerine mutlak
+  yolla verilmesi gerektiği fark edildi (göreli yol bu ortamda
+  `subprocess.run`'da `FileNotFoundError` veriyordu) — dev restart talimatı
+  buna göre not edilmeli. Test hesabı temizlendi, audit zinciri geçerli
+  (209 kayıt, 185 zincirli).
 - [x] **Uçtan uca doğrulandı** (geçici debug admin, requests + PyMuPDF ile
   PDF sayfalarını PNG'ye render edip görsel inceleme): eski formatlı 4
   tamamlanmış hunt (id 1,4,6,7) hâlâ hatasız PDF üretiyor (geriye dönük
