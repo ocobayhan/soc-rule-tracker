@@ -766,6 +766,9 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
   güncellendi (CSS değişkeni değil, elle yazılmış rgba olduğu için otomatik
   takip etmiyordu). PDF yeniden üretilip PNG'ye çevrilerek görsel doğrulandı,
   test hesabı temizlendi, audit zinciri geçerli (210 kayıt, 186 zincirli).
+- [x] **Küçük düzeltme (2026-08-16):** "Onay Bilgileri" bölüm başlığındaki
+  "(Hesap Verebilirlik)" eki kaldırıldı (kullanıcı isteğiyle) — PDF yeniden
+  üretilip doğrulandı, audit zinciri geçerli (212 kayıt, 188 zincirli).
 - [x] **Uçtan uca doğrulandı** (geçici debug admin, requests + PyMuPDF ile
   PDF sayfalarını PNG'ye render edip görsel inceleme): eski formatlı 4
   tamamlanmış hunt (id 1,4,6,7) hâlâ hatasız PDF üretiyor (geriye dönük
