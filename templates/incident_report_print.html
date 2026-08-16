@@ -131,7 +131,7 @@ body {
         <div class="row"><span class="row-label">Ortam</span><span class="row-value">{{ r.environment or "—" }}</span></div>
       </div>
       <div>
-        <div class="row"><span class="row-label">Raporlayan</span><span class="row-value">{{ r.reporter }}</span></div>
+        <div class="row"><span class="row-label">Raporlayan</span><span class="row-value">{{ display_name(r.reporter) }}</span></div>
         <div class="row"><span class="row-label">Tarih</span><span class="row-value">{{ fmt(r.created_at) }}</span></div>
       </div>
     </div>
@@ -141,7 +141,7 @@ body {
     <div class="section-title">Onay Bilgileri</div>
     <div class="grid-2">
       <div>
-        <div class="row"><span class="row-label">Onaylayan</span><span class="row-value">{{ r.validated_by or "—" }}</span></div>
+        <div class="row"><span class="row-label">Onaylayan</span><span class="row-value">{{ display_name(r.validated_by) or "—" }}</span></div>
         <div class="row"><span class="row-label">Onay Tarihi</span><span class="row-value">{{ fmt(r.validated_at) if r.validated_at else "—" }}</span></div>
       </div>
       <div>

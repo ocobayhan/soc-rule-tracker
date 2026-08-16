@@ -976,6 +976,39 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
     `v36`'ya yükseltildi. Test verileri (3 rapor, 2 görsel dosyası, debug
     hesap) temizlendi, audit zinciri geçerli (228 kayıt, 204 zincirli).
 
+### Takip (2026-08-16) — Ad Soyad, kalan yüzeyler (PDF/rapor/Excel)
+
+Ad Soyad altyapısı (kolon, kullanıcı yönetimi UI, `displayName()`) zaten
+Faz H'de (2026-07-19) vardı ama sadece **istemci tarafı** (JS) çalışıyordu —
+Jinja/PDF/Excel gibi Python tarafında hiç karşılığı yoktu. Kullanıcı bunu
+Hunt/Incident PDF'lerinde ve diğer "göze batan" yerlerde fark edip istedi.
+
+- Yeni `display_name(username)` (`app.py`) — `displayName()`'in sunucu
+  tarafı eşi, `g` üzerinde istek başına önbelleklenen tek bir sorgu.
+  `inject_app_version` ile aynı `@app.context_processor` deseniyle her
+  template'te otomatik erişilebilir hale getirildi.
+- Kapsanan yerler: Hunt PDF (4 alan), Olay Raporu PDF (2 alan), `/report`
+  aylık görsel rapor (3 alan), Excel export Sheet 1-3 (12 kolon), Audit Log
+  Excel export (1 kolon), sidebar (artık ilk render'da doğru — önceden JS'in
+  async `/api/analysts` çağrısını bekliyordu), 8+3 "kendine kilitli" dropdown
+  (`lockToSelf` + 3 "Üstlen" modali) ve 2 "meslektaşın atamasını salt-okunur
+  gör" dropdown'u (`value` ham kullanıcı adı kalıyor, sadece görünen metin
+  Ad Soyad'a çevrildi — DB/eşleştirme etkilenmedi).
+- **Bilinçli dokunulmayan yer:** audit `detail` serbest metnine gömülü
+  kullanıcı adları (CREATE_USER/EDIT_USER/DELETE_USER/EXPORT_AUDIT_LOG) —
+  Faz H'nin kendi gerekçesiyle aynı: bunlar adli/kanıt niteliğinde, ham
+  sistem kimliği burada daha doğru.
+- **Doğrulandı** (gerçek hesap "Kerem Kundakçı"/admin + "Ayşe Yılmaz"/analist,
+  gerçek tarayıcı + PyMuPDF ile PDF görsel inceleme + openpyxl ile Excel
+  okuma): Hunt PDF'in 4 alanı, Incident PDF'in 2 alanı, `/report`'ta Ad
+  Soyad doğru render oluyor (ham kullanıcı adı hiçbir yerde görünmüyor);
+  Excel Sheet 3'te Ad Soyad doğru yazılı; sidebar ilk yüklemede (ekstra JS
+  round-trip beklemeden) doğru isim gösteriyor; analist hesabıyla Hunt
+  formu açılınca `value="AyseY"` (ham, backend için) + görünen metin "Ayşe
+  Yılmaz" olan kilitli dropdown doğrulandı. `app.js` versiyonu `v37`'ye
+  yükseltildi. Test verileri (2 hesap, 1 hunt, 1 olay raporu) temizlendi,
+  audit zinciri geçerli (241 kayıt, 217 zincirli).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

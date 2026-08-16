@@ -60,8 +60,8 @@
   <div class="sidebar-bottom">
     <div class="sidebar-divider"></div>
     <div class="sidebar-user">
-      <div class="sidebar-user-avatar" id="sidebar-user-avatar">{{ username[0]|upper if username else "?" }}</div>
-      <span id="sidebar-user-name">{{ username }}</span>
+      <div class="sidebar-user-avatar" id="sidebar-user-avatar">{{ display_name(username)[0]|upper if username else "?" }}</div>
+      <span id="sidebar-user-name">{{ display_name(username) }}</span>
     </div>
     <a href="/logout" class="nav-btn" style="color:var(--text-2)">
       <span>&#8617;</span> Çıkış
@@ -1691,6 +1691,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=36"></script>
+<script src="/static/app.js?v=37"></script>
 </body>
 </html>

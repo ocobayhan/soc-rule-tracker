@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v36
+   SOC Tracker — Frontend  v37
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -670,7 +670,7 @@ function onUCSearch(val)   { ucSearch   = val.toLowerCase(); renderUCRows();  }
 function lockToSelf(selectId) {
   const el = document.getElementById(selectId);
   if (!el) return;
-  el.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(CURRENT_USER)}</option>`;
+  el.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(displayName(CURRENT_USER))}</option>`;
   el.disabled  = true;
 }
 function freeSelect(selectId, currentVal) {
@@ -1056,7 +1056,7 @@ function openTuneEditModal(id) {
       lockToSelf("edit-tune-analyst");
     } else {
       const sel = document.getElementById("edit-tune-analyst");
-      sel.innerHTML = `<option value="${esc(r.tuning_analyst||"")}">${esc(r.tuning_analyst||"—")}</option>`;
+      sel.innerHTML = `<option value="${esc(r.tuning_analyst||"")}">${esc(displayName(r.tuning_analyst)||"—")}</option>`;
       sel.disabled  = true;
     }
     // Rapor alanları (raporlayan doldurur): yalnızca raporlayan düzenleyebilir
@@ -1134,7 +1134,7 @@ function openTuneClaimModal(id) {
   document.getElementById("claim-tune-id").value = id;
   const sel = document.getElementById("claim-tune-analyst");
   if (USER_ROLE === "analyst") {
-    sel.innerHTML  = `<option value="${esc(CURRENT_USER)}" selected>${esc(CURRENT_USER)}</option>`;
+    sel.innerHTML  = `<option value="${esc(CURRENT_USER)}" selected>${esc(displayName(CURRENT_USER))}</option>`;
     sel.disabled   = true;
   } else {
     sel.disabled = false;
@@ -1496,7 +1496,7 @@ function openUCEditModal(id) {
       lockToSelf("edit-uc-rule-author");
     } else {
       const sel = document.getElementById("edit-uc-rule-author");
-      sel.innerHTML = `<option value="${esc(r.rule_author||"")}">${esc(r.rule_author||"—")}</option>`;
+      sel.innerHTML = `<option value="${esc(r.rule_author||"")}">${esc(displayName(r.rule_author)||"—")}</option>`;
       sel.disabled  = true;
     }
     setUCEnvEditDisabled(!isRequester);
@@ -1557,7 +1557,7 @@ function openUCClaimModal(id) {
   document.getElementById("claim-uc-id").value = id;
   const sel = document.getElementById("claim-uc-analyst");
   if (USER_ROLE === "analyst") {
-    sel.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(CURRENT_USER)}</option>`;
+    sel.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(displayName(CURRENT_USER))}</option>`;
     sel.disabled  = true;
   } else {
     sel.disabled = false;
@@ -2445,7 +2445,7 @@ function openHuntClaimModal(id) {
   document.getElementById("claim-hunt-id").value = id;
   const sel = document.getElementById("claim-hunt-analyst");
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
-    sel.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(CURRENT_USER)}</option>`;
+    sel.innerHTML = `<option value="${esc(CURRENT_USER)}" selected>${esc(displayName(CURRENT_USER))}</option>`;
     sel.disabled  = true;
   } else {
     sel.disabled = false;

@@ -111,6 +111,26 @@ def _col_exists(db, table, col):
     rows = db.execute(f"PRAGMA table_info({table})").fetchall()
     return any(r["name"] == col for r in rows)
 
+def display_name(username):
+    """Kullanıcı adını Ad Soyad'a çevirir (yoksa kullanıcı adına düşer) —
+    static/app.js'teki displayName()'in sunucu tarafı karşılığı. PDF/rapor/
+    Excel export'u gibi Jinja/JS'siz yollarda kullanılır; DB/eşleştirme/
+    webhook mantığı her zaman ham kullanıcı adı üzerinden çalışmaya devam
+    eder, bu sadece gösterim katmanı (bkz. docs/rbac.md, Faz H). Bir
+    request içinde tek sorgu — g'de önbelleklenir."""
+    if not username:
+        return username
+    if "_display_names" not in g:
+        rows = get_db().execute("SELECT username, full_name FROM users").fetchall()
+        g._display_names = {r["username"]: r["full_name"] for r in rows if r["full_name"]}
+    return g._display_names.get(username) or username
+
+@app.context_processor
+def inject_display_name():
+    """display_name() her template'te otomatik erişilebilir olsun diye —
+    inject_app_version'daki aynı desen."""
+    return {"display_name": display_name}
+
 def init_db():
     db = get_db()
 
@@ -2768,7 +2788,7 @@ def export_audit():
 
     for r in rows:
         ws.append([
-            r["created_at"], r["username"], r["action"],
+            r["created_at"], display_name(r["username"]), r["action"],
             r["record_type"] or "", r["record_id"] or "", r["detail"] or "",
         ])
     for col in ws.columns:
@@ -2861,15 +2881,15 @@ def export_data():
     tune_q += " WHERE (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)" if exp_month else " WHERE 1=1"
     tune_q += " ORDER BY id"
     for r in db.execute(tune_q, (exp_month, exp_month) if exp_month else ()).fetchall():
-        row = [r["id"], r["rule_name"], r["environment"], r["reporter"],
+        row = [r["id"], r["rule_name"], r["environment"], display_name(r["reporter"]),
                r["tune_reason"], r["trigger_frequency"] or "",
-               r["tuning_analyst"] or "", r["how_tuned"] or "",
+               display_name(r["tuning_analyst"]) or "", r["how_tuned"] or "",
                r["status"], fmt_date(r["created_at"]),
                fmt_date(r["tuned_at"]) if "tuned_at" in r.keys() else "",
-               r["approved_by"] if "approved_by" in r.keys() else "",
+               display_name(r["approved_by"]) if "approved_by" in r.keys() else "",
                fmt_date(r["approved_at"]) if "approved_at" in r.keys() else "",
                fmt_date(r["completed_at"]),
-               gv(r, "validated_by"), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
+               display_name(gv(r, "validated_by")), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
                gv(r, "qa_test_ok"), gv(r, "qa_peer_reviewed"), gv(r, "approval_note"),
                gv(r, "xsoar_case_id"), gv(r, "xsoar_url"), gv(r, "xsoar_case_missing", "Hayır")]
         ws1.append(row)
@@ -2891,15 +2911,15 @@ def export_data():
     uc_q += " WHERE (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)" if exp_month else " WHERE 1=1"
     uc_q += " ORDER BY id"
     for r in db.execute(uc_q, (exp_month, exp_month) if exp_month else ()).fetchall():
-        row = [r["id"], r["usecase_description"], r["environment"], r["requester"],
-               r["rule_author"] or "", r["rule_name"] or "", r["notes"] or "",
+        row = [r["id"], r["usecase_description"], r["environment"], display_name(r["requester"]),
+               display_name(r["rule_author"]) or "", r["rule_name"] or "", r["notes"] or "",
                r["status"], fmt_date(r["created_at"]),
                fmt_date(r["test_started_at"]) if "test_started_at" in r.keys() else "",
                fmt_date(r["test_approved_at"]) if "test_approved_at" in r.keys() else "",
-               r["test_approved_by"] if "test_approved_by" in r.keys() else "",
+               display_name(r["test_approved_by"]) if "test_approved_by" in r.keys() else "",
                r["test_notes"] if "test_notes" in r.keys() else "",
                fmt_date(r["completed_at"]),
-               gv(r, "validated_by"), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
+               display_name(gv(r, "validated_by")), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
                gv(r, "qa_test_ok"), gv(r, "qa_peer_reviewed")]
         ws2.append(row)
         for ci in range(1, len(uc_cols) + 1):
@@ -2941,8 +2961,8 @@ def export_data():
         except Exception:
             vuln_txt  = ""
         env_val = r["hunt_environment"] if "hunt_environment" in r.keys() and r["hunt_environment"] else (r["environment"] if "environment" in r.keys() else "")
-        row = [r["id"], r["hunt_subject"], env_val, r["requester"],
-               r["assigned_analyst"] or "", r["status"],
+        row = [r["id"], r["hunt_subject"], env_val, display_name(r["requester"]),
+               display_name(r["assigned_analyst"]) or "", r["status"],
                r["report_status"] or "", r["hunt_result"] or "",
                r["severity"] if "severity" in r.keys() else "",
                mitre_txt, r["findings"] or "", ioc_txt,
@@ -2951,8 +2971,8 @@ def export_data():
                (r["detection_suggestion"] or "") + ((" — " + r["detection_detail"]) if r["detection_detail"] else ""),
                r["recommendations"] or "", vuln_txt, gv(r, "hunt_duration_hours"),
                fmt_date(r["created_at"]), fmt_date(r["started_at"]), fmt_date(r["completed_at"]),
-               gv(r, "validated_by"), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
-               gv(r, "result_approved_by"), fmt_date(gv(r, "result_approved_at")), gv(r, "result_approval_note")]
+               display_name(gv(r, "validated_by")), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
+               display_name(gv(r, "result_approved_by")), fmt_date(gv(r, "result_approved_at")), gv(r, "result_approval_note")]
         ws3.append(row)
         for ci in range(1, len(hunt_cols) + 1):
             ws3.cell(row=ws3.max_row, column=ci).alignment = CELL_ALIGN

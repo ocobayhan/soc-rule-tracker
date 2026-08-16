@@ -143,8 +143,8 @@ ol.list-block li { padding: 2px 0; }
     <div class="section-title">Talep Bilgileri</div>
     <div class="grid-2">
       <div>
-        <div class="row"><span class="row-label">Talep Eden</span><span class="row-value">{{ r.requester }}</span></div>
-        <div class="row"><span class="row-label">Atanan Analist</span><span class="row-value">{{ r.assigned_analyst or "—" }}</span></div>
+        <div class="row"><span class="row-label">Talep Eden</span><span class="row-value">{{ display_name(r.requester) }}</span></div>
+        <div class="row"><span class="row-label">Atanan Analist</span><span class="row-value">{{ display_name(r.assigned_analyst) or "—" }}</span></div>
         <div class="row"><span class="row-label">Ortamlar</span><span class="row-value">{% for e in env_list %}<span class="tag">{{ e }}</span>{% else %}—{% endfor %}</span></div>
       </div>
       <div>
@@ -162,12 +162,12 @@ ol.list-block li { padding: 2px 0; }
     <div class="section-title">Onay Bilgileri</div>
     <div class="grid-2">
       <div>
-        <div class="row"><span class="row-label">Ön Onayı Veren</span><span class="row-value">{{ r.validated_by or "—" }}</span></div>
+        <div class="row"><span class="row-label">Ön Onayı Veren</span><span class="row-value">{{ display_name(r.validated_by) or "—" }}</span></div>
         <div class="row"><span class="row-label">Ön Onay Tarihi</span><span class="row-value">{{ fmt(r.validated_at) if r.validated_at else "—" }}</span></div>
         {% if r.validation_note %}<div class="row"><span class="row-label">Ön Onay Notu</span><span class="row-value">{{ r.validation_note }}</span></div>{% endif %}
       </div>
       <div>
-        <div class="row"><span class="row-label">Sonucu Onaylayan</span><span class="row-value">{{ r.result_approved_by or "—" }}</span></div>
+        <div class="row"><span class="row-label">Sonucu Onaylayan</span><span class="row-value">{{ display_name(r.result_approved_by) or "—" }}</span></div>
         <div class="row"><span class="row-label">Sonuç Onay Tarihi</span><span class="row-value">{{ fmt(r.result_approved_at) if r.result_approved_at else "—" }}</span></div>
         {% if r.result_approval_note %}<div class="row"><span class="row-label">Sonuç Onay Notu</span><span class="row-value">{{ r.result_approval_note }}</span></div>{% endif %}
       </div>

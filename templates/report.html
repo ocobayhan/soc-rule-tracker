@@ -534,7 +534,7 @@ body {
             <td class="text-muted">{{ r.id }}</td>
             <td class="td-trunc" style="max-width:180px" title="{{ r.rule_name | e }}">{{ r.rule_name | e }}</td>
             <td class="text-muted">{{ r.environment | e }}</td>
-            <td class="text-muted">{{ r.tuning_analyst or '—' }}</td>
+            <td class="text-muted">{{ display_name(r.tuning_analyst) or '—' }}</td>
             <td><span class="pill {{ tune_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
             <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
           </tr>
@@ -593,7 +593,7 @@ body {
             <td class="text-muted">{{ r.id }}</td>
             <td class="td-trunc" style="max-width:180px" title="{{ r.usecase_description | e }}">{{ r.usecase_description | e }}</td>
             <td class="text-muted">{{ r.environment | e }}</td>
-            <td class="text-muted">{{ r.rule_author or '—' }}</td>
+            <td class="text-muted">{{ display_name(r.rule_author) or '—' }}</td>
             <td><span class="pill {{ uc_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
             <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
           </tr>
@@ -649,7 +649,7 @@ body {
           <tr>
             <td class="text-muted">{{ r.id }}</td>
             <td class="td-trunc" style="max-width:200px" title="{{ r.hunt_subject | e }}">{{ r.hunt_subject | e }}</td>
-            <td class="text-muted">{{ r.assigned_analyst or '—' }}</td>
+            <td class="text-muted">{{ display_name(r.assigned_analyst) or '—' }}</td>
             <td class="text-muted">{{ r.hunt_result or '—' }}</td>
             <td><span class="pill {{ hunt_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
             <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
