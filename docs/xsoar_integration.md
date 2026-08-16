@@ -166,6 +166,53 @@ curl -X POST https://<sunucu>:9897/api/integrations/xsoar/incident-report \
   }'
 ```
 
+## Case'e Sonradan Görsel Ekleme (2026-08-16)
+
+Ana webhook "tek çağrıda hepsi birden" mantığıyla çalışır (rapor + tüm
+görseller aynı istekte). Bunun dışında, bir case için **ayrı ayrı, farklı
+zamanlarda** görsel eklemek isteyen playbook'lar için ayrı, daha hafif bir
+uç nokta da var — raporun durumuna bakılmaksızın çalışır (Taslak, Onaylandı
+veya Reddedildi fark etmez; geç gelen ek kanıt senaryosu için bilinçli
+tercih).
+
+### Uç Nokta
+
+```
+POST /api/integrations/xsoar/incident-report/image
+```
+
+Kimlik doğrulama ana webhook'la aynı (`X-API-Key`).
+
+### İstek Gövdesi (JSON)
+
+| Alan | Zorunlu | Açıklama |
+|------|---------|----------|
+| `xsoar_case_id` | ✅ | Görselin ekleneceği raporu bulmak için kullanılır — o case'e ait **en son** rapor hedeflenir. Case için hiç rapor yoksa `404` döner (önce ana webhook'un raporu oluşturması gerekir). |
+| `image` | ✅ | Tek bir görsel — ham base64, opsiyonel `data:image/X;base64,` önekiyle. |
+| `order` | opsiyonel | Görselin numarası/etiketi. Verilmezse mevcut en yüksek numaranın bir fazlası otomatik atanır. Verilip o raporda zaten kullanılıyorsa (örn. iki ayrı çağrı da `1` gönderirse) veri sessizce üzerine yazılmaz — bir harf ekiyle ilk boş etiket kullanılır: `1`, `1a`, `1b`... Rapor arayüzünde "Görsel 1", "Görsel 1a" olarak görünür. |
+
+### Davranış
+
+- Başarılı yanıt: güncellenmiş olay raporu kaydının tamamı (`201`).
+- Audit log'a `ADD_INCIDENT_IMAGE_XSOAR` aksiyonu ile, hangi etiketle
+  eklendiği ve raporun güncel toplam görsel sayısı detayında yazılır.
+- **Not:** Bir analist Taslak durumundaki bir raporu SOC Tracker
+  arayüzünden düzenleyip kaydettiğinde, o ana kadar eklenmiş tüm
+  görsellerin etiketleri (`1`, `1a` dahil) olduğu gibi korunur —
+  sıralama sadece görsel silinip eklendiğinde değişir.
+
+### Örnek İstek
+
+```bash
+curl -X POST https://<sunucu>:9897/api/integrations/xsoar/incident-report/image \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <XSOAR_WEBHOOK_TOKEN>" \
+  -d '{
+    "xsoar_case_id": "12345",
+    "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+  }'
+```
+
 ## Kapsam Dışı (v1)
 
 PDF export bu ilk sürümde yok — Hunt raporunun PDF deseni (Montserrat font,

@@ -50,7 +50,8 @@ AUDIT_CATEGORIES = {
                         "APPROVE_HUNT_RESULT", "REJECT_HUNT_RESULT",
                         "APPROVE_INCIDENT", "REJECT_INCIDENT"],
     "work_done":      ["CLOSE_TUNE", "CLOSE_UC", "CLOSE_HUNT", "REPORT_HUNT"],
-    "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER", "EDIT_INCIDENT"],
+    "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER", "EDIT_INCIDENT",
+                        "ADD_INCIDENT_IMAGE_XSOAR"],
     "delete":         ["DELETE_TUNE", "DELETE_UC", "DELETE_HUNT", "DELETE_USER", "DELETE_INCIDENT"],
     "system":         ["EXPORT_HUNT_PDF", "VERIFY_AUDIT_CHAIN", "EDIT_SETTING", "EXPORT_AUDIT_LOG"],
 }
@@ -1317,6 +1318,80 @@ def xsoar_create_incident_report():
     if requested_by:
         detail += f" | Talep Eden (XSOAR): {requested_by}" + ("" if reporter == requested_by else " (eşleşmedi, genel etikete düşüldü)")
     write_audit("CREATE_INCIDENT_XSOAR", "incident", new_row["id"], detail)
+    return jsonify(dict(new_row)), 201
+
+def _incident_next_image_label(images, requested):
+    """Yeni eklenen bir görselin 'order' etiketini belirler. XSOAR bir numara
+    vermezse mevcut en büyük numaranın bir fazlası otomatik atanır. Numara
+    verilip mevcut bir görselle çakışırsa (örn. iki ayrı çağrı da 'order':1
+    gönderirse) veri sessizce üzerine yazılmaz — 1a, 1b... gibi bir harf eki
+    ile ilk boş etiket bulunup kullanılır."""
+    existing_labels = {str(im.get("order")) for im in images if isinstance(im, dict)}
+    if requested in (None, ""):
+        nums = []
+        for im in images:
+            if not isinstance(im, dict):
+                continue
+            digits = "".join(ch for ch in str(im.get("order", "")) if ch.isdigit())
+            if digits:
+                nums.append(int(digits))
+        return (max(nums) + 1) if nums else 1
+    label = str(requested).strip()
+    if label not in existing_labels:
+        return int(label) if label.isdigit() else label
+    for i in range(26):
+        candidate = f"{label}{chr(ord('a') + i)}"
+        if candidate not in existing_labels:
+            return candidate
+    return f"{label}-{len(images) + 1}"  # 26 çakışma pratikte imkansız, yine de bir çıkış yolu olsun
+
+@app.route("/api/integrations/xsoar/incident-report/image", methods=["POST"])
+@api_key_required
+def xsoar_add_incident_image():
+    """XSOAR'dan, bir olay raporuna sonradan/tek tek görsel eklemek için ayrı
+    bir uç nokta — ana webhook'taki 'tek çağrıda hepsi birden' akışından
+    bağımsız. Raporun durumuna bakılmaksızın çalışır (kullanıcı kararı: geç
+    gelen ek kanıt senaryosu için, Onaylandı/Reddedildi bir rapora da görsel
+    eklenebilsin) — bu, PUT /api/incident-reports/<id>'nin Taslak-only
+    kısıtından bilinçli olarak farklıdır."""
+    import json as _j
+    data = request.json or {}
+    case_id = str(data.get("xsoar_case_id", "")).strip()
+    if not case_id:
+        return jsonify({"error": "xsoar_case_id zorunludur"}), 400
+    if not data.get("image"):
+        return jsonify({"error": "image zorunludur"}), 400
+
+    db  = get_db()
+    row = db.execute(
+        "SELECT * FROM incident_reports WHERE xsoar_case_id=? ORDER BY id DESC LIMIT 1",
+        (case_id,),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": f"Bu SOAR Case ID ({case_id}) için bir olay raporu bulunamadı — önce ana webhook'un raporu oluşturması gerekir"}), 404
+
+    fn = _decode_incident_image(data["image"])
+    if not fn:
+        return jsonify({"error": "Görsel çözümlenemedi (geçersiz base64 veya desteklenmeyen format)"}), 400
+
+    try:
+        images = _j.loads(row["images"] or "[]")
+        if not isinstance(images, list):
+            images = []
+    except Exception:
+        images = []
+
+    label = _incident_next_image_label(images, data.get("order"))
+    images.append({"order": label, "filename": fn})
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("UPDATE incident_reports SET images=?, updated_at=? WHERE id=?",
+               (_j.dumps(images), now, row["id"]))
+    db.commit()
+    write_audit("ADD_INCIDENT_IMAGE_XSOAR", "incident", row["id"],
+                f"Başlık: {row['title']} | XSOAR Case: {case_id} | Görsel: {label} (toplam {len(images)})")
+
+    new_row = db.execute("SELECT * FROM incident_reports WHERE id=?", (row["id"],)).fetchone()
     return jsonify(dict(new_row)), 201
 
 @app.route("/api/incident-reports", methods=["GET"])

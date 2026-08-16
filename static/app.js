@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v34
+   SOC Tracker — Frontend  v35
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1761,6 +1761,7 @@ const ACTION_TR = {
   "REJECT_HUNT_RESULT":     "Hunt sonucu revizyona gönderildi",
   "EXPORT_HUNT_PDF":        "Hunt raporu PDF olarak indirildi",
   "CREATE_INCIDENT_XSOAR":  "Olay raporu oluşturuldu (XSOAR)",
+  "ADD_INCIDENT_IMAGE_XSOAR": "Olay raporuna görsel eklendi (XSOAR)",
   "EDIT_INCIDENT":          "Olay raporu düzenlendi",
   "APPROVE_INCIDENT":       "Olay raporu onaylandı",
   "REJECT_INCIDENT":        "Olay raporu reddedildi",
@@ -1782,6 +1783,7 @@ const ACTION_CLS = {
   "APPROVE_HUNT_RESULT": "audit-close", "REJECT_HUNT_RESULT": "audit-delete",
   "EXPORT_HUNT_PDF": "audit-edit",
   "CREATE_INCIDENT_XSOAR": "audit-create",
+  "ADD_INCIDENT_IMAGE_XSOAR": "audit-edit",
   "EDIT_INCIDENT": "audit-edit",
   "APPROVE_INCIDENT": "audit-close",
   "REJECT_INCIDENT": "audit-delete",
@@ -3285,10 +3287,11 @@ function renderIncidentGallery() {
   if (!gallery) return;
   gallery.innerHTML = _incidentImages.map((img, i) => {
     const url = `/static/uploads/${img.filename}`;
+    const label = (img.order !== undefined && img.order !== null) ? img.order : i + 1;
     return `<div class="paste-thumb-wrap">
-      <img class="paste-thumb" src="${url}" onclick="openLightbox('${url}')" title="Görsel ${i + 1} — büyütmek için tıklayın"/>
+      <img class="paste-thumb" src="${url}" onclick="openLightbox('${url}')" title="Görsel ${label} — büyütmek için tıklayın"/>
       <button class="paste-thumb-remove" type="button" onclick="removeIncidentImage(${i})">&#x2715;</button>
-      <div style="text-align:center;font-size:10px;color:var(--text-3);margin-top:2px">Görsel ${i + 1}</div>
+      <div style="text-align:center;font-size:10px;color:var(--text-3);margin-top:2px">Görsel ${label}</div>
     </div>`;
   }).join("");
 }
@@ -3350,7 +3353,10 @@ async function saveIncidentEdit() {
     environment:   document.getElementById("incident-edit-env").value,
     xsoar_case_id: document.getElementById("incident-edit-case-id").value.trim(),
     sections:      validSections,
-    images:        _incidentImages.map((img, i) => ({ order: i + 1, filename: img.filename })),
+    images:        _incidentImages.map((img, i) => ({
+      order: (img.order !== undefined && img.order !== null) ? img.order : i + 1,
+      filename: img.filename,
+    })),
   };
   try {
     await apiFetch(`/api/incident-reports/${id}`, { method: "PUT", body: JSON.stringify(payload) });
@@ -3380,9 +3386,10 @@ async function openIncidentDetail(id) {
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
       ${images.map((img, i) => {
         const url = `/static/uploads/${img.filename}`;
+        const label = (img.order !== undefined && img.order !== null) ? img.order : i + 1;
         return `<div style="text-align:center">
           <img class="detail-img" src="${url}" onclick="openLightbox('${url}')" title="Büyütmek için tıklayın"/>
-          <div style="font-size:10px;color:var(--text-3);margin-top:2px">Görsel ${i + 1}</div>
+          <div style="font-size:10px;color:var(--text-3);margin-top:2px">Görsel ${label}</div>
         </div>`;
       }).join("")}
     </div>` : "";

@@ -900,6 +900,43 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
   deseni (Montserrat, `.report-img` sabit sınırı, `WEASYPRINT_EXE` yedek yolu)
   doğrudan yeniden kullanılabilir hale geldiğinde ayrı bir takip fazı olarak
   eklenecek.
+- [x] **Takip (2026-08-16): Case'e sonradan/ayrı görsel ekleme webhook'u.**
+  Kullanıcı isteğiyle ana "tek çağrıda hepsi birden" webhook'undan bağımsız
+  yeni bir uç nokta: `POST /api/integrations/xsoar/incident-report/image`
+  (`xsoar_case_id` ile en son raporu bulur, tek bir `image` + opsiyonel
+  `order` alır). Kullanıcı kararı: **raporun durumuna bakılmaksızın çalışır**
+  (Taslak/Onaylandı/Reddedildi fark etmez — geç gelen ek kanıt senaryosu),
+  bu bilinçli olarak `PUT` düzenlemenin Taslak-only kısıtından farklı.
+  Numaralandırma: `order` verilmezse otomatik (mevcut en yüksek + 1); verilip
+  çakışırsa (iki çağrı da aynı numarayı gönderirse) veri sessizce üzerine
+  yazılmaz — `1, 1a, 1b...` gibi bir harf ekiyle ilk boş etiket bulunur
+  (yeni `_incident_next_image_label()` yardımcısı).
+  **Geliştirirken bulunan gerçek bir tasarım açığı:** galeri arayüzü
+  (düzenleme modali + salt-okunur detay modali) görsellerin etiketini
+  `img.order` yerine dizideki SIRA NUMARASINA (`i+1`) göre gösteriyordu —
+  yani "1a" gibi bir etiket hâlâ ekranda düz "Görsel 3" olarak görünürdü,
+  özelliğin tüm amacı boşa çıkardı. Daha ciddisi: düzenleme modalinin
+  Kaydet akışı da `order`'ı her seferinde `i+1`'e sıfırlıyordu — bir analist
+  Taslak bir raporu SADECE başka bir alanı değiştirip kaydetse bile,
+  webhook'un özenle atadığı "1a" etiketi sessizce sıradan bir sayıya
+  dönüşüp kaybolurdu. Üç yer de düzeltildi: galeri render'ları artık
+  `img.order` kullanıyor (yoksa `i+1`'e düşüyor), Kaydet artık mevcut
+  `order` değerini koruyor (sadece gerçekten eksikse `i+1` atıyor).
+  `app.js` versiyonu `v35`'e yükseltildi.
+  **Yan bulgu (bu fazın kapsamı dışında, ayrıca not edildi):** `login_required`
+  session'da sadece `user_id` var mı diye bakıyor, kullanıcının DB'de hâlâ
+  var olduğunu tekrar sorgulamıyor — silinen bir hesabın önceden açılmış
+  oturumu, çerez süresi dolana kadar geçerli kalmaya devam ediyor. Bu fazın
+  konusu değil, düzeltilmedi, ayrıca bildirildi.
+  **Doğrulandı:** requests ile otomatik numaralama (1, 2), açık numarayla
+  çakışma (`order:1` → `1a`), çakışmasız açık numara (`order:5` → `5`),
+  var olmayan case için `404`, Onaylandı bir rapora görsel ekleme (durum
+  kısıtı yok) — hepsi test edildi. Gerçek tarayıcı + gerçek giriş ile: detay
+  modalinde "Görsel 1a" doğru göründüğü, düzenleme modalinde galeri etiketi
+  doğru göründüğü VE ilgisiz bir alanı değiştirip Kaydet'e basınca "1a"
+  etiketinin hayatta kaldığı (sıradan sayıya dönüşmediği) DOM/API durumu
+  üzerinden teyit edildi. Test verileri (2 rapor, 7 görsel dosyası, debug
+  hesap) temizlendi, audit zinciri geçerli (222 kayıt, 198 zincirli).
 
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
