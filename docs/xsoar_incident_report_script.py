@@ -127,6 +127,7 @@ def file_to_data_uri(file_bytes, mime="image/png"):
 #   title            | Zorunlu değil | Varsayılan: ${incident.name}
 #   environment      | ZORUNLU       | örn. sabit "PROD" ya da bir custom field
 #   summary          | Zorunlu değil | "Olay Özeti" bölümünün metni
+#   timeline         | Zorunlu değil | "Zaman Çizelgesi" bölümünün metni
 #   findings         | Zorunlu değil | "Bulgular" bölümünün metni
 #   impact           | Zorunlu değil | "Etki" bölümünün metni
 #   actions_taken    | Zorunlu değil | "Alınan Aksiyonlar" bölümünün metni
@@ -135,7 +136,7 @@ def file_to_data_uri(file_bytes, mime="image/png"):
 #   api_key          | ZORUNLU       | Type: Credentials — düz metin YAZMAYIN
 #
 # Her satır JSON DEĞİL — normal düz metin kutusu. Argümanı boş bırakırsanız o
-# bölüm rapora hiç girmez (örn. sadece summary+findings doldurup diğer üçünü
+# bölüm rapora hiç girmez (örn. sadece summary+findings doldurup gerisini
 # boş bırakırsanız, raporda sadece "Olay Özeti" ve "Bulgular" görünür).
 # Sıra ve başlık metinleri SECTION_ARGS listesinden geliyor — yeni bir bölüm
 # eklemek/başlığı Türkçeleştirmek/sırayı değiştirmek isterseniz sadece o
@@ -143,6 +144,7 @@ def file_to_data_uri(file_bytes, mime="image/png"):
 
 SECTION_ARGS = [
     ("summary",         "Olay Özeti"),
+    ("timeline",        "Zaman Çizelgesi"),
     ("findings",        "Bulgular"),
     ("impact",          "Etki"),
     ("actions_taken",   "Alınan Aksiyonlar"),
