@@ -116,29 +116,52 @@ def file_to_data_uri(file_bytes, mime="image/png"):
 
 
 # ---------------------------------------------------------------------------
-# XSOAR automation task içindeki kullanım örneği
+# XSOAR Automation — Arguments sekmesinde tanımlanacak alanlar
 # ---------------------------------------------------------------------------
-# Aşağıdaki blok, bu dosya bir XSOAR "Run Script" adımına yapıştırıldığında
-# çalışacak örnek akıştır. `demisto` XSOAR çalışma zamanında hazır gelir.
-# Alan adlarını (incident.CustomFields.xxx gibi) kendi incident layout'unuza
-# göre güncellemeniz gerekir — burada verilenler yer tutucudur.
+# Bu script'i XSOAR'da bir Automation olarak kaydederken, "Arguments" sekmesine
+# aşağıdaki alanları ekleyin (isim/açıklama/zorunlu — Value sütununu DOLDURMAYIN,
+# o playbook'ta bu automation'ı bir task olarak kullandığınızda, o task'ın kendi
+# ekranında doldurulur, genelde ${incident.xxx} ile):
+#
+#   case_id        | Zorunlu değil | Varsayılan değer alanına: ${incident.id}
+#   title          | Zorunlu değil | Varsayılan değer alanına: ${incident.name}
+#   environment    | ZORUNLU       | örn. playbook'ta sabit "PROD" ya da bir custom field
+#   sections       | ZORUNLU       | JSON dizi metni — bkz. aşağıdaki not
+#   requested_by   | Zorunlu değil | Varsayılan değer alanına: ${incident.owner}
+#   api_key        | ZORUNLU       | Type: Credentials — düz metin YAZMAYIN, bir
+#                  |               | XSOAR Credentials (secret) seçin
+#
+# 'sections' için: playbook task'ının bu argümana verdiği DEĞER, şuna benzer bir
+# JSON metni olmalı (bunu genelde bir önceki "Set a value in context" veya küçük
+# bir yardımcı script ile oluşturursunuz):
+#   [{"heading": "Olay Özeti", "text": "..."}, {"heading": "Etki", "text": "..."}]
+# JSON yazmak istemiyorsanız aşağıdaki main() bunu tolere eder: 'sections' geçerli
+# JSON değilse, tek bölümlük bir rapor olarak (başlık "Olay Özeti", metin = girdiğiniz
+# düz metnin tamamı) otomatik sarmalanır — küçük/basit raporlar için JSON'a hiç
+# gerek kalmaz.
+
+import json
+
 
 def main():
-    incident = demisto.incident()  # noqa: F821
     args = demisto.args()  # noqa: F821
+    incident = demisto.incident()  # noqa: F821
 
-    api_key = args.get("api_key")  # playbook'ta bir Credentials alanına bağlayın
+    sections_raw = args.get("sections", "")
+    try:
+        sections = json.loads(sections_raw)
+        if not isinstance(sections, list):
+            raise ValueError
+    except (ValueError, TypeError):
+        sections = [{"heading": "Olay Özeti", "text": sections_raw}]
 
     ok, result = send_incident_report(
-        api_key=api_key,
-        xsoar_case_id=incident.get("id"),
-        title=incident.get("name"),
-        environment=incident.get("CustomFields", {}).get("environment", ""),
-        sections=[
-            {"heading": "Olay Özeti", "text": incident.get("details", "")},
-            # TODO: playbook'ta topladığınız diğer alanları buraya ekleyin
-        ],
-        requested_by=incident.get("owner"),
+        api_key=args.get("api_key"),
+        xsoar_case_id=args.get("case_id") or incident.get("id"),
+        title=args.get("title") or incident.get("name"),
+        environment=args.get("environment", ""),
+        sections=sections,
+        requested_by=args.get("requested_by") or incident.get("owner"),
     )
 
     if ok:
