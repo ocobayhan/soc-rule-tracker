@@ -818,6 +818,68 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
   tabloları da aynı mekanizmayla doğru kuruldu. Test hesabı temizlendi,
   audit zinciri etkilenmedi.
 
+### Faz W — XSOAR Olay Raporu: Yeni Modül (2026-08-16)
+
+- [x] **Yeni tablo `incident_reports`:** `xsoar_case_id`/`xsoar_url` (mevcut
+  `build_xsoar_url()` ile Tune'la aynı desen), `title`/`environment`/
+  `reporter`, `sections` (JSON — `[{heading, text}]`, başlıklar koda gömülü
+  değil, kullanıcı/XSOAR playbook'u belirliyor), `images` (JSON — sıralı
+  `[{order, filename}]`), `status` (Taslak/Onaylandı/Reddedildi) + onay alanları
+  (`validated_by/at/note`).
+- [x] **Webhook `POST /api/integrations/xsoar/incident-report`** (`@api_key_required`,
+  mevcut `XSOAR_WEBHOOK_TOKEN`): `sections` zorunlu (en az bir dolu madde),
+  `images` opsiyonel — tek çağrıda hepsi birden, base64 dizisi (öğeler ham
+  string, `data:image/X;base64,...` önekiyle veya önek olmadan), yeni
+  `_decode_incident_image()` ile çözülüp `UPLOAD_FOLDER`'a yazılıyor, sırasına
+  göre `order` alanı atanıyor. Tune'daki AYNI mükerrer-case engeli
+  (`Reddedildi` olmayan aynı `xsoar_case_id` → `409`) ve `requested_by`
+  kullanıcı-adı eşleştirme + nazik fallback deseni yeniden kullanıldı.
+- [x] **Onay akışı VAR** (kullanıcı kararı: XSOAR'dan gelen veri bozuk/eksik
+  olabilir) — webhook → `Taslak`; bir analist başlık/bölüm/görselleri serbestçe
+  düzenleyebilir (`PUT`, sadece `Taslak` durumdayken); bir Kıdemli Analist/Müdür
+  Onaylar veya (zorunlu gerekçe notuyla) Reddeder — Tune'un onay modalı
+  (`validate-modal`/`openValidateModal`/`execValidate`/`execRejectValidation`)
+  aynen yeniden kullanıldı, sadece route öneki farkı için küçük bir
+  `_validatePathBase(type)` yardımccısı eklendi.
+- [x] **Frontend — yeni üst-seviye modül** ("📋 Olay Raporları", RBAC gate yok —
+  Tune/UC/Hunt gibi tüm giriş yapmış kullanıcılara açık): liste tablosu (Faz
+  V'nin kolon göster/gizle + kolona göre filtre mekanizması 4. tablo olarak
+  buraya da uygulandı), düzenleme modalı (dinamik bölüm listesi ekle/çıkar +
+  görsel galerisi paste-ile-ekle/çıkar, "Görsel 1/2/…" sıralı etiketleme),
+  salt-okunur detay modalı (bölümler + galeri + onay/red bilgisi), audit
+  kategorileri (`CREATE_INCIDENT_XSOAR`/`EDIT_INCIDENT`/`APPROVE_INCIDENT`/
+  `REJECT_INCIDENT`/`DELETE_INCIDENT`) ve global arama (`incident_reports`
+  4. modül olarak `goToItem`'a eklendi).
+- [x] **Uçtan uca doğrulandı** (geçici debug admin, gerçek tarayıcı + DOM +
+  webhook `requests` çağrıları): webhook `sections`+`images` (2 test görseli,
+  sıralı) ile `201` dönüp doğru galeri oluşturuyor; mükerrer case `409`
+  veriyor; liste tablosu 3 farklı durumdaki (Taslak/Onaylandı/Reddedildi) kaydı
+  doğru render ediyor; detay modalinin footer butonları duruma göre doğru
+  değişiyor (Taslak → Düzenle+Onayla/Reddet+Kapat, diğerleri → sadece Kapat);
+  düzenleme modalinde bölüm ekleme/çıkarma + kaydetme round-trip doğru
+  persist ediyor; onay modalinde red gerekçesi zorunluluğu (notsuz reddet →
+  engellendi) ve hem onayla hem reddet akışının gerçek API'ye doğru gidip
+  (`_validatePathBase` düzeltmesi doğrulandı) durumu güncellediği; silme
+  (gerçek `deleteIncident()` fonksiyonu, `confirm()` override edilerek) doğru
+  çalıştığı; kolon göster/gizle + kolona göre filtrenin 4. tabloda da doğru
+  işlediği; genel aramanın olay raporunu bulup `pickSearch`→`goToItem` ile
+  doğru sekmeye/detay moduna zıpladığı; audit log'da 5 action'ın da doğru
+  Türkçe etiket/renk sınıfıyla (`ACTION_TR`/`ACTION_CLS`) göründüğü teyit
+  edildi. Test verileri (kayıtlar, yüklenen görseller, debug hesapları)
+  temizlendi, `verify_audit.py` zincirin geçerli kaldığını doğruladı (206
+  kayıt, 182 zincirli).
+- [x] **Geliştirme sürecinde bulunup düzeltilen 2 gerçek bug:** `_colFilters`
+  state objesinde `incident` anahtarı eksikti (Faz V'nin genel kolon-filtre
+  motoru 3 tablo için yazılmıştı, 4. tabloya eklenirken unutulmuştu) —
+  `matchesColumnFilters` içinde `TypeError` fırlatıp tabloyu tamamen boş
+  render ediyordu; `onColumnFilterInput`'ta da aynı sebepten `incident` dispatch
+  dalı eksikti. İkisi de eklendi, `app.js` versiyonu `v34`'e yükseltildi
+  (tarayıcı önbelleğini kesin olarak atlamak için).
+- [x] **Kapsam dışı (bilinçli, v1):** PDF export bu fazda yok — Hunt'ın PDF
+  deseni (Montserrat, `.report-img` sabit sınırı, `WEASYPRINT_EXE` yedek yolu)
+  doğrudan yeniden kullanılabilir hale geldiğinde ayrı bir takip fazı olarak
+  eklenecek.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

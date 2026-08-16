@@ -90,5 +90,10 @@ tutarlıdır.
   `test_approve_uc`/`test_reject_uc`, Q&A formuyla genişletilecek)
 - Threat Hunt: ön onay (hipotez onayı) ve rapor tamamlandıktan sonraki
   ikinci onay
+- Olay Raporu (Incident Report, Faz W): tek onay kapısı — Taslak → Onaylandı/
+  Reddedildi (`validate_incident_report`/`reject_incident_report`). Diğer üç
+  modülden farklı olarak ön onay yok (webhook'tan zaten Taslak olarak açılır,
+  ikinci bir "işleme alınsın mı" kapısına gerek yok) — tek soru Hunt'ın son
+  onayıyla aynı: "bitmiş içerik iyi mi".
 
-Detaylar için `docs/PROGRESS.md`'deki Faz 4/5 maddelerine bakın.
+Detaylar için `docs/PROGRESS.md`'deki Faz 4/5/W maddelerine bakın.

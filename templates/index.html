@@ -42,6 +42,9 @@
     <button class="nav-btn" data-tab="threat-hunting">
       <span>&#9650;</span> Threat Hunting
     </button>
+    <button class="nav-btn" data-tab="incident">
+      <span>&#9873;</span> Olay Raporları
+    </button>
     {% if user_role == "admin" %}
     <button class="nav-btn" data-tab="auditlog">
       <span>&#9776;</span> Audit Log
@@ -394,6 +397,62 @@
         <tbody id="hunt-tbody"></tbody>
       </table>
       <div id="hunt-empty" class="empty-state" style="display:none">Henüz hunt talebi yok.</div>
+    </div>
+  </section>
+
+  <!-- ===== OLAY RAPORLARI (XSOAR Incident Report) ===== -->
+  <section id="tab-incident" class="tab-panel">
+    <div class="page-header">
+      <h1 class="page-title">Olay Raporları</h1>
+    </div>
+    <p class="text-muted" style="font-size:12px;margin:-8px 0 12px">
+      XSOAR'da "incident" olarak kapatılan case'ler için playbook webhook'unun
+      oluşturduğu raporlar. Taslak durumundakiler düzenlenebilir; bir Kıdemli
+      Analist/Müdür onaylar veya reddeder.
+    </p>
+    <div class="filter-bar">
+      <div class="search-wrap">
+        <span class="search-icon">&#9906;</span>
+        <input type="text" id="incident-search" class="form-input input-sm search-input"
+               placeholder="Başlık, case no, raporlayan…" oninput="onIncidentSearch(this.value)"/>
+      </div>
+      <input type="month" id="incident-filter-month" class="form-input input-sm"/>
+      <select id="incident-filter-env" class="form-input input-sm"><option value="">Tüm Ortamlar</option></select>
+      <select id="incident-filter-status" class="form-input input-sm">
+        <option value="">Tüm Durumlar</option>
+        <option>Taslak</option><option>Onaylandı</option><option>Reddedildi</option>
+      </select>
+      <button class="btn btn-secondary" onclick="loadIncidents()">Filtrele</button>
+      <button class="btn-ghost-sm" onclick="clearIncidentFilters()">Temizle</button>
+      <div class="col-toggle-wrap">
+        <button class="btn-ghost-sm" onclick="toggleColumnPanel('incident', this)">&#9776; Kolonlar</button>
+        <div class="col-toggle-panel" id="incident-col-panel" style="display:none"></div>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table class="table table-fixed" id="incident-table">
+        <colgroup>
+          <col class="col-dot"/><col class="col-id"/>
+          <col class="col-name"/><col style="width:90px"/><col class="col-env"/>
+          <col class="col-person"/><col class="col-status"/>
+          <col class="col-date"/><col class="col-act"/>
+        </colgroup>
+        <thead>
+        <tr>
+          <th></th>
+          <th class="th-sortable" id="th-incident-id" onclick="sortIncident('id')"># <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-incident-title" onclick="sortIncident('title')">Başlık <span class="sort-arrow"></span></th>
+          <th>Case No</th>
+          <th>Ortam</th><th>Raporlayan</th>
+          <th class="th-sortable" id="th-incident-status" onclick="sortIncident('status')">Durum <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-incident-created_at" onclick="sortIncident('created_at')">Tarih <span class="sort-arrow"></span></th>
+          <th>İşlem</th>
+        </tr>
+        <tr id="incident-filter-row" class="col-filter-row"></tr>
+        </thead>
+        <tbody id="incident-tbody"></tbody>
+      </table>
+      <div id="incident-empty" class="empty-state" style="display:none">Henüz olay raporu yok.</div>
     </div>
   </section>
 
@@ -1474,6 +1533,71 @@
   </div>
 </div>
 
+<!-- ===== MODAL: Olay Raporu Düzenle ===== -->
+<div id="incident-edit-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2 class="modal-title">Olay Raporunu Düzenle</h2>
+      <button class="modal-close" onclick="closeIncidentEditModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="incident-edit-id"/>
+      <div class="form-grid">
+        <div class="form-group form-col-2">
+          <label class="form-label">Başlık *</label>
+          <input class="form-input" id="incident-edit-title" type="text" placeholder="Olay raporu başlığı"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ortam</label>
+          <select class="form-input" id="incident-edit-env"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">SOAR Case ID
+            <span class="text-muted" style="font-weight:400">(değiştirirseniz case linki yeniden oluşur)</span>
+          </label>
+          <input class="form-input" id="incident-edit-case-id" type="text" placeholder="örn. 12345"/>
+        </div>
+      </div>
+
+      <div class="form-group form-col-2" style="margin-top:12px;margin-bottom:0">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Bölümler <span class="text-muted" style="font-weight:400">(başlık + metin)</span></span>
+          <button type="button" class="btn btn-sm" onclick="addIncidentSection()" style="padding:2px 10px;font-size:12px">+ Ekle</button>
+        </label>
+        <div id="incident-section-list" style="display:flex;flex-direction:column;gap:8px;margin-top:4px"></div>
+      </div>
+
+      <div class="form-group form-col-2" style="margin-top:12px;margin-bottom:0">
+        <label class="form-label">
+          Görseller <span class="paste-hint">— sırayla "Görsel 1, Görsel 2…" olarak numaralanır; yeni eklemek için buraya tıklayıp Ctrl+V</span>
+        </label>
+        <textarea class="form-input" id="incident-edit-image-paste" rows="1"
+                  placeholder="Görsel yapıştırmak için buraya tıklayıp Ctrl+V yapın… (yalnızca görsel alanıdır)"
+                  style="min-height:34px;margin-top:4px" onpaste="handleIncidentImagePaste(event)"></textarea>
+        <div id="incident-image-gallery" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+      </div>
+
+      <div id="incident-edit-modal-error" class="form-error" style="display:none;margin-top:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost-sm" onclick="closeIncidentEditModal()">İptal</button>
+      <button class="btn btn-primary" onclick="saveIncidentEdit()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Olay Raporu Detay ===== -->
+<div id="incident-detail-modal" class="modal-overlay" style="display:none">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2 class="modal-title" id="incident-detail-title">Olay Raporu</h2>
+      <button class="modal-close" onclick="closeIncidentDetailModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="incident-detail-body"></div>
+    <div class="modal-footer" id="incident-detail-footer"></div>
+  </div>
+</div>
+
 <!-- ===== MODAL: Hunt Sonuç Onayı ===== -->
 <div id="hunt-result-modal" class="modal-overlay" style="display:none">
   <div class="modal modal-sm">
@@ -1565,6 +1689,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=32"></script>
+<script src="/static/app.js?v=34"></script>
 </body>
 </html>

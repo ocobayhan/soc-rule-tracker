@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v32
+   SOC Tracker — Frontend  v34
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -22,6 +22,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "tuning")         loadTune();
     if (btn.dataset.tab === "usecase")        loadUC();
     if (btn.dataset.tab === "threat-hunting") loadHunt();
+    if (btn.dataset.tab === "incident")       loadIncidents();
     if (btn.dataset.tab === "settings")       loadSettings();
     if (btn.dataset.tab === "auditlog")       loadAuditLog();
   });
@@ -259,8 +260,8 @@ function displayName(username) {
 }
 
 function populateEnvDropdowns() {
-  // Tune still uses plain selects
-  ["tune-env","edit-tune-env"].forEach(id => {
+  // Tune + Incident Report still use plain single-selects
+  ["tune-env","edit-tune-env","incident-edit-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value; el.innerHTML = envOpts(cur);
   });
@@ -271,7 +272,7 @@ function populateEnvDropdowns() {
     const el = document.getElementById(id); if (!el) return;
     el.innerHTML = envOpsSimple;
   });
-  ["tune-filter-env","uc-filter-env"].forEach(id => {
+  ["tune-filter-env","uc-filter-env","incident-filter-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value;
     el.innerHTML = `<option value="">Tüm Ortamlar</option>` +
@@ -384,8 +385,8 @@ async function loadDashboardTables() {
 }
 
 // ---- Bana bekleyen işler --------------------------------------------------
-const WORK_TYPE_LABEL = { tune: "Tune", usecase: "UC", hunt: "Hunt" };
-const WORK_TYPE_COLOR = { tune: "var(--amber)", usecase: "var(--teal)", hunt: "var(--purple)" };
+const WORK_TYPE_LABEL = { tune: "Tune", usecase: "UC", hunt: "Hunt", incident: "Olay" };
+const WORK_TYPE_COLOR = { tune: "var(--amber)", usecase: "var(--teal)", hunt: "var(--purple)", incident: "var(--red)" };
 
 function renderMyWorkList(elId, items) {
   const el = document.getElementById(elId);
@@ -423,9 +424,10 @@ async function loadMyWork() {
 /** Bir modül öğesine git: sekmeyi aç, verisini yükle, detay modalini aç. */
 async function goToItem(type, id) {
   const map = {
-    tune:    { tab: "tuning",         load: loadTune, open: openTuneDetail },
-    usecase: { tab: "usecase",        load: loadUC,   open: openUCDetail },
-    hunt:    { tab: "threat-hunting", load: loadHunt, open: openHuntDetail },
+    tune:     { tab: "tuning",         load: loadTune,      open: openTuneDetail },
+    usecase:  { tab: "usecase",        load: loadUC,        open: openUCDetail },
+    hunt:     { tab: "threat-hunting", load: loadHunt,      open: openHuntDetail },
+    incident: { tab: "incident",       load: loadIncidents, open: openIncidentDetail },
   };
   const m = map[type]; if (!m) return;
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
@@ -687,9 +689,10 @@ function clientSort(rows, col, dir) {
 }
 
 function updateSortUI(prefix, activeCol, dir) {
-  const cols = prefix === "tune"  ? ["id", "rule_name",          "status", "created_at"]
-             : prefix === "hunt"  ? ["id", "hunt_subject",        "status", "created_at"]
-             :                      ["id", "usecase_description", "status", "created_at"];
+  const cols = prefix === "tune"     ? ["id", "rule_name",          "status", "created_at"]
+             : prefix === "hunt"     ? ["id", "hunt_subject",        "status", "created_at"]
+             : prefix === "incident" ? ["id", "title",               "status", "created_at"]
+             :                         ["id", "usecase_description", "status", "created_at"];
   cols.forEach(col => {
     const th    = document.getElementById(`th-${prefix}-${col}`);
     if (!th) return;
@@ -704,7 +707,7 @@ function updateSortUI(prefix, activeCol, dir) {
 // Tablo kolonları: göster/gizle + kolona göre filtre (Tune/UC/Hunt ortak)
 // ---------------------------------------------------------------------------
 const _tableColumns = {};                        // tableKey -> columns config
-const _colFilters    = { tune: {}, uc: {}, hunt: {} };
+const _colFilters    = { tune: {}, uc: {}, hunt: {}, incident: {} };
 
 /** columns: [{ index, key, label, filterType: 'text'|'select' }] — index,
  * <colgroup>/<thead>/<tbody><tr> içindeki 0-based sütun sırası. İlk (durum
@@ -818,9 +821,10 @@ function buildColumnFilterRow(tableKey, rows) {
 
 function onColumnFilterInput(tableKey, key, value) {
   _colFilters[tableKey][key] = value.trim().toLowerCase();
-  if (tableKey === "tune") renderTuneRows();
-  if (tableKey === "uc")   renderUCRows();
-  if (tableKey === "hunt") renderHuntRows();
+  if (tableKey === "tune")     renderTuneRows();
+  if (tableKey === "uc")       renderUCRows();
+  if (tableKey === "hunt")     renderHuntRows();
+  if (tableKey === "incident") renderIncidentRows();
 }
 
 function matchesColumnFilters(tableKey, row) {
@@ -1243,9 +1247,9 @@ async function execRetryTune() {
 // Ön onay (validate/reject) — Tuning + UC ortak
 // ---------------------------------------------------------------------------
 function openValidateModal(type, id) {
-  const rows = type === "tune" ? tuneRows : (type === "usecase" ? ucRows : huntRows);
+  const rows = type === "tune" ? tuneRows : (type === "usecase" ? ucRows : (type === "incident" ? incidentRows : huntRows));
   const r = rows.find(x => x.id === id); if (!r) return;
-  const label = type === "tune" ? r.rule_name : (type === "usecase" ? (r.usecase_description || "").slice(0, 80) : r.hunt_subject);
+  const label = type === "tune" ? r.rule_name : (type === "usecase" ? (r.usecase_description || "").slice(0, 80) : (type === "incident" ? r.title : r.hunt_subject));
   document.getElementById("validate-type").value = type;
   document.getElementById("validate-id").value   = id;
   document.getElementById("validate-desc").textContent =
@@ -1255,6 +1259,12 @@ function openValidateModal(type, id) {
   document.getElementById("validate-modal").style.display = "flex";
 }
 
+// Olay raporlarının API yolu diğer üçünden farklı (/api/incident-reports,
+// çoğul-tireli) — tune/usecase/hunt ise doğrudan type adını kullanıyor.
+function _validatePathBase(type) {
+  return type === "incident" ? "incident-reports" : type;
+}
+
 async function execValidate() {
   const type  = document.getElementById("validate-type").value;
   const id    = document.getElementById("validate-id").value;
@@ -1262,7 +1272,7 @@ async function execValidate() {
   const errEl = document.getElementById("validate-error");
   errEl.style.display = "none";
   try {
-    await apiFetch(`/api/${type}/${id}/validate`, { method: "POST", body: JSON.stringify({ validation_note: note }) });
+    await apiFetch(`/api/${_validatePathBase(type)}/${id}/validate`, { method: "POST", body: JSON.stringify({ validation_note: note }) });
     document.getElementById("validate-modal").style.display = "none";
     reloadAfterValidate(type);
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
@@ -1279,7 +1289,7 @@ async function execRejectValidation() {
     errEl.style.display = "block"; return;
   }
   try {
-    await apiFetch(`/api/${type}/${id}/reject-validation`, { method: "POST", body: JSON.stringify({ validation_note: note }) });
+    await apiFetch(`/api/${_validatePathBase(type)}/${id}/reject-validation`, { method: "POST", body: JSON.stringify({ validation_note: note }) });
     document.getElementById("validate-modal").style.display = "none";
     reloadAfterValidate(type);
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
@@ -1288,6 +1298,7 @@ async function execRejectValidation() {
 function reloadAfterValidate(type) {
   if (type === "tune") { loadTune(); }
   else if (type === "usecase") { loadUC(); }
+  else if (type === "incident") { loadIncidents(); }
   else { loadHunt(); }
   loadKPI(); loadDashboardTables();
 }
@@ -1749,6 +1760,11 @@ const ACTION_TR = {
   "APPROVE_HUNT_RESULT":    "Hunt sonucu onaylandı",
   "REJECT_HUNT_RESULT":     "Hunt sonucu revizyona gönderildi",
   "EXPORT_HUNT_PDF":        "Hunt raporu PDF olarak indirildi",
+  "CREATE_INCIDENT_XSOAR":  "Olay raporu oluşturuldu (XSOAR)",
+  "EDIT_INCIDENT":          "Olay raporu düzenlendi",
+  "APPROVE_INCIDENT":       "Olay raporu onaylandı",
+  "REJECT_INCIDENT":        "Olay raporu reddedildi",
+  "DELETE_INCIDENT":        "Olay raporu silindi",
 };
 const ACTION_CLS = {
   "LOGIN": "audit-login",
@@ -1765,6 +1781,11 @@ const ACTION_CLS = {
   "REJECT_VALIDATION_TUNE": "audit-delete", "REJECT_VALIDATION_UC": "audit-delete", "REJECT_VALIDATION_HUNT": "audit-delete",
   "APPROVE_HUNT_RESULT": "audit-close", "REJECT_HUNT_RESULT": "audit-delete",
   "EXPORT_HUNT_PDF": "audit-edit",
+  "CREATE_INCIDENT_XSOAR": "audit-create",
+  "EDIT_INCIDENT": "audit-edit",
+  "APPROVE_INCIDENT": "audit-close",
+  "REJECT_INCIDENT": "audit-delete",
+  "DELETE_INCIDENT": "audit-delete",
 };
 // Audit Log filtre kategorileri — hangi action'ın hangi kategoriye girdiği
 // app.py'deki AUDIT_CATEGORIES ile eşleşmeli (bkz. docs/audit_logging.md).
@@ -3137,6 +3158,271 @@ function pickSearch(type, id) {
 }
 
 // ---------------------------------------------------------------------------
+// Olay Raporları (XSOAR Incident Report)
+// ---------------------------------------------------------------------------
+let incidentRows = [];
+let incidentSearch = "";
+let incidentSortCol = "created_at", incidentSortDir = -1;
+
+const INCIDENT_COLUMNS = [
+  { index: 1, key: "id",            label: "#",           filterType: "text" },
+  { index: 2, key: "title",         label: "Başlık",       filterType: "text" },
+  { index: 3, key: "xsoar_case_id", label: "Case No",      filterType: "text" },
+  { index: 4, key: "environment",   label: "Ortam",        filterType: "select" },
+  { index: 5, key: "reporter",      label: "Raporlayan",   filterType: "text" },
+  { index: 6, key: "status",        label: "Durum",        filterType: "select" },
+  { index: 7, key: "created_at",    label: "Tarih",        filterType: "text" },
+];
+
+const INCIDENT_CLS = { "Taslak": "status-pending", "Onaylandı": "status-success", "Reddedildi": "status-rejected" };
+const INCIDENT_DOT = { "Taslak": "dot-pending",     "Onaylandı": "dot-success",   "Reddedildi": "dot-rejected" };
+
+function sortIncident(col) {
+  incidentSortDir = incidentSortCol === col ? incidentSortDir * -1 : 1;
+  incidentSortCol = col;
+  renderIncidentRows();
+}
+
+function onIncidentSearch(val) { incidentSearch = val.toLowerCase(); renderIncidentRows(); }
+
+async function loadIncidents() {
+  const p = new URLSearchParams();
+  const month  = document.getElementById("incident-filter-month")?.value;
+  const env    = document.getElementById("incident-filter-env")?.value;
+  const status = document.getElementById("incident-filter-status")?.value;
+  if (month)  p.set("month", month);
+  if (env)    p.set("environment", env);
+  if (status) p.set("status", status);
+  try {
+    incidentRows = await apiFetch(`/api/incident-reports?${p}`);
+    buildColumnFilterRow("incident", incidentRows);
+    renderIncidentRows();
+  } catch (e) { console.error(e); }
+}
+
+function clearIncidentFilters() {
+  ["incident-filter-month", "incident-filter-env", "incident-filter-status"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+  const s = document.getElementById("incident-search"); if (s) s.value = "";
+  incidentSearch = "";
+  loadIncidents();
+}
+
+function incidentActionBtns(r) {
+  const isDraft = r.status === "Taslak";
+  let btns = "";
+  if (isDraft) {
+    btns += `<button class="btn-action-claim" onclick="openIncidentEditModal(${r.id})">Düzenle</button> `;
+    if (IS_SENIOR) {
+      btns += `<button class="btn-action-close" onclick="openValidateModal('incident', ${r.id})">Onayla / Reddet</button> `;
+    }
+  }
+  if (USER_ROLE === "admin") {
+    btns += `<button class="btn-icon danger" onclick="deleteIncident(${r.id})" title="Sil">&#128465;</button>`;
+  }
+  return btns || '<span class="text-muted">—</span>';
+}
+
+function renderIncidentRows() {
+  const FIELDS = ["title", "xsoar_case_id", "reporter", "environment"];
+  const visible = incidentRows
+    .filter(r => !incidentSearch || FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(incidentSearch)))
+    .filter(r => matchesColumnFilters("incident", r));
+  const sorted = clientSort(visible, incidentSortCol, incidentSortDir);
+  updateSortUI("incident", incidentSortCol, incidentSortDir);
+  const tbody = document.getElementById("incident-tbody");
+  const empty = document.getElementById("incident-empty");
+  if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  tbody.innerHTML = sorted.map(r => `<tr>
+    <td>${dot(r.status, INCIDENT_DOT)}</td>
+    <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
+    <td class="td-truncate" title="${esc(r.title)}">
+      <span class="cell-link" onclick="openIncidentDetail(${r.id})" style="cursor:pointer">${esc(r.title)}</span>
+    </td>
+    <td class="td-truncate" style="font-size:11px" title="${esc(r.xsoar_case_id || '')}">${r.xsoar_case_id ? esc(r.xsoar_case_id) : '<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(r.environment || '')}">${r.environment ? esc(r.environment) : '<span class="text-muted">—</span>'}</td>
+    <td class="td-truncate" title="${esc(r.reporter)}">${esc(displayName(r.reporter))}</td>
+    <td>${badge(r.status, INCIDENT_CLS)}</td>
+    <td class="text-muted">${fmtDate(r.created_at)}</td>
+    <td style="white-space:nowrap">${incidentActionBtns(r)}</td>
+  </tr>`).join("");
+  applyColumnVisibilityToBody("incident");
+}
+
+// ---- Bölümler (sections) ve görsel galerisi — düzenleme modali -----------
+let _incidentSections = [];
+let _incidentImages   = [];   // [{order, filename}]
+
+function renderIncidentSections() {
+  const list = document.getElementById("incident-section-list");
+  if (!list) return;
+  list.innerHTML = _incidentSections.map((s, i) => `
+    <div class="mitre-entry">
+      <div class="mitre-entry-header">
+        <input type="text" class="form-input input-sm" style="max-width:240px;font-weight:500"
+               placeholder="Bölüm başlığı…" value="${esc(s.heading)}"
+               oninput="_incidentSections[${i}].heading=this.value"/>
+        <button type="button" class="btn-icon danger" style="margin-left:auto;font-size:11px"
+                onclick="removeIncidentSection(${i})">&#x2715;</button>
+      </div>
+      <textarea class="form-input form-textarea" style="margin-top:6px;min-height:60px"
+        placeholder="Bölüm metni…"
+        oninput="_incidentSections[${i}].text=this.value">${esc(s.text)}</textarea>
+    </div>`).join("");
+}
+function addIncidentSection() {
+  _incidentSections.push({ heading: "", text: "" });
+  renderIncidentSections();
+  const els = document.querySelectorAll("#incident-section-list textarea");
+  if (els.length) els[els.length - 1].focus();
+}
+function removeIncidentSection(i) { _incidentSections.splice(i, 1); renderIncidentSections(); }
+
+function renderIncidentGallery() {
+  const gallery = document.getElementById("incident-image-gallery");
+  if (!gallery) return;
+  gallery.innerHTML = _incidentImages.map((img, i) => {
+    const url = `/static/uploads/${img.filename}`;
+    return `<div class="paste-thumb-wrap">
+      <img class="paste-thumb" src="${url}" onclick="openLightbox('${url}')" title="Görsel ${i + 1} — büyütmek için tıklayın"/>
+      <button class="paste-thumb-remove" type="button" onclick="removeIncidentImage(${i})">&#x2715;</button>
+      <div style="text-align:center;font-size:10px;color:var(--text-3);margin-top:2px">Görsel ${i + 1}</div>
+    </div>`;
+  }).join("");
+}
+function removeIncidentImage(i) { _incidentImages.splice(i, 1); renderIncidentGallery(); }
+
+async function handleIncidentImagePaste(e) {
+  const items = Array.from(e.clipboardData?.items || []);
+  const img   = items.find(it => it.type.startsWith("image/"));
+  if (!img) return;
+  e.preventDefault();
+  try {
+    const blob     = img.getAsFile();
+    const filename = await uploadBlob(blob);
+    _incidentImages.push({ order: _incidentImages.length + 1, filename });
+    renderIncidentGallery();
+  } catch (err) {
+    console.error("Paste upload failed:", err);
+    alert("Görsel yüklenemedi: " + err.message);
+  }
+}
+
+function openIncidentEditModal(id) {
+  const r = incidentRows.find(x => x.id === id); if (!r) return;
+  if (r.status !== "Taslak") { alert("Sadece Taslak durumundaki olay raporları düzenlenebilir."); return; }
+  document.getElementById("incident-edit-id").value       = id;
+  document.getElementById("incident-edit-title").value    = r.title || "";
+  document.getElementById("incident-edit-env").value      = r.environment || "";
+  document.getElementById("incident-edit-case-id").value  = r.xsoar_case_id || "";
+
+  try {
+    _incidentSections = JSON.parse(r.sections || "[]");
+    if (!Array.isArray(_incidentSections)) _incidentSections = [];
+  } catch { _incidentSections = []; }
+  if (!_incidentSections.length) _incidentSections = [{ heading: "", text: "" }];
+  renderIncidentSections();
+
+  try {
+    _incidentImages = JSON.parse(r.images || "[]");
+    if (!Array.isArray(_incidentImages)) _incidentImages = [];
+  } catch { _incidentImages = []; }
+  renderIncidentGallery();
+
+  document.getElementById("incident-edit-image-paste").value = "";
+  document.getElementById("incident-edit-modal-error").style.display = "none";
+  document.getElementById("incident-edit-modal").style.display = "flex";
+}
+function closeIncidentEditModal() { document.getElementById("incident-edit-modal").style.display = "none"; }
+
+async function saveIncidentEdit() {
+  const id    = document.getElementById("incident-edit-id").value;
+  const errEl = document.getElementById("incident-edit-modal-error");
+  errEl.style.display = "none";
+  const title = document.getElementById("incident-edit-title").value.trim();
+  if (!title) { errEl.textContent = "Başlık zorunludur."; errEl.style.display = "block"; return; }
+  const validSections = _incidentSections.filter(s => (s.heading || "").trim() || (s.text || "").trim());
+  if (!validSections.length) { errEl.textContent = "En az bir dolu bölüm gerekli."; errEl.style.display = "block"; return; }
+  const payload = {
+    title,
+    environment:   document.getElementById("incident-edit-env").value,
+    xsoar_case_id: document.getElementById("incident-edit-case-id").value.trim(),
+    sections:      validSections,
+    images:        _incidentImages.map((img, i) => ({ order: i + 1, filename: img.filename })),
+  };
+  try {
+    await apiFetch(`/api/incident-reports/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    closeIncidentEditModal();
+    loadIncidents();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
+}
+
+async function openIncidentDetail(id) {
+  let r = incidentRows.find(x => x.id === id);
+  if (!r) { try { incidentRows = await apiFetch("/api/incident-reports"); r = incidentRows.find(x => x.id === id); } catch { return; } }
+  if (!r) return;
+
+  document.getElementById("incident-detail-title").textContent = r.title;
+  let sections = [], images = [];
+  try { sections = JSON.parse(r.sections || "[]"); if (!Array.isArray(sections)) sections = []; } catch {}
+  try { images   = JSON.parse(r.images   || "[]"); if (!Array.isArray(images))   images   = []; } catch {}
+
+  const sectionsHtml = sections.length ? sections.map(s => `
+    <div style="margin-bottom:12px">
+      ${s.heading ? `<div class="detail-section-title" style="margin-top:8px">${esc(s.heading)}</div>` : ""}
+      <div class="detail-value" style="white-space:pre-wrap">${esc(s.text)}</div>
+    </div>`).join("") : `<div class="text-muted">Bölüm yok.</div>`;
+
+  const imagesHtml = images.length ? `
+    <div class="detail-section-title" style="margin-top:12px">Görseller</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
+      ${images.map((img, i) => {
+        const url = `/static/uploads/${img.filename}`;
+        return `<div style="text-align:center">
+          <img class="detail-img" src="${url}" onclick="openLightbox('${url}')" title="Büyütmek için tıklayın"/>
+          <div style="font-size:10px;color:var(--text-3);margin-top:2px">Görsel ${i + 1}</div>
+        </div>`;
+      }).join("")}
+    </div>` : "";
+
+  const body = `
+    <div class="detail-grid">
+      ${detailRow("Case No", r.xsoar_case_id ? "#" + r.xsoar_case_id : "")}
+      ${detailRow("Ortam", r.environment)}
+      ${detailRow("Raporlayan", displayName(r.reporter))}
+      ${detailRow("Durum", r.status)}
+      ${detailRow("Tarih", fmtDate(r.created_at))}
+      ${r.validated_by ? detailRow("Onaylayan/Reddeden", displayName(r.validated_by)) : ""}
+      ${r.validated_at ? detailRow("Onay/Red Tarihi", fmtDate(r.validated_at)) : ""}
+    </div>
+    ${r.validation_note ? `<div class="detail-section-title" style="margin-top:12px">Onay/Red Notu</div><div class="detail-value">${esc(r.validation_note)}</div>` : ""}
+    <div class="detail-section-title" style="margin-top:12px">Bölümler</div>
+    ${sectionsHtml}
+    ${imagesHtml}
+  `;
+  document.getElementById("incident-detail-body").innerHTML = body;
+
+  const footer = document.getElementById("incident-detail-footer");
+  if (r.status === "Taslak") {
+    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
+      <button class="btn btn-secondary" onclick="closeIncidentDetailModal();openIncidentEditModal(${r.id})">Düzenle</button>` +
+      (IS_SENIOR ? `<button class="btn btn-primary" onclick="closeIncidentDetailModal();openValidateModal('incident', ${r.id})">Onayla / Reddet</button>` : "");
+  } else {
+    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>`;
+  }
+  document.getElementById("incident-detail-modal").style.display = "flex";
+}
+function closeIncidentDetailModal() { document.getElementById("incident-detail-modal").style.display = "none"; }
+
+async function deleteIncident(id) {
+  if (!confirm("Bu olay raporunu silmek istediğinize emin misiniz?")) return;
+  try { await apiFetch(`/api/incident-reports/${id}`, { method: "DELETE" }); loadIncidents(); }
+  catch (e) { alert(e.message); }
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 // Kolon göster/gizle + kolona göre filtre — Tune/UC/Hunt tabloları rol
@@ -3144,9 +3430,10 @@ function pickSearch(type, id) {
 // sekmenin ilk açıldığını belirliyor), o yüzden her iki init dalında da
 // çağrılır.
 function _initAllTableColumns() {
-  initTableColumns("tune", TUNE_COLUMNS);
-  initTableColumns("uc",   UC_COLUMNS);
-  initTableColumns("hunt", HUNT_COLUMNS);
+  initTableColumns("tune",     TUNE_COLUMNS);
+  initTableColumns("uc",       UC_COLUMNS);
+  initTableColumns("hunt",     HUNT_COLUMNS);
+  initTableColumns("incident", INCIDENT_COLUMNS);
 }
 
 if (HAS_DASHBOARD) {

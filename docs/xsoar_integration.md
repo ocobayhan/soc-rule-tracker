@@ -83,10 +83,95 @@ tarafındaki ekiple birlikte yapılmalı.
 
 ## Genişletme
 
-Şu an sadece Tuning modülü destekleniyor. Aynı desen (yeni bir `/api/
-integrations/xsoar/<modül>` ucu + `api_key_required` decorator'ının
-yeniden kullanılması) ileride Use-Case ve Threat Hunt için de
+Tuning'in yanı sıra artık Olay Raporu (Incident Report) modülü de aynı
+desenle destekleniyor (bkz. aşağıdaki "Olay Raporu Webhook'u" bölümü). Aynı
+yaklaşım (yeni bir `/api/integrations/xsoar/<modül>` ucu + `api_key_required`
+decorator'ının yeniden kullanılması) ileride Use-Case ve Threat Hunt için de
 uygulanabilir.
+
+# Olay Raporu Webhook'u (2026-08-16)
+
+XSOAR'da bir case bir playbook tarafından **"incident"** olarak
+kapatıldığında, bu uç noktaya bir HTTP isteği atarak SOC Tracker'da
+otomatik, küçük bir olay raporu açılabilir. Tuning webhook'undan farklı
+olarak rapor gövdesi sabit alanlar değil, **yapılandırılmış bir bölüm
+listesi** (`sections`) — başlıkları playbook/kullanıcı serbestçe belirler.
+
+## Uç Nokta
+
+```
+POST /api/integrations/xsoar/incident-report
+```
+
+## Kimlik Doğrulama
+
+Tuning webhook'uyla **aynı** mekanizma ve **aynı** token
+(`XSOAR_WEBHOOK_TOKEN`) — yukarıdaki "Kimlik Doğrulama" bölümüne bakın.
+
+```
+X-API-Key: <XSOAR_WEBHOOK_TOKEN ortam değişkeninin değeri>
+```
+
+## İstek Gövdesi (JSON)
+
+| Alan | Zorunlu | Açıklama |
+|------|---------|----------|
+| `xsoar_case_id` | ✅ | XSOAR incident/case numarası. |
+| `title` | ✅ | Olay raporunun başlığı. |
+| `environment` | ✅ | Ortam (örn. `PROD`, `DEV`). |
+| `sections` | ✅ | En az bir dolu madde gerekir. Dizi, her öğe `{"heading": "...", "text": "..."}` — `text` boş olan öğeler otomatik elenir; hepsi elenirse `400` döner. Başlıklar (`heading`) serbest metin, koda gömülü sabit bir alan listesi **yok** — playbook rapor şablonunu tamamen kendi belirler. |
+| `images` | opsiyonel | En fazla 50 öğe. Dizi, **her öğe ham bir base64 string** (obje değil) — opsiyonel `data:image/png;base64,...` / `data:image/jpeg;base64,...` önekiyle, önek yoksa `.png` varsayılır. Gönderilme **sırasına** göre `order` alanı (1, 2, 3…) otomatik atanır ve rapor arayüzünde "Görsel 1", "Görsel 2"… diye numaralanır — tüm görseller **tek çağrıda**, `sections`'dan bağımsız ayrı bir galeri olarak gönderilir (Hunt raporundaki madde-başı-görsel deseninden farklı). Çözülemeyen/geçersiz bir öğe sessizce atlanır, isteğin geri kalanını etkilemez. |
+| `requested_by` | opsiyonel | Tuning webhook'uyla aynı davranış: SOC Tracker'daki kullanıcı adıyla eşleşirse `reporter` o kullanıcı olur, eşleşmezse `reporter` genel `"XSOAR Entegrasyonu"` etiketine düşer — hiçbir istek bu yüzden reddedilmez. |
+
+Eksik zorunlu alan varsa `400` ve hangi alan(lar)ın eksik olduğunu belirten
+bir hata döner.
+
+## Davranış
+
+- Oluşan rapor **`status = "Taslak"`** ile açılır — XSOAR'dan gelen veri
+  bozuk/eksik olabileceğinden, doğrudan nihai rapor haline gelmez: bir
+  analist SOC Tracker üzerinde başlığı/bölümleri/görselleri serbestçe
+  düzenleyebilir, ardından bir Kıdemli Analist/Müdür Onaylar veya (zorunlu
+  gerekçe notuyla) Reddeder.
+- `xsoar_url`, Tuning'le aynı mekanizmayla (bkz. "SOAR Case URL Şablonu"
+  bölümü) `xsoar_case_id`'den otomatik oluşturulur.
+- Audit log'a `CREATE_INCIDENT_XSOAR` aksiyonu ile, bölüm/görsel sayısı ve
+  `requested_by` eşleşme durumu detayında yazılır.
+- Başarılı yanıt: oluşturulan olay raporu kaydının tamamı (`201`).
+- **Mükerrer case koruması:** Tuning'le aynı kural — gönderilen
+  `xsoar_case_id` için zaten aktif (`Reddedildi` olmayan) bir olay raporu
+  varsa yeni kayıt açılmaz, `409` + `{"existing_id": ..., "duplicate": true}`
+  döner. Reddedilmiş bir case için gönderim yine yeni rapor açar.
+
+## Örnek İstek
+
+```bash
+curl -X POST https://<sunucu>:9897/api/integrations/xsoar/incident-report \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <XSOAR_WEBHOOK_TOKEN>" \
+  -d '{
+    "xsoar_case_id": "12345",
+    "title": "Phishing e-postası — kullanıcı tıkladı",
+    "environment": "PROD",
+    "requested_by": "analist1",
+    "sections": [
+      {"heading": "Olay Özeti", "text": "Kullanıcı X, phishing e-postasındaki linke tıkladı."},
+      {"heading": "Etki", "text": "Tek istasyon etkilendi, yanal hareket gözlenmedi."},
+      {"heading": "Alınan Aksiyon", "text": "İstasyon izole edildi, parola sıfırlatıldı."}
+    ],
+    "images": [
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...",
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+    ]
+  }'
+```
+
+## Kapsam Dışı (v1)
+
+PDF export bu ilk sürümde yok — Hunt raporunun PDF deseni (Montserrat font,
+sabit görsel sınırları, `WEASYPRINT_EXE` yerel yedek yolu) doğrudan yeniden
+kullanılabilir hale geldiğinde, ayrı ve küçük bir takip fazı olarak
+eklenecek.
 
 ## SOAR Case URL Şablonu (2026-07-20)
 

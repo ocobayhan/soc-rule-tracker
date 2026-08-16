@@ -41,15 +41,17 @@ XSOAR_WEBHOOK_TOKEN = os.environ.get("XSOAR_WEBHOOK_TOKEN", "soc-tracker-xsoar-w
 # etiketleri (Türkçe) static/app.js'teki AUDIT_CATEGORY_LABELS ile eşleşmeli
 # — burada sadece hangi action'ların hangi kategoriye girdiği tanımlanır.
 AUDIT_CATEGORIES = {
-    "create":         ["CREATE_TUNE", "CREATE_TUNE_XSOAR", "CREATE_UC", "CREATE_HUNT", "CREATE_USER"],
+    "create":         ["CREATE_TUNE", "CREATE_TUNE_XSOAR", "CREATE_UC", "CREATE_HUNT", "CREATE_USER",
+                        "CREATE_INCIDENT_XSOAR"],
     "claim":          ["CLAIM_TUNE", "CLAIM_UC", "CLAIM_HUNT", "START_HUNT"],
     "pre_approval":   ["VALIDATE_TUNE", "VALIDATE_UC", "VALIDATE_HUNT",
                         "REJECT_VALIDATION_TUNE", "REJECT_VALIDATION_UC", "REJECT_VALIDATION_HUNT"],
     "final_approval": ["APPROVE_TUNE", "RETRY_TUNE", "TEST_APPROVE_UC", "TEST_REJECT_UC",
-                        "APPROVE_HUNT_RESULT", "REJECT_HUNT_RESULT"],
+                        "APPROVE_HUNT_RESULT", "REJECT_HUNT_RESULT",
+                        "APPROVE_INCIDENT", "REJECT_INCIDENT"],
     "work_done":      ["CLOSE_TUNE", "CLOSE_UC", "CLOSE_HUNT", "REPORT_HUNT"],
-    "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER"],
-    "delete":         ["DELETE_TUNE", "DELETE_UC", "DELETE_HUNT", "DELETE_USER"],
+    "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER", "EDIT_INCIDENT"],
+    "delete":         ["DELETE_TUNE", "DELETE_UC", "DELETE_HUNT", "DELETE_USER", "DELETE_INCIDENT"],
     "system":         ["EXPORT_HUNT_PDF", "VERIFY_AUDIT_CHAIN", "EDIT_SETTING", "EXPORT_AUDIT_LOG"],
 }
 
@@ -233,6 +235,32 @@ def init_db():
         CREATE TABLE IF NOT EXISTS app_settings (
             key   TEXT PRIMARY KEY,
             value TEXT
+        )
+    """)
+
+    # XSOAR Olay Raporu (2026-08-16) — XSOAR'da "incident" olarak kapatılan
+    # case'ler için bir playbook webhook'unun doldurduğu, yapılandırılmış
+    # bölümlerden (sections) ve sıralı görsel galerisinden (images) oluşan
+    # küçük olay raporları. Onay akışı Tune/UC/Hunt'tan bilinçli olarak daha
+    # sade — tek kapı (Taslak -> Onaylandı/Reddedildi), çünkü "iş" zaten
+    # XSOAR'da bitmiş, burada sadece webhook'tan gelen (bozuk/eksik olabilen)
+    # içeriğin bir analist tarafından düzenlenip onaylanması var.
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS incident_reports (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            xsoar_case_id TEXT,
+            xsoar_url     TEXT,
+            title         TEXT NOT NULL DEFAULT '',
+            environment   TEXT DEFAULT '',
+            reporter      TEXT NOT NULL DEFAULT '',
+            sections      TEXT DEFAULT '[]',
+            images        TEXT DEFAULT '[]',
+            status        TEXT NOT NULL DEFAULT 'Taslak',
+            validated_by  TEXT,
+            validated_at  TEXT,
+            validation_note TEXT,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
 
@@ -1019,6 +1047,10 @@ def global_search():
         "SELECT * FROM threat_hunt_requests WHERE hunt_subject LIKE ? OR requester LIKE ? "
         "OR assigned_analyst LIKE ? OR findings LIKE ? ORDER BY created_at DESC LIMIT ?",
         (like, like, like, like, LIMIT)).fetchall(), "hunt", "hunt_subject", "requester")
+    add(db.execute(
+        "SELECT * FROM incident_reports WHERE title LIKE ? OR xsoar_case_id LIKE ? "
+        "OR reporter LIKE ? OR sections LIKE ? ORDER BY created_at DESC LIMIT ?",
+        (like, like, like, like, LIMIT)).fetchall(), "incident", "title", "reporter")
 
     return jsonify({"results": results, "query": q})
 
@@ -1180,6 +1212,245 @@ def xsoar_create_tune():
         detail += f" | Talep Eden (XSOAR): {requested_by}" + ("" if reporter == requested_by else " (eşleşmedi, genel etikete düşüldü)")
     write_audit("CREATE_TUNE_XSOAR", "tune", new_row["id"], detail)
     return jsonify(dict(new_row)), 201
+
+# ---------------------------------------------------------------------------
+# XSOAR Olay Raporu (Incident Report) — Faz W, bkz. docs/xsoar_integration.md
+# ---------------------------------------------------------------------------
+def _decode_incident_image(raw):
+    """Base64 (opsiyonel data:image/X;base64, önekiyle) bir görseli diske
+    yazar, dosya adını döner. Format data URI'den çıkarılır, yoksa .png
+    varsayılır. Geçersiz/boş girdide None döner (çağıran yer atlar) —
+    webhook'un görsel dizisindeki bir öğe bozuksa tüm istek reddedilmez,
+    sadece o görsel atlanır."""
+    import re, base64
+    if not raw or not isinstance(raw, str):
+        return None
+    m = re.match(r"^data:image/(\w+);base64,(.+)$", raw.strip(), re.DOTALL)
+    if m:
+        ext = "." + m.group(1).lower().replace("jpeg", "jpg")
+        b64 = m.group(2)
+    else:
+        ext, b64 = ".png", raw.strip()
+    if ext not in ALLOWED_EXT:
+        ext = ".png"
+    try:
+        raw_bytes = base64.b64decode(b64, validate=False)
+    except Exception:
+        return None
+    if not raw_bytes:
+        return None
+    filename = str(uuid.uuid4()) + ext
+    try:
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        with open(os.path.join(UPLOAD_FOLDER, filename), "wb") as f:
+            f.write(raw_bytes)
+    except OSError as e:
+        app.logger.error(f"[incident-webhook] Görsel kaydedilemedi: {e}")
+        return None
+    return filename
+
+@app.route("/api/integrations/xsoar/incident-report", methods=["POST"])
+@api_key_required
+def xsoar_create_incident_report():
+    """XSOAR'da bir case 'incident' olarak kapatıldığında bir playbook bu uca
+    çağrı yapar — yapılandırılmış bölümler (sections) + sıralı görsel
+    galerisi (images) ile küçük bir olay raporu 'Taslak' durumunda açılır;
+    bir analist düzenleyip bir Kıdemli Analist/Müdür onaylar/reddeder."""
+    import json
+    data = request.json or {}
+    required = ["xsoar_case_id", "title", "environment", "sections"]
+    missing  = [f for f in required if not data.get(f)]
+    if missing:
+        return jsonify({"error": f"Eksik alan(lar): {', '.join(missing)}"}), 400
+
+    sections = [
+        {"heading": str(s.get("heading", "")).strip(), "text": str(s.get("text", "")).strip()}
+        for s in data.get("sections", [])
+        if isinstance(s, dict) and str(s.get("text", "")).strip()
+    ]
+    if not sections:
+        return jsonify({"error": "En az bir dolu 'sections' maddesi gerekli (heading + text)"}), 400
+
+    db = get_db()
+    requested_by = str(data.get("requested_by", "")).strip()
+    reporter = XSOAR_REPORTER_NAME
+    if requested_by:
+        match = db.execute(
+            "SELECT username FROM users WHERE username=? AND role!='settings'", (requested_by,)
+        ).fetchone()
+        if match:
+            reporter = match["username"]
+
+    case_id = str(data["xsoar_case_id"]).strip()
+
+    # Mükerrer case engeli — Tune webhook'undaki aynı kural (bkz. yukarısı).
+    dup = db.execute(
+        "SELECT id FROM incident_reports WHERE xsoar_case_id=? AND status!=? ORDER BY id LIMIT 1",
+        (case_id, STATUS_REJECTED),
+    ).fetchone()
+    if dup:
+        return jsonify({
+            "error": f"Bu SOAR Case ID için zaten bir olay raporu var: #{dup['id']}",
+            "existing_id": dup["id"], "duplicate": True,
+        }), 409
+
+    images = []
+    for raw in (data.get("images") or [])[:50]:  # tek istekte makul bir üst sınır
+        fn = _decode_incident_image(raw)
+        if fn:
+            images.append({"order": len(images) + 1, "filename": fn})
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    cur = db.execute("""
+        INSERT INTO incident_reports
+          (xsoar_case_id, xsoar_url, title, environment, reporter,
+           sections, images, status, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+    """, (
+        case_id, build_xsoar_url(case_id), str(data["title"]).strip(),
+        str(data["environment"]).strip(), reporter,
+        json.dumps(sections), json.dumps(images), "Taslak", now, now,
+    ))
+    db.commit()
+    new_row = db.execute("SELECT * FROM incident_reports WHERE id=?", (cur.lastrowid,)).fetchone()
+    detail = f"Başlık: {new_row['title']} | XSOAR Case: {case_id} | {len(sections)} bölüm | {len(images)} görsel"
+    if requested_by:
+        detail += f" | Talep Eden (XSOAR): {requested_by}" + ("" if reporter == requested_by else " (eşleşmedi, genel etikete düşüldü)")
+    write_audit("CREATE_INCIDENT_XSOAR", "incident", new_row["id"], detail)
+    return jsonify(dict(new_row)), 201
+
+@app.route("/api/incident-reports", methods=["GET"])
+@login_required
+def list_incident_reports():
+    db  = get_db()
+    env    = request.args.get("environment", "")
+    month  = request.args.get("month", "")
+    status = request.args.get("status", "")
+    q = "SELECT * FROM incident_reports WHERE 1=1"
+    p = []
+    if env:    q += " AND environment=?"; p.append(env)
+    if month:  q += " AND (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',validated_at)=?)"; p += [month, month]
+    if status: q += " AND status=?"; p.append(status)
+    q += " ORDER BY created_at DESC"
+    return jsonify([dict(r) for r in db.execute(q, p).fetchall()])
+
+@app.route("/api/incident-reports/<int:item_id>", methods=["PUT"])
+@login_required
+def update_incident_report(item_id):
+    """XSOAR'dan gelen içerik bozuk/eksik olabilir — bir analist Taslak
+    durumundaki raporu serbestçe düzenleyebilir (onaylanmış/reddedilmiş
+    raporlar kilitli)."""
+    import json
+    data = request.json or {}
+    db   = get_db()
+    row  = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != "Taslak":
+        return jsonify({"error": "Sadece 'Taslak' durumundaki olay raporları düzenlenebilir."}), 400
+
+    def sv(key, fallback=""):
+        v = data.get(key)
+        return str(v).strip() if v is not None else (row[key] or fallback)
+
+    new_case_id = sv("xsoar_case_id", row["xsoar_case_id"] or "") or None
+    case_changed = new_case_id and new_case_id != row["xsoar_case_id"]
+    if case_changed:
+        dup = db.execute(
+            "SELECT id FROM incident_reports WHERE xsoar_case_id=? AND id!=? AND status!=? ORDER BY id LIMIT 1",
+            (new_case_id, item_id, STATUS_REJECTED),
+        ).fetchone()
+        if dup:
+            return jsonify({"error": f"Bu SOAR Case ID ({new_case_id}) için zaten başka bir olay raporu var: #{dup['id']}."}), 409
+
+    sections_in = data.get("sections")
+    if sections_in is not None:
+        sections = [
+            {"heading": str(s.get("heading", "")).strip(), "text": str(s.get("text", "")).strip()}
+            for s in sections_in
+            if isinstance(s, dict) and (str(s.get("heading", "")).strip() or str(s.get("text", "")).strip())
+        ]
+    else:
+        sections = json.loads(row["sections"] or "[]")
+
+    images = data.get("images")
+    if images is None:
+        images = json.loads(row["images"] or "[]")
+
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""
+        UPDATE incident_reports SET
+          xsoar_case_id=?, xsoar_url=?, title=?, environment=?,
+          sections=?, images=?, updated_at=?
+        WHERE id=?
+    """, (
+        new_case_id,
+        build_xsoar_url(new_case_id) if case_changed else row["xsoar_url"],
+        sv("title"), sv("environment"),
+        json.dumps(sections), json.dumps(images), now, item_id,
+    ))
+    db.commit()
+    updated = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    write_audit("EDIT_INCIDENT", "incident", item_id, f"Başlık: {updated['title']}")
+    return jsonify(dict(updated))
+
+@app.route("/api/incident-reports/<int:item_id>/validate", methods=["POST"])
+@login_required
+def validate_incident_report(item_id):
+    db  = get_db()
+    row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != "Taslak":
+        return jsonify({"error": "Sadece 'Taslak' durumundaki olay raporları onaylanabilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Onay için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    note  = (request.json or {}).get("validation_note", "").strip()
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""UPDATE incident_reports SET status='Onaylandı',
+                  validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
+               (uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    write_audit("APPROVE_INCIDENT", "incident", item_id, f"Başlık: {row['title']}")
+    return jsonify(dict(updated))
+
+@app.route("/api/incident-reports/<int:item_id>/reject-validation", methods=["POST"])
+@login_required
+def reject_incident_report(item_id):
+    db  = get_db()
+    row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != "Taslak":
+        return jsonify({"error": "Sadece 'Taslak' durumundaki olay raporları reddedilebilir."}), 400
+    if not is_senior():
+        return jsonify({"error": "Red için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+    note = (request.json or {}).get("validation_note", "").strip()
+    if not note:
+        return jsonify({"error": "Red gerekçesi zorunludur."}), 400
+    uname = session.get("username", "")
+    now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("""UPDATE incident_reports SET status='Reddedildi',
+                  validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
+               (uname, now, note, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    write_audit("REJECT_INCIDENT", "incident", item_id, f"Başlık: {row['title']} | Gerekçe: {note[:80]}")
+    return jsonify(dict(updated))
+
+@app.route("/api/incident-reports/<int:item_id>", methods=["DELETE"])
+@login_required
+def delete_incident_report(item_id):
+    db  = get_db()
+    row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    db.execute("DELETE FROM incident_reports WHERE id=?", (item_id,))
+    db.commit()
+    write_audit("DELETE_INCIDENT", "incident", item_id, f"Başlık: {row['title']}")
+    return jsonify({"ok": True})
 
 @app.route("/api/tune/<int:item_id>", methods=["PUT"])
 @login_required
