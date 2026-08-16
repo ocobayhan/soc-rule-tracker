@@ -1035,7 +1035,10 @@ def list_tune():
     q = "SELECT * FROM tune_requests WHERE 1=1"
     p = []
     if env:    q += " AND environment=?";                   p.append(env)
-    if month:  q += " AND strftime('%Y-%m',created_at)=?";  p.append(month)
+    # Ay filtresi: sadece o ay AÇILAN değil, o ay TAMAMLANAN kayıtlar da
+    # görünsün (2026-08-16) — önceki sürüm sadece created_at'e bakıyordu,
+    # başka bir ayda açılıp bu ay biten kayıtlar filtreden düşüyordu.
+    if month:  q += " AND (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)"; p += [month, month]
     if status: q += " AND status=?";                        p.append(status)
     q += " ORDER BY created_at DESC"
     return jsonify([dict(r) for r in db.execute(q, p).fetchall()])
@@ -1461,7 +1464,7 @@ def list_usecase():
     q = "SELECT * FROM usecase_requests WHERE 1=1"
     p = []
     if env:    q += " AND INSTR(',' || environment || ',', ',' || ? || ',') > 0"; p.append(env)
-    if month:  q += " AND strftime('%Y-%m',created_at)=?";  p.append(month)
+    if month:  q += " AND (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)"; p += [month, month]
     if status: q += " AND status=?";                        p.append(status)
     q += " ORDER BY created_at DESC"
     return jsonify([dict(r) for r in db.execute(q, p).fetchall()])
@@ -1768,7 +1771,7 @@ def list_hunts():
     q   = "SELECT * FROM threat_hunt_requests WHERE 1=1"
     args = []
     if p.get("month"):
-        q += " AND strftime('%Y-%m', created_at)=?"; args.append(p["month"])
+        q += " AND (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)"; args += [p["month"], p["month"]]
     if p.get("environment"):
         q += " AND environment=?"; args.append(p["environment"])
     if p.get("status"):
@@ -2450,9 +2453,11 @@ def export_data():
     write_headers(ws1, tune_cols)
 
     tune_q = "SELECT * FROM tune_requests"
-    tune_q += " WHERE strftime('%Y-%m',created_at)=?" if exp_month else " WHERE 1=1"
+    # O ay açılan VEYA o ay tamamlanan kayıtlar (2026-08-16) — liste
+    # endpoint'leriyle aynı düzeltme, Excel'in de aynı satırları göstermesi için.
+    tune_q += " WHERE (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)" if exp_month else " WHERE 1=1"
     tune_q += " ORDER BY id"
-    for r in db.execute(tune_q, (exp_month,) if exp_month else ()).fetchall():
+    for r in db.execute(tune_q, (exp_month, exp_month) if exp_month else ()).fetchall():
         row = [r["id"], r["rule_name"], r["environment"], r["reporter"],
                r["tune_reason"], r["trigger_frequency"] or "",
                r["tuning_analyst"] or "", r["how_tuned"] or "",
@@ -2480,9 +2485,9 @@ def export_data():
     write_headers(ws2, uc_cols)
 
     uc_q = "SELECT * FROM usecase_requests"
-    uc_q += " WHERE strftime('%Y-%m',created_at)=?" if exp_month else " WHERE 1=1"
+    uc_q += " WHERE (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)" if exp_month else " WHERE 1=1"
     uc_q += " ORDER BY id"
-    for r in db.execute(uc_q, (exp_month,) if exp_month else ()).fetchall():
+    for r in db.execute(uc_q, (exp_month, exp_month) if exp_month else ()).fetchall():
         row = [r["id"], r["usecase_description"], r["environment"], r["requester"],
                r["rule_author"] or "", r["rule_name"] or "", r["notes"] or "",
                r["status"], fmt_date(r["created_at"]),
@@ -2512,10 +2517,10 @@ def export_data():
     write_headers(ws3, hunt_cols)
 
     hunt_q = "SELECT * FROM threat_hunt_requests"
-    hunt_q += " WHERE strftime('%Y-%m',created_at)=?" if exp_month else " WHERE 1=1"
+    hunt_q += " WHERE (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)" if exp_month else " WHERE 1=1"
     hunt_q += " ORDER BY id"
     import json as _json
-    for r in db.execute(hunt_q, (exp_month,) if exp_month else ()).fetchall():
+    for r in db.execute(hunt_q, (exp_month, exp_month) if exp_month else ()).fetchall():
         # Summarize MITRE entries to text
         try:
             mitre_list = _json.loads(r["mitre_techniques"] or "[]")

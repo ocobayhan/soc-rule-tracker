@@ -767,6 +767,26 @@ Kullanıcının Threat Hunt raporu için istediği 4 iyileştirme:
   edildi, konsol hatasız. Test verileri (hunt, görseller, debug hesap)
   temizlendi, hunt sayısı 7'ye döndü, audit hash zinciri geçerli.
 
+### Faz U — Ay Filtresi Düzeltmesi (2026-08-16)
+
+- [x] **Gerçek bug, kullanıcı bildirimiyle bulundu:** "Temmuz'u filtreleyince
+  hem o ay açılan hem o ay biten kayıtları görmem lazım" — kod okunarak
+  doğrulandı: `list_tune()`, `list_usecase()`, `list_hunt()` (3 liste
+  endpoint'i) ve Excel'in 3 satır-listeleme sorgusu (KPI Özeti sayfası hariç
+  — o zaten her state için doğru tarih kolonunu kullanıyordu, ayrı ve önceden
+  doğru bir tasarım) SADECE `created_at`'e bakıyordu — başka bir ayda açılıp
+  seçili ayda tamamlanan kayıtlar filtreden düşüyordu.
+- [x] **Fix:** 6 sorguda da filtre `(strftime('%Y-%m',created_at)=? OR
+  strftime('%Y-%m',completed_at)=?)`'e çevrildi — UI'da hiçbir değişiklik
+  gerekmedi, mevcut ay seçici aynı kaldı, sadece anlamı düzeldi.
+- [x] **Uçtan uca doğrulandı:** Haziran'da açılıp Temmuz'da tamamlanan test
+  kayıtları (Tune/UC/Hunt, üçü de) oluşturulup Haziran/Temmuz/Ağustos
+  filtreleriyle sorgulandı — Haziran ve Temmuz'da doğru şekilde görünüp
+  Ağustos'ta (ne açılma ne bitiş ayı) doğru şekilde görünmediği hem liste
+  API'lerinde hem Excel'in 3 sayfasında teyit edildi. Test verileri
+  temizlendi, baseline sayılar (tune 9, UC 4, hunt 7) korundu, audit zinciri
+  bu testten etkilenmedi (ham SQL insert, write_audit çağrılmadı).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
