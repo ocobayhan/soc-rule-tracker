@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v38
+   SOC Tracker — Frontend  v39
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1915,6 +1915,11 @@ async function loadSettings() {
   loadBackupList();
   loadUserStats();
   loadXsoarUrlTemplate();
+}
+
+function switchSettingsSubtab(name) {
+  document.querySelectorAll(".settings-subtab-btn").forEach(b => b.classList.toggle("active", b.dataset.subtab === name));
+  document.querySelectorAll(".settings-subpanel").forEach(p => p.classList.toggle("active", p.id === `settings-subtab-${name}`));
 }
 
 async function loadXsoarUrlTemplate() {

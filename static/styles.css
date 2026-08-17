@@ -293,14 +293,14 @@ input, select, textarea { font-family: inherit; }
 .kpi-module {
   background: var(--bg-secondary);
   border: 0.5px solid var(--border);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   border-radius: var(--r-lg);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.kpi-module:hover { border-color: var(--border-md); box-shadow: 0 4px 16px rgba(0,0,0,.15); }
+.kpi-module:hover { border-color: var(--border-md); box-shadow: 0 4px 16px rgba(0,0,0,.15); transform: scale(1.02); }
 .kpi-module-hdr {
   display: flex;
   align-items: center;
@@ -847,6 +847,29 @@ input, select, textarea { font-family: inherit; }
 .settings-list li:hover { background: var(--bg-hover); }
 .settings-list .item-actions { display: flex; gap: 6px; }
 .settings-date-fields { border-top: 0.5px solid var(--border); padding-top: 12px; margin-top: 4px; }
+
+.settings-subnav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 0.5px solid var(--border);
+}
+.settings-subtab-btn {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -0.5px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.settings-subtab-btn:hover { color: var(--text-1); }
+.settings-subtab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.settings-subpanel { display: none; }
+.settings-subpanel.active { display: block; }
 
 /* ============================================================ DETAIL VIEW */
 .detail-overlay {

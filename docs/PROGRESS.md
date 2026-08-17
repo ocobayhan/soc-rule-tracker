@@ -1040,6 +1040,43 @@ Hunt/Incident PDF'lerinde ve diğer "göze batan" yerlerde fark edip istedi.
   (1 hesap, 2 hunt) temizlendi, baseline hunt sayısı 7'ye döndü, audit
   zinciri geçerli (246 kayıt, 222 zincirli).
 
+### Takip (2026-08-17) — Ayarlar sekmeleri, Olay Raporu XSOAR rehberi, Dashboard hover
+
+- **Ayarlar sayfası sekmelere ayrıldı:** Daha önce tek uzun sayfa halinde
+  kayan 5 panel (Ortamlar/Kullanıcılar/Yedekleme/XSOAR/Kullanıcı Aktivitesi)
+  artık admin için 4 sekme: **Genel** (Ortamlar+Kullanıcılar — ikisi de
+  `settings` rolüne de açık olduğu için birlikte), **Yedekleme**, **XSOAR
+  Entegrasyonu**, **Kullanıcı Aktivitesi**. `settings` rolü hâlâ sadece
+  Genel'i görüyor — sekme çubuğu sadece admin'e render oluyor (`{% if
+  user_role == 'admin' %}`), tek seçenek varken gereksiz UI karmaşası
+  olmasın diye. Yeni jenerik `.settings-subnav`/`.settings-subtab-btn`/
+  `.settings-subpanel` CSS + `switchSettingsSubtab(name)` — sidebar'ın
+  `nav-btn`/`tab-panel` desenini küçük ölçekte tekrarlıyor, ilk kurulan
+  "sayfa içi sekme" bileşeni bu projede. Veri yükleme davranışı değişmedi
+  (`loadSettings()` hâlâ hepsini baştan yüklüyor, sekme geçişi salt görünüm).
+- **XSOAR sekmesine Olay Raporu rehberi eklendi:** Panelde şimdiye kadar
+  sadece Kural Tuning webhook'u anlatılıyordu (ve altındaki "Şu an kapsamı"
+  notu hâlâ "sadece Kural Tuning" diyordu — Faz W'den beri yanlıştı). Şimdi
+  Kural Tuning'in hemen altında paralel bir "Olay Raporu (Incident Report)
+  Webhook'u" bölümü var: ne işe yaradığı, onay akışı, kurulum için
+  gereken adres/anahtar/zorunlu alanlar, `docs/xsoar_incident_report_script.py`
+  ve `docs/xsoar_integration.md`'ye pointer. "SOAR Case URL Şablonu"nun
+  her iki entegrasyon için de ortak olduğu netleştirildi, "Şu an kapsamı"
+  notu güncellendi.
+- **Dashboard KPI kartlarına hover-büyüme:** `.kpi-module` (Kural Tuning/
+  Use-Case/Threat Hunting kartları) zaten `:hover`'da kenarlık+gölge
+  değiştiriyordu — `transform: scale(1.02)` eklendi (küçük/abartısız,
+  `transition`e de `transform` eklendi ki pürüzsüz büyüsün/küçülsün).
+- **Doğrulandı:** gerçek admin hesabıyla, gerçek tarayıcı: sekme
+  butonlarına tıklayınca doğru panel görünür/gizlenir oluyor (DOM
+  `.active` durumu üzerinden), XSOAR sekmesinde yeni Olay Raporu bölümü ve
+  URL şablonu inputu'nun mevcut değeri (taşımadan önce kaydedilen) hâlâ
+  doğru yükleniyor, Kullanıcı Aktivitesi sekmesi tıklayınca tablo gerçek
+  veriyle doluyor. Hover CSS kuralı (`transform: scale(1.02)`) sayfanın
+  yüklü stylesheet'inde doğru şekilde bulundu (CSSOM üzerinden). `app.js`
+  `v39`, `styles.css` `v11.14`'e yükseltildi. Test hesabı temizlendi, audit
+  zinciri geçerli (246 kayıt, 222 zincirli — bu faz veri mutasyonu içermedi).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=11.13"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.14"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -509,6 +509,17 @@
   <!-- ===== SETTINGS ===== -->
   <section id="tab-settings" class="tab-panel{% if is_settings %} active{% endif %}">
     <div class="page-header"><h1 class="page-title">Ayarlar</h1></div>
+
+  {% if user_role == 'admin' %}
+    <div class="settings-subnav">
+      <button class="settings-subtab-btn active" data-subtab="general" onclick="switchSettingsSubtab('general')">Genel</button>
+      <button class="settings-subtab-btn" data-subtab="backup" onclick="switchSettingsSubtab('backup')">Yedekleme</button>
+      <button class="settings-subtab-btn" data-subtab="xsoar" onclick="switchSettingsSubtab('xsoar')">XSOAR Entegrasyonu</button>
+      <button class="settings-subtab-btn" data-subtab="activity" onclick="switchSettingsSubtab('activity')">Kullanıcı Aktivitesi</button>
+    </div>
+  {% endif %}
+
+    <div id="settings-subtab-general" class="settings-subpanel active">
     <div class="settings-grid" style="grid-template-columns:minmax(320px,480px)">
       <div class="settings-panel">
         <div class="settings-panel-header">
@@ -554,9 +565,12 @@
       </div>
       <ul class="settings-list" id="user-settings-list"></ul>
     </div>
+    </div>
+
   {% if user_role == 'admin' %}
     <!-- Backup panel — admin only -->
-    <div class="settings-panel" style="margin-top:20px;max-width:800px">
+    <div id="settings-subtab-backup" class="settings-subpanel">
+    <div class="settings-panel" style="max-width:800px">
       <div class="settings-panel-header">
         <span class="settings-panel-title">Veri Yedekleme</span>
         <button class="btn btn-primary" onclick="createBackup()">&#128190; Şimdi Yedekle</button>
@@ -574,14 +588,17 @@
         </table>
       </div>
     </div>
+    </div>
 
     <!-- XSOAR entegrasyonu — bilgilendirme paneli, admin only -->
-    <div class="settings-panel" style="margin-top:20px;max-width:800px">
+    <div id="settings-subtab-xsoar" class="settings-subpanel">
+    <div class="settings-panel" style="max-width:800px">
       <div class="settings-panel-header">
         <span class="settings-panel-title">XSOAR Entegrasyonu</span>
       </div>
       <div style="padding:16px 20px;font-size:13px;line-height:1.7;color:var(--text-2)">
-        <p style="margin:0">
+        <div class="detail-section-title">Kural Tuning Webhook'u</div>
+        <p style="margin:6px 0 0">
           XSOAR'da bir playbook bir kuralı <strong>"Needs Tuning"</strong> (tune
           gerekiyor) adımına getirdiğinde, SOC Tracker'da otomatik olarak bir
           Kural Tuning talebi açılabilir — analist elle talep girmek zorunda
@@ -602,19 +619,47 @@
           <li>Bir API anahtarı (<code>XSOAR_WEBHOOK_TOKEN</code>) — bu, sunucu tarafında ortam değişkeni olarak tanımlanır ve sadece XSOAR'ın bileceği bir parola gibi düşünülmeli. Her istekte <code>X-API-Key</code> header'ı olarak gönderilmesi gerekir.</li>
           <li>XSOAR tarafında, "Needs Tuning" adımına gelindiğinde bu adrese kural adı, ortam, tune gerekçesi ve XSOAR case numarasını içeren bir istek atacak bir otomasyon görevi (ör. "HTTP Request" task'ı) tanımlanmalı — bu kurulumu XSOAR tarafındaki ekip yapar.</li>
         </ul>
+
+        <div class="detail-section-title" style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">Olay Raporu (Incident Report) Webhook'u</div>
+        <p style="margin:6px 0 0">
+          XSOAR'da bir case bir playbook tarafından <strong>"incident"</strong>
+          olarak kapatıldığında, SOC Tracker'da otomatik olarak küçük bir olay
+          raporu açılabilir. Rapor gövdesi sabit alanlar değil,
+          <strong>bölüm listesi</strong> şeklindedir (başlık + metin çiftleri,
+          örn. "Olay Özeti", "Bulgular", "Öneriler") — başlıkları playbook/siz
+          serbestçe belirlersiniz, koda gömülü sabit bir şablon yoktur.
+        </p>
         <p style="margin:10px 0 0">
-          Teknik detaylar (tam alan listesi, örnek istek) için:
-          <code>docs/xsoar_integration.md</code> — bu dosyayı entegrasyonu
+          <strong>Onay akışı:</strong> XSOAR'dan gelen veri bozuk/eksik
+          olabileceğinden, webhook raporu doğrudan nihai hale getirmez —
+          <strong>Taslak</strong> olarak açılır, bir analist SOC Tracker
+          üzerinde başlık/bölümler/görselleri serbestçe düzenleyebilir,
+          ardından bir Kıdemli Analist/Müdür Onaylar veya Reddeder.
+        </p>
+
+        <div class="detail-section-title" style="margin-top:16px">Kurulum için ne gerekli?</div>
+        <ul style="margin:6px 0 0 18px;padding:0">
+          <li>Adres (webhook URL): <code>{{ request.host_url }}api/integrations/xsoar/incident-report</code></li>
+          <li>Aynı API anahtarı, aynı <code>X-API-Key</code> header'ı — yukarıdaki Kural Tuning entegrasyonuyla ortak.</li>
+          <li>Zorunlu alanlar: SOAR case no, başlık, ortam, en az bir dolu bölüm (başlık+metin).</li>
+          <li>Opsiyonel görseller: sırayla "Görsel 1, Görsel 2…" diye numaralanır — ya raporla birlikte tek çağrıda hepsi birden, ya da case'e sonradan tek tek eklenir (ayrı, ikinci bir uç nokta ile).</li>
+        </ul>
+        <p style="margin:10px 0 0">
+          Hazır, test edilmiş bir Python script örneği için:
+          <code>docs/xsoar_incident_report_script.py</code>. Her iki
+          entegrasyonun da tam alan listesi ve örnek istekleri için:
+          <code>docs/xsoar_integration.md</code> — bu dosyaları entegrasyonu
           kuracak ekiple paylaşabilirsiniz.
         </p>
 
-        <div class="detail-section-title" style="margin-top:16px">SOAR Case URL Şablonu</div>
+        <div class="detail-section-title" style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">SOAR Case URL Şablonu</div>
         <p style="margin:6px 0 8px">
           SOAR'daki incident URL'lerinin sonundaki case numarası dışında hep
-          aynı olduğu durumlar için: şablonu bir kere burada tanımlayın,
-          analistler Tuning talebi açarken artık tam URL'i kopyalamak yerine
-          sadece <strong>case numarasını</strong> girsin — link otomatik
-          oluşur. <code>[CASENO]</code> yer tutucusu, girilen case numarasıyla
+          aynı olduğu durumlar için: şablonu bir kere burada tanımlayın —
+          hem Kural Tuning hem Olay Raporu için ortak kullanılır. Analistler
+          artık tam URL'i kopyalamak yerine sadece <strong>case
+          numarasını</strong> girsin, link otomatik oluşur.
+          <code>[CASENO]</code> yer tutucusu, girilen case numarasıyla
           değiştirilir.
         </p>
         <div style="display:flex;gap:8px;align-items:center">
@@ -626,14 +671,17 @@
 
         <div class="detail-section-title" style="margin-top:16px">Şu an kapsamı</div>
         <p style="margin:6px 0 0">
-          Bu özellik şu an sadece <strong>Kural Tuning</strong> modülü için
-          aktif. Use-Case ve Threat Hunt için henüz yok.
+          Bu özellik şu an <strong>Kural Tuning</strong> ve <strong>Olay
+          Raporu</strong> modülleri için aktif. Use-Case ve Threat Hunt için
+          henüz yok.
         </p>
       </div>
     </div>
+    </div>
 
     <!-- Kullanıcı Aktivitesi — admin only -->
-    <div class="settings-panel" style="margin-top:20px;max-width:1100px">
+    <div id="settings-subtab-activity" class="settings-subpanel">
+    <div class="settings-panel" style="max-width:1100px">
       <div class="settings-panel-header">
         <span class="settings-panel-title">Kullanıcı Aktivitesi</span>
       </div>
@@ -655,6 +703,7 @@
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   {% endif %}
 
@@ -1699,6 +1748,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=38"></script>
+<script src="/static/app.js?v=39"></script>
 </body>
 </html>
