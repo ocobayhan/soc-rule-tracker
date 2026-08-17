@@ -385,7 +385,7 @@
         <tr>
           <th></th>
           <th class="th-sortable" id="th-hunt-id" onclick="sortHunt('id')"># <span class="sort-arrow"></span></th>
-          <th class="th-sortable" id="th-hunt-hunt_subject" onclick="sortHunt('hunt_subject')">Hunt Konusu <span class="sort-arrow"></span></th>
+          <th class="th-sortable" id="th-hunt-hunt_title" onclick="sortHunt('hunt_title')">Hunt Başlığı <span class="sort-arrow"></span></th>
           <th>Talep Eden</th><th>Analist</th>
           <th class="th-sortable" id="th-hunt-status" onclick="sortHunt('status')">Durum <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-hunt-created_at" onclick="sortHunt('created_at')">Talep Tarihi <span class="sort-arrow"></span></th>
@@ -1180,6 +1180,10 @@
           <select class="form-input" id="hunt-requester"><option value="">— Seçin —</option></select>
         </div>
         <div class="form-group form-col-2">
+          <label class="form-label">Hunt Başlığı *</label>
+          <input class="form-input" type="text" id="hunt-title" placeholder="Kısa, tanımlayıcı başlık…"/>
+        </div>
+        <div class="form-group form-col-2">
           <label class="form-label">Hunt Konusu *</label>
           <textarea class="form-input form-textarea" id="hunt-subject" placeholder="Araştırılacak senaryo veya amaç…"></textarea>
         </div>
@@ -1210,6 +1214,10 @@
         <div class="form-group form-col-2">
           <label class="form-label">Talep Eden *</label>
           <select class="form-input" id="edit-hunt-requester"><option value="">— Seçin —</option></select>
+        </div>
+        <div class="form-group form-col-2">
+          <label class="form-label">Hunt Başlığı *</label>
+          <input class="form-input" type="text" id="edit-hunt-title" placeholder="Kısa, tanımlayıcı başlık…"/>
         </div>
         <div class="form-group form-col-2">
           <label class="form-label">Hunt Konusu *</label>
@@ -1691,6 +1699,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=37"></script>
+<script src="/static/app.js?v=38"></script>
 </body>
 </html>

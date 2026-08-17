@@ -127,8 +127,8 @@ ol.list-block li { padding: 2px 0; }
     <div class="header-left">
       {% if logo_uri %}<img class="header-logo" src="{{ logo_uri }}">{% endif %}
       <div>
-        <div class="header-title">Threat Hunt Raporu — #{{ r.id }}</div>
-        <div class="header-subject">{{ r.hunt_subject }}</div>
+        <div class="header-title">{{ r.hunt_title or r.hunt_subject }}</div>
+        <div class="header-subject">Threat Hunt Raporu — #{{ r.id }}</div>
       </div>
     </div>
     <div class="header-meta">
@@ -156,6 +156,9 @@ ol.list-block li { padding: 2px 0; }
         {% endif %}
       </div>
     </div>
+    {% if r.hunt_title %}
+    <div class="row" style="margin-top:4px"><span class="row-label">Hunt Konusu</span><span class="row-value">{{ r.hunt_subject }}</span></div>
+    {% endif %}
   </div>
 
   <div class="section">

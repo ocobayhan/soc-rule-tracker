@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v37
+   SOC Tracker — Frontend  v38
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -376,7 +376,7 @@ async function loadDashboardTables() {
     tb.innerHTML = rows.length
       ? rows.slice(0,6).map(r => `<tr>
           <td>${badge(r.status,HUNT_CLS)}</td>
-          <td class="td-truncate" title="${esc(r.hunt_subject)}">${esc(r.hunt_subject)}</td>
+          <td class="td-truncate" title="${esc(r.hunt_title || r.hunt_subject)}">${esc(r.hunt_title || r.hunt_subject)}</td>
           <td class="text-muted" title="${esc(r.assigned_analyst || r.requester)}">${esc(displayName(r.assigned_analyst || r.requester))}</td>
           <td class="text-muted">${fmtDate(r.created_at)}</td>
         </tr>`).join("")
@@ -690,7 +690,7 @@ function clientSort(rows, col, dir) {
 
 function updateSortUI(prefix, activeCol, dir) {
   const cols = prefix === "tune"     ? ["id", "rule_name",          "status", "created_at"]
-             : prefix === "hunt"     ? ["id", "hunt_subject",        "status", "created_at"]
+             : prefix === "hunt"     ? ["id", "hunt_title",          "status", "created_at"]
              : prefix === "incident" ? ["id", "title",               "status", "created_at"]
              :                         ["id", "usecase_description", "status", "created_at"];
   cols.forEach(col => {
@@ -1249,7 +1249,7 @@ async function execRetryTune() {
 function openValidateModal(type, id) {
   const rows = type === "tune" ? tuneRows : (type === "usecase" ? ucRows : (type === "incident" ? incidentRows : huntRows));
   const r = rows.find(x => x.id === id); if (!r) return;
-  const label = type === "tune" ? r.rule_name : (type === "usecase" ? (r.usecase_description || "").slice(0, 80) : (type === "incident" ? r.title : r.hunt_subject));
+  const label = type === "tune" ? r.rule_name : (type === "usecase" ? (r.usecase_description || "").slice(0, 80) : (type === "incident" ? r.title : (r.hunt_title || r.hunt_subject)));
   document.getElementById("validate-type").value = type;
   document.getElementById("validate-id").value   = id;
   document.getElementById("validate-desc").textContent =
@@ -1310,7 +1310,7 @@ function openHuntResultModal(id) {
   const r = huntRows.find(x => x.id === id); if (!r) return;
   document.getElementById("hunt-result-id").value = id;
   document.getElementById("hunt-result-desc").textContent =
-    `"${r.hunt_subject}" hunt'ının sonucunu/raporunu onaylıyor musunuz? Revizyona gönderirseniz İnceleniyor'a döner.`;
+    `"${r.hunt_title || r.hunt_subject}" hunt'ının sonucunu/raporunu onaylıyor musunuz? Revizyona gönderirseniz İnceleniyor'a döner.`;
   document.getElementById("hunt-result-note").value = "";
   document.getElementById("hunt-result-error").style.display = "none";
   document.getElementById("hunt-result-modal").style.display = "flex";
@@ -2281,7 +2281,7 @@ function huntActionBtns(r) {
 
 const HUNT_COLUMNS = [
   { index: 1, key: "id",               label: "#",            filterType: "text" },
-  { index: 2, key: "hunt_subject",     label: "Hunt Konusu",  filterType: "text" },
+  { index: 2, key: "hunt_title",       label: "Hunt Başlığı", filterType: "text" },
   { index: 3, key: "requester",        label: "Talep Eden",   filterType: "text" },
   { index: 4, key: "assigned_analyst", label: "Analist",      filterType: "text" },
   { index: 5, key: "status",           label: "Durum",        filterType: "select" },
@@ -2290,7 +2290,7 @@ const HUNT_COLUMNS = [
 ];
 
 function renderHuntRows() {
-  const HUNT_FIELDS = ["hunt_subject","requester","assigned_analyst","environment","notes"];
+  const HUNT_FIELDS = ["hunt_title","hunt_subject","requester","assigned_analyst","environment","notes"];
   const visible = huntRows
     .filter(r => !huntSearch || HUNT_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(huntSearch)))
     .filter(r => matchesColumnFilters("hunt", r));
@@ -2303,8 +2303,8 @@ function renderHuntRows() {
   tbody.innerHTML = sorted.map(r => `<tr>
     <td>${dot(r.status, HUNT_DOT)}</td>
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
-    <td class="td-truncate" title="${esc(r.hunt_subject)}">
-      <span class="cell-link" onclick="openHuntDetail(${r.id})" style="cursor:pointer">${esc(r.hunt_subject)}</span>
+    <td class="td-truncate" title="${esc(r.hunt_title || r.hunt_subject)}">
+      <span class="cell-link" onclick="openHuntDetail(${r.id})" style="cursor:pointer">${esc(r.hunt_title || r.hunt_subject)}</span>
     </td>
     <td class="td-truncate" title="${esc(r.requester)}">${esc(displayName(r.requester))}</td>
     <td class="td-truncate" title="${esc(r.assigned_analyst||'')}">${r.assigned_analyst ? esc(displayName(r.assigned_analyst)) : '<span class="text-muted">—</span>'}</td>
@@ -2351,6 +2351,7 @@ async function startHunt(id) {
 // ---------------------------------------------------------------------------
 function openHuntModal() {
   populateAnalystDropdowns();
+  document.getElementById("hunt-title").value   = "";
   document.getElementById("hunt-subject").value = "";
   document.getElementById("hunt-notes").value   = "";
   if (USER_ROLE === "analyst" || USER_ROLE === "user") {
@@ -2367,6 +2368,7 @@ async function saveHunt() {
   const errEl = document.getElementById("hunt-modal-error");
   errEl.style.display = "none";
   const payload = {
+    hunt_title:   document.getElementById("hunt-title").value.trim(),
     hunt_subject: document.getElementById("hunt-subject").value.trim(),
     requester:    document.getElementById("hunt-requester").value,
     notes:        document.getElementById("hunt-notes").value.trim(),
@@ -2384,6 +2386,7 @@ function openHuntEditModal(id) {
   const r = huntRows.find(x => x.id === id); if (!r) return;
   populateAnalystDropdowns();
   document.getElementById("edit-hunt-id").value      = r.id;
+  document.getElementById("edit-hunt-title").value   = r.hunt_title || "";
   document.getElementById("edit-hunt-subject").value = r.hunt_subject || "";
   document.getElementById("edit-hunt-notes").value   = r.notes || "";
 
@@ -2391,12 +2394,14 @@ function openHuntEditModal(id) {
     const isAssigned  = r.assigned_analyst === CURRENT_USER;
     const isRequester = r.requester === CURRENT_USER;
     lockToSelf("edit-hunt-requester");
+    document.getElementById("edit-hunt-title").disabled   = !isRequester;
     document.getElementById("edit-hunt-subject").disabled = !isRequester;
     document.getElementById("edit-hunt-notes").disabled   = !isRequester;
     if (!isRequester && !isAssigned) {
       // Shouldn't reach here (button wouldn't show), but guard anyway
     }
   } else {
+    document.getElementById("edit-hunt-title").disabled   = false;
     document.getElementById("edit-hunt-subject").disabled = false;
     document.getElementById("edit-hunt-notes").disabled   = false;
     freeSelect("edit-hunt-requester", r.requester || "");
@@ -2420,6 +2425,7 @@ async function saveHuntEdit() {
   const errEl = document.getElementById("hunt-edit-modal-error");
   errEl.style.display = "none";
   const payload = {
+    hunt_title:   document.getElementById("edit-hunt-title").value.trim(),
     hunt_subject: document.getElementById("edit-hunt-subject").value.trim(),
     requester:    document.getElementById("edit-hunt-requester").value,
     notes:        document.getElementById("edit-hunt-notes").value.trim(),
@@ -3002,7 +3008,7 @@ async function saveHuntReport() {
 async function openHuntDetail(id) {
   try {
     const r = await apiFetch(`/api/hunt/${id}`);
-    document.getElementById("hunt-detail-title").textContent = `Hunt #${r.id} — ${r.hunt_subject}`;
+    document.getElementById("hunt-detail-title").textContent = `Hunt #${r.id} — ${r.hunt_title || r.hunt_subject}`;
     const HUNT_RESULT_CLS = { "Tehdit Tespit Edildi": "status-done", "Tehdit Tespit Edilmedi": "status-reviewing", "Yetersiz Veri": "status-nottuned" };
     const reportBadge = r.report_status === "Tamamlandı"
       ? `<span class="badge status-done">${esc(r.report_status)}</span>`
@@ -3064,6 +3070,7 @@ async function openHuntDetail(id) {
         ${r.result_approval_note ? detailRow("Sonuç Onay Notu", r.result_approval_note) : ""}
         ${detailRow("Talep Eden", displayName(r.requester))}
         ${detailRow("Atanan Analist", r.assigned_analyst ? displayName(r.assigned_analyst) : "")}
+        ${r.hunt_title ? detailRow("Hunt Konusu", r.hunt_subject) : ""}
         ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${envBadges}</span></div>` : ""}
         ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
         ${r.started_at ? detailRow("Hunt Başlangıcı", fmtDate(r.started_at)) : ""}

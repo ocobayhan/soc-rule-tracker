@@ -41,7 +41,7 @@ SIEM use-case geliştirme taleplerinin yönetimi.
 ### 3. Threat Hunting
 Proaktif tehdit avı taleplerinin ve raporlarının yönetimi.
 
-**Talep Alanları:** Hunt Konusu, Ortam (multi-select), Talep Eden, Atanan Analist, Notlar, Durum  
+**Talep Alanları:** Hunt Başlığı (2026-08-17 — kısa/tanımlayıcı, tablo/detay/PDF'te ana görüntülenen isim), Hunt Konusu (detaylı açıklama, sadece detay/PDF içeriğinde), Ortam (multi-select), Talep Eden, Atanan Analist, Notlar, Durum  
 **Rapor Bölümleri:**
 1. Hedef & Kapsam (textarea + görsel)
 2. MITRE ATT&CK teknikleri (tactic → technique, per-technique yöntem notu)

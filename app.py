@@ -382,6 +382,12 @@ def init_db():
     # bu sadece arayüzde gösterim için opsiyonel bir alan (bkz. docs/rbac.md).
     if not _col_exists(db, "users", "full_name"):
         db.execute("ALTER TABLE users ADD COLUMN full_name TEXT")
+    # Hunt Başlığı — hunt_subject'ten ayrı, kısa/tanımlayıcı bir başlık;
+    # tablo/detay/PDF'te artık ana görüntülenen isim bu, hunt_subject içerik
+    # alanı olarak kalıyor. Eski kayıtlarda boş — gösterimde hunt_subject'e
+    # düşülür (bkz. display katmanındaki "or" fallback'leri).
+    if not _col_exists(db, "threat_hunt_requests", "hunt_title"):
+        db.execute("ALTER TABLE threat_hunt_requests ADD COLUMN hunt_title TEXT")
     # Migrate hunt_result: Pozitif/Negatif → daha açıklayıcı değerler
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edildi'   WHERE hunt_result='Pozitif'")
     db.execute("UPDATE threat_hunt_requests SET hunt_result='Tehdit Tespit Edilmedi' WHERE hunt_result='Negatif'")
@@ -968,8 +974,8 @@ def get_my_work():
         f"SELECT * FROM usecase_requests WHERE rule_author=? AND status NOT IN ({ph(_UC_TERMINAL)}) ORDER BY created_at DESC",
         (uname, *_UC_TERMINAL)).fetchall(), "usecase", "usecase_description", "requester")
     assigned += norm(db.execute(
-        f"SELECT * FROM threat_hunt_requests WHERE assigned_analyst=? AND status NOT IN ({ph(_HUNT_TERMINAL)}) ORDER BY created_at DESC",
-        (uname, *_HUNT_TERMINAL)).fetchall(), "hunt", "hunt_subject", "requester")
+        f"SELECT *, COALESCE(hunt_title, hunt_subject) AS display_title FROM threat_hunt_requests WHERE assigned_analyst=? AND status NOT IN ({ph(_HUNT_TERMINAL)}) ORDER BY created_at DESC",
+        (uname, *_HUNT_TERMINAL)).fetchall(), "hunt", "display_title", "requester")
 
     awaiting = []
     if is_senior():
@@ -980,8 +986,8 @@ def get_my_work():
             f"SELECT * FROM usecase_requests WHERE status IN ({ph(_UC_GATE)}) ORDER BY created_at DESC",
             _UC_GATE).fetchall(), "usecase", "usecase_description", "requester")
         awaiting += norm(db.execute(
-            f"SELECT * FROM threat_hunt_requests WHERE status IN ({ph(_HUNT_GATE)}) ORDER BY created_at DESC",
-            _HUNT_GATE).fetchall(), "hunt", "hunt_subject", "requester")
+            f"SELECT *, COALESCE(hunt_title, hunt_subject) AS display_title FROM threat_hunt_requests WHERE status IN ({ph(_HUNT_GATE)}) ORDER BY created_at DESC",
+            _HUNT_GATE).fetchall(), "hunt", "display_title", "requester")
 
     return jsonify({"awaiting_approval": awaiting, "assigned_to_me": assigned})
 
@@ -1065,9 +1071,10 @@ def global_search():
         "OR requester LIKE ? OR rule_author LIKE ? ORDER BY created_at DESC LIMIT ?",
         (like, like, like, like, LIMIT)).fetchall(), "usecase", "usecase_description", "requester")
     add(db.execute(
-        "SELECT * FROM threat_hunt_requests WHERE hunt_subject LIKE ? OR requester LIKE ? "
+        "SELECT *, COALESCE(hunt_title, hunt_subject) AS display_title FROM threat_hunt_requests "
+        "WHERE hunt_title LIKE ? OR hunt_subject LIKE ? OR requester LIKE ? "
         "OR assigned_analyst LIKE ? OR findings LIKE ? ORDER BY created_at DESC LIMIT ?",
-        (like, like, like, like, LIMIT)).fetchall(), "hunt", "hunt_subject", "requester")
+        (like, like, like, like, like, LIMIT)).fetchall(), "hunt", "display_title", "requester")
     add(db.execute(
         "SELECT * FROM incident_reports WHERE title LIKE ? OR xsoar_case_id LIKE ? "
         "OR reporter LIKE ? OR sections LIKE ? ORDER BY created_at DESC LIMIT ?",
@@ -2210,25 +2217,26 @@ def create_hunt():
     now  = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     db   = get_db()
 
+    hunt_title   = data.get("hunt_title",   "").strip()
     hunt_subject = data.get("hunt_subject", "").strip()
     requester    = data.get("requester",    "").strip()
 
-    if not hunt_subject or not requester:
-        return jsonify({"error": "Hunt Konusu ve Talep Eden zorunludur."}), 400
+    if not hunt_title or not hunt_subject or not requester:
+        return jsonify({"error": "Hunt Başlığı, Hunt Konusu ve Talep Eden zorunludur."}), 400
     if session.get("role") == "analyst":
         requester = session.get("username", "")
 
     new_id = next_available_id(db, "threat_hunt_requests")
     cur = db.execute("""
         INSERT INTO threat_hunt_requests
-          (id, hunt_subject, requester, assigned_analyst, notes, status, created_at, updated_at)
-        VALUES (?,?,?,?,?,?,?,?)
-    """, (new_id, hunt_subject, requester,
+          (id, hunt_title, hunt_subject, requester, assigned_analyst, notes, status, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?)
+    """, (new_id, hunt_title, hunt_subject, requester,
           data.get("assigned_analyst", "").strip(),
           data.get("notes", "").strip(), STATUS_PENDING_VALIDATION, now, now))
     db.commit()
     row = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (cur.lastrowid,)).fetchone()
-    write_audit("CREATE_HUNT", "hunt", row["id"], f"Konu: {hunt_subject}")
+    write_audit("CREATE_HUNT", "hunt", row["id"], f"Başlık: {hunt_title} | Konu: {hunt_subject}")
     return jsonify(dict(row)), 201
 
 @app.route("/api/hunt/<int:item_id>", methods=["GET"])
@@ -2285,7 +2293,7 @@ def update_hunt(item_id):
 
         data["requester"] = row["requester"]
         if not is_requester:
-            for f in ("hunt_subject",):
+            for f in ("hunt_title", "hunt_subject"):
                 data[f] = row[f]
         if not is_assigned:
             for f in ("hunt_environment", "scope", "scope_image",
@@ -2381,7 +2389,7 @@ def update_hunt(item_id):
     db.execute("""
         UPDATE threat_hunt_requests SET
           id=?,
-          hunt_subject=?, requester=?, assigned_analyst=?, notes=?, status=?,
+          hunt_title=?, hunt_subject=?, requester=?, assigned_analyst=?, notes=?, status=?,
           hunt_environment=?, scope=?, scope_image=?,
           mitre_techniques=?, has_findings=?,
           findings=?, findings_image=?, findings_items=?, ioc_list=?, affected_assets=?, affected_assets_image=?, severity=?,
@@ -2394,7 +2402,7 @@ def update_hunt(item_id):
         WHERE id=?
     """, (
         hunt_new_id,
-        sv("hunt_subject"), sv("requester"), sv("assigned_analyst"), sv("notes"), new_status,
+        sv("hunt_title"), sv("hunt_subject"), sv("requester"), sv("assigned_analyst"), sv("notes"), new_status,
         sv("hunt_environment"), sv("scope"), nv("scope_image"),
         jv("mitre_techniques"), sv("has_findings", "Hayır"),
         sv("findings"), nv("findings_image"), jv("findings_items", "[]"), jv("ioc_list"), sv("affected_assets"), nv("affected_assets_image"), sv("severity"),
@@ -2433,16 +2441,16 @@ def update_hunt(item_id):
 
     if new_status == "İnceleniyor" and data.get("assigned_analyst") and not row["assigned_analyst"]:
         a_action = "CLAIM_HUNT"
-        a_detail = f"Konu: {updated['hunt_subject']} | Analist: {updated['assigned_analyst']}"
+        a_detail = f"Başlık: {updated['hunt_title'] or updated['hunt_subject']} | Analist: {updated['assigned_analyst']}"
     elif new_status in (STATUS_HUNT_RESULT_PENDING, "İptal"):
         a_action = "CLOSE_HUNT"
-        a_detail = f"Konu: {updated['hunt_subject']} | Durum: {new_status}"
+        a_detail = f"Başlık: {updated['hunt_title'] or updated['hunt_subject']} | Durum: {new_status}"
     elif report_changed:
         a_action = "REPORT_HUNT"
-        a_detail = f"Konu: {updated['hunt_subject']}"
+        a_detail = f"Başlık: {updated['hunt_title'] or updated['hunt_subject']}"
     else:
         a_action = "EDIT_HUNT"
-        a_detail = f"Konu: {updated['hunt_subject']}"
+        a_detail = f"Başlık: {updated['hunt_title'] or updated['hunt_subject']}"
     if hunt_override_parts:
         a_detail += " | MANUEL DÜZENLEME (settings): " + "; ".join(hunt_override_parts)
     write_audit(a_action, "hunt", item_id, a_detail)
@@ -2470,7 +2478,7 @@ def validate_hunt(item_id):
                (uname, now, note, now, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
-    write_audit("VALIDATE_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    write_audit("VALIDATE_HUNT", "hunt", item_id, f"Başlık: {row['hunt_title'] or row['hunt_subject']}")
     return jsonify(dict(updated))
 
 @app.route("/api/hunt/<int:item_id>/reject-validation", methods=["POST"])
@@ -2494,7 +2502,7 @@ def reject_validation_hunt(item_id):
                (STATUS_REJECTED, uname, now, note, now, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
-    write_audit("REJECT_VALIDATION_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']} | Gerekçe: {note[:80]}")
+    write_audit("REJECT_VALIDATION_HUNT", "hunt", item_id, f"Başlık: {row['hunt_title'] or row['hunt_subject']} | Gerekçe: {note[:80]}")
     return jsonify(dict(updated))
 
 @app.route("/api/hunt/<int:item_id>/approve-result", methods=["POST"])
@@ -2518,7 +2526,7 @@ def approve_hunt_result(item_id):
                (uname, now, note, now, now, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
-    write_audit("APPROVE_HUNT_RESULT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    write_audit("APPROVE_HUNT_RESULT", "hunt", item_id, f"Başlık: {row['hunt_title'] or row['hunt_subject']}")
     return jsonify(dict(updated))
 
 @app.route("/api/hunt/<int:item_id>/reject-result", methods=["POST"])
@@ -2542,7 +2550,7 @@ def reject_hunt_result(item_id):
                (uname, now, note, now, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
-    write_audit("REJECT_HUNT_RESULT", "hunt", item_id, f"Konu: {row['hunt_subject']} | Gerekçe: {note[:80]}")
+    write_audit("REJECT_HUNT_RESULT", "hunt", item_id, f"Başlık: {row['hunt_title'] or row['hunt_subject']} | Gerekçe: {note[:80]}")
     return jsonify(dict(updated))
 
 @app.route("/api/hunt/<int:item_id>", methods=["DELETE"])
@@ -2557,7 +2565,7 @@ def delete_hunt(item_id):
     db.execute("DELETE FROM threat_hunt_requests WHERE id=?", (item_id,))
     reset_seq_if_empty(db, "threat_hunt_requests")
     db.commit()
-    write_audit("DELETE_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    write_audit("DELETE_HUNT", "hunt", item_id, f"Başlık: {row['hunt_title'] or row['hunt_subject']}")
     return jsonify({"ok": True})
 
 @app.route("/api/hunt/<int:item_id>/start", methods=["POST"])
@@ -2579,7 +2587,7 @@ def start_hunt(item_id):
                (now, now, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM threat_hunt_requests WHERE id=?", (item_id,)).fetchone()
-    write_audit("START_HUNT", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    write_audit("START_HUNT", "hunt", item_id, f"Başlık: {row['hunt_title'] or row['hunt_subject']}")
     return jsonify(dict(updated))
 
 # ---------------------------------------------------------------------------
@@ -2929,7 +2937,7 @@ def export_data():
 
     # ── Sheet 3 : Threat Hunt Talepleri ───────────────────────────────────
     ws3 = wb.create_sheet("Threat Hunt Talepleri")
-    hunt_cols = ["ID", "Hunt Konusu", "Ortam", "Talep Eden", "Atanan Analist",
+    hunt_cols = ["ID", "Hunt Başlığı", "Hunt Konusu", "Ortam", "Talep Eden", "Atanan Analist",
                  "Durum", "Rapor Durumu", "Sonuç", "Şiddet",
                  "MITRE Teknikleri", "Bulgular", "IOC Listesi",
                  "Etkilenen Varlıklar", "Hedef & Kapsam",
@@ -2961,7 +2969,7 @@ def export_data():
         except Exception:
             vuln_txt  = ""
         env_val = r["hunt_environment"] if "hunt_environment" in r.keys() and r["hunt_environment"] else (r["environment"] if "environment" in r.keys() else "")
-        row = [r["id"], r["hunt_subject"], env_val, display_name(r["requester"]),
+        row = [r["id"], gv(r, "hunt_title") or r["hunt_subject"], r["hunt_subject"], env_val, display_name(r["requester"]),
                display_name(r["assigned_analyst"]) or "", r["status"],
                r["report_status"] or "", r["hunt_result"] or "",
                r["severity"] if "severity" in r.keys() else "",
@@ -3354,7 +3362,7 @@ def hunt_report_pdf(item_id):
         pdf_bytes = _render_pdf_bytes(html)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
-    write_audit("EXPORT_HUNT_PDF", "hunt", item_id, f"Konu: {row['hunt_subject']}")
+    write_audit("EXPORT_HUNT_PDF", "hunt", item_id, f"Başlık: {row['hunt_title'] or row['hunt_subject']}")
     return send_file(
         BytesIO(pdf_bytes),
         mimetype="application/pdf",

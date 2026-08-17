@@ -1009,6 +1009,37 @@ Hunt/Incident PDF'lerinde ve diğer "göze batan" yerlerde fark edip istedi.
   yükseltildi. Test verileri (2 hesap, 1 hunt, 1 olay raporu) temizlendi,
   audit zinciri geçerli (241 kayıt, 217 zincirli).
 
+### Takip (2026-08-17) — PDF başlık hiyerarşisi + Hunt Başlığı alanı
+
+- **Olay Raporu PDF:** Başlık/rapor-no yer değiştirdi — rapor adı artık büyük
+  ana başlık, "Olay Raporu — #N" altında küçük alt başlık (öncesi tersiydi).
+- **Hunt Başlığı (yeni alan):** `threat_hunt_requests.hunt_title` — hunt
+  oluştururken artık önce kısa/tanımlayıcı bir başlık, sonra (eskisi gibi)
+  detaylı "Hunt Konusu" soruluyor. Kullanıcı kararıyla `hunt_title`, Olay
+  Raporu'ndaki `title` ile aynı rolü üstlendi — **her yerde ana görüntülenen
+  isim**: tablo (kolon adı da "Hunt Başlığı" oldu, sıralama artık bu alana
+  göre), detay modali başlığı, PDF başlığı (Olay Raporu'yla aynı desen: başlık
+  büyük, "#N" altında küçük), genel arama, onay modali metni, dashboard mini-
+  tablosu, Excel export (yeni kolon). `hunt_subject` içerik alanı olarak kaldı
+  — detay modali ve PDF'te "Hunt Konusu" satırı olarak (sadece `hunt_title`
+  doluysa gösteriliyor, eski kayıtlarda tekrar olmasın diye).
+  Eski kayıtlarda `hunt_title` boş — her gösterim noktasında `hunt_title or
+  hunt_subject` fallback'i var, hiçbir yerde boş başlık görünmüyor.
+  `/api/my-work` ve `/api/search`'teki hunt sorguları `COALESCE(hunt_title,
+  hunt_subject)` ile aynı fallback'i SQL tarafında uyguluyor (bu iki uç genel
+  `norm()`/`add()` yardımcısını üç modülle paylaştığı için Python tarafında
+  hunt'a özel dallanma yerine SQL'de çözüldü).
+  Düzenleme yetkisi `hunt_subject` ile birebir aynı (sadece talebi açan kişi
+  değiştirebilir).
+- **Doğrulandı:** başlıksız oluşturma isteği `400`; gerçek oluşturma +
+  PDF (PyMuPDF ile görsel inceleme — başlık büyük, "#N" küçük, "Hunt Konusu"
+  gövdede doğru göründü) + Excel ("Hunt Başlığı" kolonu doğru) + gerçek
+  tarayıcıda tablo/detay/oluşturma formu (alan sırası: önce başlık, sonra
+  konu) + gerçek `POST` ile UI'dan oluşturma + genel arama + onay modali metni
+  — hepsi test edildi. `app.js` versiyonu `v38`'e yükseltildi. Test verileri
+  (1 hesap, 2 hunt) temizlendi, baseline hunt sayısı 7'ye döndü, audit
+  zinciri geçerli (246 kayıt, 222 zincirli).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
