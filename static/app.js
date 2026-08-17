@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v39
+   SOC Tracker — Frontend  v41
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -452,7 +452,16 @@ function _sparkPath(values, w, h, pad, max) {
   }).join(" ");
 }
 
-function trendCard(title, months, series) {
+const TR_MONTHS_SHORT = ["Oca","Şub","Mar","Nis","May","Haz","Tem","Ağu","Eyl","Eki","Kas","Ara"];
+function fmtMonthShort(ym) {
+  const [y, m] = (ym || "").split("-");
+  const idx = parseInt(m, 10) - 1;
+  return (TR_MONTHS_SHORT[idx] || ym) + " " + (y || "").slice(2);
+}
+
+let _trendCardDefs = [];  // { title, months, series } — index eşleşir onclick="openTrendDetail(i)" ile
+
+function trendCard(idx, title, months, series) {
   const w = 280, h = 76, pad = 8;
   const max = Math.max(1, ...series.flatMap(s => s.values));
   const lines = series.map(s =>
@@ -466,7 +475,7 @@ function trendCard(title, months, series) {
   const legend = series.map(s =>
     `<span class="trend-leg"><span class="trend-dot" style="background:${s.color}"></span>${s.name}
        <strong>${s.values[s.values.length - 1]}</strong></span>`).join("");
-  return `<div class="trend-card">
+  return `<div class="trend-card" onclick="openTrendDetail(${idx})" style="cursor:pointer" title="Büyütmek için tıklayın">
     <div class="trend-title">${title}</div>
     <svg viewBox="0 0 ${w} ${h}" class="trend-svg" preserveAspectRatio="none">${lines}${dots}</svg>
     <div class="trend-legend">${legend}</div>
@@ -474,28 +483,76 @@ function trendCard(title, months, series) {
   </div>`;
 }
 
+// Büyütülmüş grafik: her noktanın altında ay etiketi, üstünde/altında değeri.
+function _trendDetailSvg(months, series) {
+  const w = 780, h = 320, padL = 36, padR = 20, padT = 24, padB = 40;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const n = months.length;
+  const max = Math.max(1, ...series.flatMap(s => s.values));
+  const dx = innerW / Math.max(1, n - 1);
+  const xAt = i => padL + i * dx;
+  const yAt = v => padT + innerH - (v / max) * innerH;
+
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const y = padT + innerH - f * innerH;
+    return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${w - padR}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+            <text x="${padL - 6}" y="${(y + 3).toFixed(1)}" font-size="9" fill="var(--text-3)" text-anchor="end">${Math.round(f * max)}</text>`;
+  }).join("");
+
+  const monthLabels = months.map((mo, i) =>
+    `<text x="${xAt(i).toFixed(1)}" y="${h - padB + 27}" font-size="9" fill="var(--text-3)" text-anchor="middle">${fmtMonthShort(mo)}</text>`
+  ).join("");
+
+  const seriesSvg = series.map((s, si) => {
+    const path = s.values.map((v, i) => `${i === 0 ? "M" : "L"}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+    const dots = s.values.map((v, i) => {
+      const x = xAt(i), y = yAt(v);
+      // İki seri üst üste binmesin diye: ilk seri etiketleri üstte, ikincisi altta.
+      const labelY = si === 0 ? y - 8 : y + 12;
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${s.color}"/>
+              <text x="${x.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="9.5" font-weight="600" fill="${s.color}" text-anchor="middle">${v}</text>`;
+    }).join("");
+    return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}`;
+  }).join("");
+
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto">${gridLines}${monthLabels}${seriesSvg}</svg>`;
+}
+
+function openTrendDetail(idx) {
+  const def = _trendCardDefs[idx]; if (!def) return;
+  document.getElementById("trend-detail-title").textContent = def.title;
+  const legend = def.series.map(s =>
+    `<span class="trend-leg"><span class="trend-dot" style="background:${s.color}"></span>${s.name}</span>`).join("");
+  document.getElementById("trend-detail-chart").innerHTML =
+    _trendDetailSvg(def.months, def.series) + `<div class="trend-legend" style="margin-top:8px">${legend}</div>`;
+  document.getElementById("trend-detail-modal").style.display = "flex";
+}
+function closeTrendDetailModal() { document.getElementById("trend-detail-modal").style.display = "none"; }
+
 async function loadTrends() {
   const box = document.getElementById("trend-cards");
   if (!box) return;
   try {
     const d = await apiFetch("/api/trends?months=12");
     const m = d.months;
-    box.innerHTML =
-      trendCard("Kural Tuning", m, [
+    _trendCardDefs = [
+      { title: "Kural Tuning", months: m, series: [
         { name: "Açılan",  values: d.tune.opened,    color: "var(--amber)" },
         { name: "Kapanan", values: d.tune.closed,    color: "var(--green)" },
-      ]) +
-      trendCard("Use-Case", m, [
+      ]},
+      { title: "Use-Case", months: m, series: [
         { name: "Açılan",  values: d.usecase.opened, color: "var(--teal)" },
         { name: "Kapanan", values: d.usecase.closed, color: "var(--green)" },
-      ]) +
-      trendCard("Threat Hunt", m, [
+      ]},
+      { title: "Threat Hunt", months: m, series: [
         { name: "Açılan",  values: d.hunt.opened,    color: "var(--purple)" },
         { name: "Kapanan", values: d.hunt.closed,    color: "var(--green)" },
-      ]) +
-      trendCard("Hunt Saati", m, [
+      ]},
+      { title: "Hunt Saati", months: m, series: [
         { name: "Saat",    values: d.hunt.hours,     color: "var(--blue)" },
-      ]);
+      ]},
+    ];
+    box.innerHTML = _trendCardDefs.map((def, i) => trendCard(i, def.title, def.months, def.series)).join("");
   } catch (_) {}
 }
 

@@ -1085,6 +1085,44 @@ Hunt/Incident PDF'lerinde ve diğer "göze batan" yerlerde fark edip istedi.
   küçük daha iyi oturuyor). CSSOM üzerinden doğrulandı, PyMuPDF ile PDF
   görsel karşılaştırması yapıldı. `styles.css` `v11.15`'e yükseltildi. Test
   hesabı temizlendi, audit zinciri geçerli (249 kayıt, 225 zincirli).
+- **Takip (2026-08-17) — hover büyümesi hâlâ az geldi:** Kullanıcı geri
+  bildirimiyle iki kez daha artırıldı: `scale(1.05)` → `scale(1.08)` (KPI
+  kartları + Trend kartları, ikisi de).
+
+### Takip (2026-08-17) — Trend kartı: tıkla-büyüt detay grafiği
+
+- **Trend kartına tıklayınca büyüyen grafik:** Dashboard'daki 4 mini Trend
+  kartının (Kural Tuning/Use-Case/Threat Hunt/Hunt Saati) her biri artık
+  tıklanabilir (`cursor:pointer`) — tıklayınca `#trend-detail-modal` içinde
+  aynı verinin büyütülmüş (780×320 viewBox) bir versiyonu açılıyor: ızgara
+  çizgileri + Y ekseni değer etiketleri, X ekseninde ay adları (yeni
+  `fmtMonthShort()`/`TR_MONTHS_SHORT` — "Eyl 25" gibi kısa Türkçe ay
+  formatı), her veri noktasının üzerinde/altında sayısal değer etiketi
+  (birinci seri nokta üstü, ikinci seri nokta altı). Mini kartlardaki
+  `_sparkPath` ham veri kaybetmeden büyütülmüş SVG'ye aktarılsın diye
+  `loadTrends()` artık `_trendCardDefs` adında modül-seviyeli bir dizi
+  dolduruyor (kart başına `{title, months, series}`), `openTrendDetail(idx)`
+  bu diziden okuyor — ekstra bir API çağrısı yok, mevcut `/api/trends`
+  verisi tekrar kullanılıyor.
+- **Bulunan/düzeltilen bir bug:** İlk sürümde ay etiketleri ile ikinci
+  serinin "nokta altı" değer etiketleri aynı taban çizgisine yakın sabit
+  ofsetlerle konumlandırılmıştı (~2px fark) — bir serinin değeri sıfıra
+  yakın olduğunda (bu dev DB'de yaygın) etiketler görsel olarak çakışıyordu.
+  Ay etiketi ofseti `+16` → `+27`, ikinci seri "altta" etiket ofseti `+14`
+  → `+12` yapılarak ~15px boşluk sağlandı.
+  **Doğrulandı:** gerçek tarayıcıda çalışan sunucudan `outerHTML` ile SVG
+  çıkarılıp koordinatlar sayısal olarak karşılaştırıldı — gerçek trend
+  verisi (`/api/trends` ile birebir eşleşiyor), ay etiketi `y=307`, ikinci
+  seri etiketi `y=292` (15px boşluk, çakışma yok), modal `display:flex`
+  ile açılıp başlık doğru geliyor, kutu 243×147'den 843×489'a büyüyor.
+  `app.js` `v41`'e, ilgili script tag'i de aynı sürüme yükseltildi. Test
+  hesabı (`_dbgtrendtest`) temizlendi, audit zinciri geçerli (249 kayıt,
+  225 zincirli — bu faz veri mutasyonu içermedi).
+- **Not (ayrı, kapsam dışı bug):** `.trend-card` (ve `.mywork-col`,
+  `.sidebar-search-input`, `.search-results`) `background: var(--bg-1)`
+  kullanıyor ama `--bg-1` hiçbir yerde tanımlı değil — bu 4 öğe şu an şeffaf
+  arka planla render oluyor. Bu oturumdan önce de var olan, bu özellikle
+  ilgisiz bir bug; ayrı bir görev olarak işaretlendi, burada dokunulmadı.
 
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
