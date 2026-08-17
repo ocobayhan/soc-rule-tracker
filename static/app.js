@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v41
+   SOC Tracker — Frontend  v42
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -3296,7 +3296,7 @@ function incidentActionBtns(r) {
   if (r.status === "Onaylandı") {
     btns += `<a class="btn-icon" title="PDF İndir" href="/incident-reports/${r.id}/report/pdf" target="_blank" style="color:var(--red)">&#8681;</a> `;
   }
-  if (USER_ROLE === "admin") {
+  if (USER_ROLE === "admin" || USER_ROLE === "user" || USER_ROLE === "settings") {
     btns += `<button class="btn-icon danger" onclick="deleteIncident(${r.id})" title="Sil">&#128465;</button>`;
   }
   return btns || '<span class="text-muted">—</span>';

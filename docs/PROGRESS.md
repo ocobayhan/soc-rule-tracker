@@ -1124,6 +1124,41 @@ Hunt/Incident PDF'lerinde ve diğer "göze batan" yerlerde fark edip istedi.
   arka planla render oluyor. Bu oturumdan önce de var olan, bu özellikle
   ilgisiz bir bug; ayrı bir görev olarak işaretlendi, burada dokunulmadı.
 
+### Takip (2026-08-17) — Olay Raporu: settings rolüne silme yetkisi
+
+- **Bulunan kök neden:** Tune/UC/Hunt'ın üçünde de silme butonu
+  `USER_ROLE === "admin" || "user" || "settings"` (`isAdmin`) koşuluyla
+  gösteriliyor — `settings` rolü bu üç modülde zaten admin gibi
+  sayılıyordu. Olay Raporu (Faz W) bu deseni tekrarlamamış,
+  `incidentActionBtns()` (`app.js`) sadece `USER_ROLE === "admin"`
+  kontrol ediyordu — `settings` rolündeki kullanıcı silme butonunu hiç
+  görmüyordu. Backend'de (`DELETE /api/incident-reports/<id>`) zaten hiç
+  rol kontrolü yok (`@login_required` yeterli) — düzeltme sadece bu tek
+  satırlık frontend koşulunu üç modülle tutarlı hale getirmekti.
+- **Doğrulandı:** geçici bir `settings` rollü debug hesabıyla gerçek
+  tarayıcı + gerçek API: silme butonu artık görünüyor, aynı hesapla bir
+  test kaydı oluşturulup (`201`) hemen silindi (`200`, `{"ok":true}`),
+  listeden kaybolduğu doğrulandı. `app.js` `v42`'ye yükseltildi. Test
+  hesabı temizlendi, audit zinciri geçerli (251 kayıt, 227 zincirli).
+- **Ayrı not (`docs/rbac.md` güncel değil):** Doküman "settings rolünün
+  Dashboard/Tuning/UC/Hunt/Audit'a erişimi yok" diyor — ama kod
+  (`templates/index.html`) sadece Dashboard ve Audit Log'u
+  `{% if not is_settings %}` / `{% if user_role == "admin" %}` ile
+  gerçekten gizliyor; Tuning/UC/Hunt/Olay Raporu sekmeleri settings
+  rolüne de DOM'da açık (kod içindeki yorum da bunu doğruluyor: "sadece
+  'settings' rolünde dashboard sekmesi hiç render edilmiyor"). Doküman
+  muhtemelen daha eski bir davranışı yansıtıyor; düzeltilmedi, kapsam
+  dışı — ayrıca not edildi.
+- **Silinen kayıt numaralarının yeniden kullanılması (kullanıcı talebi,
+  reddedildi):** Kullanıcı silinen bir olay raporunun ID'sinin bir
+  sonraki kayıtta tekrar kullanılmasını istedi. Uygulanmadı — `id`
+  kolonu `INTEGER PRIMARY KEY AUTOINCREMENT`, SQLite'ın bunu bilinçli
+  olarak asla tekrar kullanmama garantisi var; ID'ler audit log'da
+  (`entity_id`) ve XSOAR tarafındaki case notlarında referans olarak
+  kullanılıyor — silinen bir ID'nin farklı bir kayda yeniden atanması
+  audit izini ve XSOAR çapraz referanslarını yanıltıcı hale getirir.
+  Kullanıcıya bu risk anlatılıp alternatif soruldu, cevap bekleniyor.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
