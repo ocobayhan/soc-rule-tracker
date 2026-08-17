@@ -1076,6 +1076,15 @@ Hunt/Incident PDF'lerinde ve diğer "göze batan" yerlerde fark edip istedi.
   yüklü stylesheet'inde doğru şekilde bulundu (CSSOM üzerinden). `app.js`
   `v39`, `styles.css` `v11.14`'e yükseltildi. Test hesabı temizlendi, audit
   zinciri geçerli (246 kayıt, 222 zincirli — bu faz veri mutasyonu içermedi).
+- **Takip (2026-08-17):** Kullanıcı geri bildirimiyle 3 küçük ayar: Trend
+  kartlarına (`.trend-card`, önceden hiç hover'ı yoktu) `.kpi-module` ile
+  aynı hover-büyüme eklendi; her ikisinde de büyüme miktarı `scale(1.02)` →
+  `scale(1.05)` (öncekinin fark edilmesi zor olduğu belirtildi); Hunt ve
+  Olay Raporu PDF'lerinin başlık font boyutu `18px` → `17px` (başlık artık
+  uzun bir isim olabildiği için — Hunt Başlığı/Olay Raporu adı — biraz daha
+  küçük daha iyi oturuyor). CSSOM üzerinden doğrulandı, PyMuPDF ile PDF
+  görsel karşılaştırması yapıldı. `styles.css` `v11.15`'e yükseltildi. Test
+  hesabı temizlendi, audit zinciri geçerli (249 kayıt, 225 zincirli).
 
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
