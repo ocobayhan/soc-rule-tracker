@@ -35,7 +35,7 @@ Anahtar eksik/yanlışsa `401` döner.
 | `environment` | ✅ | Ortam (örn. `PROD`, `DEV`) — mevcut ortamlar listesindeki bir isimle eşleşmeli. |
 | `analyst_comment` | ✅ | Playbook'u ilerleten analistin tune gerekçesi. `tune_reason` alanına yazılır. |
 | `xsoar_url` | opsiyonel | Incident'a doğrudan tıklanabilir link. Verilirse detay ekranında case ID bir link olarak gösterilir. Boş bırakılırsa ve Ayarlar'da bir URL şablonu tanımlıysa, `xsoar_case_id`'den otomatik oluşturulur (bkz. aşağıdaki "SOAR Case URL Şablonu" bölümü). |
-| `requested_by` | opsiyonel | Talebi XSOAR tarafında ilerleten analistin **SOC Tracker'daki kullanıcı adı** (Ad Soyad değil). Eşleşen bir kullanıcı bulunursa `reporter` o kullanıcı olur — kişi bazlı istatistiklerde (`/api/stats/users`, Excel "Kullanıcı Aktivitesi" sayfası) bu talep artık doğru analiste sayılır. Eşleşmezse (yazım hatası, tracker'da olmayan biri) istek yine kabul edilir, `reporter` genel `"XSOAR Entegrasyonu"` etiketine düşer — hiçbir istek bu yüzden reddedilmez. |
+| `requested_by` | opsiyonel | Talebi XSOAR tarafında ilerleten analistin **SOC Tracker'daki kullanıcı adı** (Ad Soyad değil). Eşleşen bir kullanıcı bulunursa `reporter` o kullanıcı olur — kişi bazlı istatistiklerde (`/api/stats/users`, Excel "Kullanıcı Aktivitesi" sayfası) bu talep artık doğru analiste sayılır. Eşleşmezse (yazım hatası, tracker'da olmayan biri, ya da eşleşen kullanıcı `settings` rolündeyse — o rol bilinçli olarak eşleşmeye dahil edilmiyor) istek yine kabul edilir, `reporter` genel `"XSOAR Entegrasyonu"` etiketine düşer — hiçbir istek bu yüzden reddedilmez. |
 
 Eksik zorunlu alan varsa `400` ve hangi alan(lar)ın eksik olduğunu belirten
 bir hata döner.
@@ -120,8 +120,10 @@ X-API-Key: <XSOAR_WEBHOOK_TOKEN ortam değişkeninin değeri>
 | `title` | ✅ | Olay raporunun başlığı. |
 | `environment` | ✅ | Ortam (örn. `PROD`, `DEV`). |
 | `sections` | ✅ | En az bir dolu madde gerekir. Dizi, her öğe `{"heading": "...", "text": "..."}` — `text` boş olan öğeler otomatik elenir; hepsi elenirse `400` döner. Başlıklar (`heading`) serbest metin, koda gömülü sabit bir alan listesi **yok** — playbook rapor şablonunu tamamen kendi belirler. |
-| `images` | opsiyonel | En fazla 50 öğe. Dizi, **her öğe ham bir base64 string** (obje değil) — opsiyonel `data:image/png;base64,...` / `data:image/jpeg;base64,...` önekiyle, önek yoksa `.png` varsayılır. Gönderilme **sırasına** göre `order` alanı (1, 2, 3…) otomatik atanır ve rapor arayüzünde "Görsel 1", "Görsel 2"… diye numaralanır — tüm görseller **tek çağrıda**, `sections`'dan bağımsız ayrı bir galeri olarak gönderilir (Hunt raporundaki madde-başı-görsel deseninden farklı). Çözülemeyen/geçersiz bir öğe sessizce atlanır, isteğin geri kalanını etkilemez. |
+| `images` | opsiyonel | En fazla 50 öğe (üst sınır — bkz. aşağıdaki istek boyutu notu, pratikte çok daha erken dolar). Dizi, **her öğe ham bir base64 string** (obje değil) — opsiyonel `data:image/png;base64,...` / `data:image/jpeg;base64,...` önekiyle, önek yoksa `.png` varsayılır (desteklenen diğer formatlar: `.jpg`, `.gif`, `.webp`). Gönderilme **sırasına** göre `order` alanı (1, 2, 3…) otomatik atanır ve rapor arayüzünde "Görsel 1", "Görsel 2"… diye numaralanır — tüm görseller **tek çağrıda**, `sections`'dan bağımsız ayrı bir galeri olarak gönderilir (Hunt raporundaki madde-başı-görsel deseninden farklı). Çözülemeyen/geçersiz bir öğe sessizce atlanır, isteğin geri kalanını etkilemez. |
 | `requested_by` | opsiyonel | Tuning webhook'uyla aynı davranış: SOC Tracker'daki kullanıcı adıyla eşleşirse `reporter` o kullanıcı olur, eşleşmezse `reporter` genel `"XSOAR Entegrasyonu"` etiketine düşer — hiçbir istek bu yüzden reddedilmez. |
+
+> **İstek boyutu limiti:** Sunucu genelinde tüm isteklerde `MAX_CONTENT_LENGTH = 10MB` sınırı var (`app.py`). Base64 kodlama boyutu ~%33 şişirdiği için 10MB'lık bir istekte gerçekçi olarak birkaç-birkaç on görsel sığar, 50 değil — 50 öğe sınırı sadece bir üst tavan, hedef değil. Limit aşılırsa Flask `413` döner (JSON değil, düz HTML gövdeli); yukarıdaki `send_incident_report()` bunu `resp.json()` başarısız olursa ham metne düşerek zaten güvenli şekilde ele alıyor. Çok sayıda görsel varsa ana çağrıda 1-2 kritik görseli gönderip kalanını aşağıdaki "Case'e Sonradan Görsel Ekleme" uç noktasıyla ayrı ayrı eklemek daha güvenilir.
 
 Eksik zorunlu alan varsa `400` ve hangi alan(lar)ın eksik olduğunu belirten
 bir hata döner.
@@ -137,7 +139,11 @@ bir hata döner.
   bölümü) `xsoar_case_id`'den otomatik oluşturulur.
 - Audit log'a `CREATE_INCIDENT_XSOAR` aksiyonu ile, bölüm/görsel sayısı ve
   `requested_by` eşleşme durumu detayında yazılır.
-- Başarılı yanıt: oluşturulan olay raporu kaydının tamamı (`201`).
+- Başarılı yanıt: oluşturulan olay raporu kaydının tamamı (`201`). **Not:**
+  `sections` ve `images` alanları DB'de TEXT kolon olarak tutulduğu için
+  yanıtta dizi değil, JSON-encode edilmiş STRING olarak döner (örn.
+  `"sections": "[{\"heading\": ...}]"`) — playbook bu alanları okuyup bir
+  şey yapacaksa ikinci bir `json.loads()` gerekir.
 - **Mükerrer case koruması:** Tuning'le aynı kural — gönderilen
   `xsoar_case_id` için zaten aktif (`Reddedildi` olmayan) bir olay raporu
   varsa yeni kayıt açılmaz, `409` + `{"existing_id": ..., "duplicate": true}`
@@ -194,6 +200,10 @@ Kimlik doğrulama ana webhook'la aynı (`X-API-Key`).
 ### Davranış
 
 - Başarılı yanıt: güncellenmiş olay raporu kaydının tamamı (`201`).
+- **Ana webhook'tan farklı olarak:** `image` çözülemezse (geçersiz base64
+  veya desteklenmeyen format) istek `400` ile reddedilir — ana webhook'un
+  `images` dizisindeki "sessizce atla" davranışı burada geçerli değil,
+  çünkü tek görsel gönderiliyor, atlanacak bir "isteğin geri kalanı" yok.
 - Audit log'a `ADD_INCIDENT_IMAGE_XSOAR` aksiyonu ile, hangi etiketle
   eklendiği ve raporun güncel toplam görsel sayısı detayında yazılır.
 - **Not:** Bir analist Taslak durumundaki bir raporu SOC Tracker
