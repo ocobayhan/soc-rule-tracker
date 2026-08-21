@@ -398,6 +398,21 @@ def init_db():
 
     # Migrate legacy 'user' role → 'admin'
     db.execute("UPDATE users SET role='admin' WHERE role='user'")
+
+    # Sık filtrelenen kolonlara index — veri büyüdükçe (özellikle audit_log,
+    # her aksiyonda büyüyor) tam tablo taramasını önler. Sadece gerçekten
+    # doğrudan (fonksiyona sarılmamış) karşılaştırılan kolonlar seçildi —
+    # örn. created_at üzerindeki strftime() bazlı ay filtreleri bir index'ten
+    # faydalanamaz, o yüzden buraya eklenmedi.
+    db.execute("CREATE INDEX IF NOT EXISTS idx_tune_status ON tune_requests(status)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_tune_xsoar_case_id ON tune_requests(xsoar_case_id)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_usecase_status ON usecase_requests(status)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_hunt_status ON threat_hunt_requests(status)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_incident_status ON incident_reports(status)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_incident_xsoar_case_id ON incident_reports(xsoar_case_id)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_audit_created_at ON audit_log(created_at)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_audit_username ON audit_log(username)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)")
     db.commit()
 
     # Seed users
@@ -2753,11 +2768,12 @@ def get_audit():
     category = request.args.get("category", "").strip()
     username = request.args.get("username", "").strip()
     where, params = _audit_filter_where(category, username)
+    total = db.execute(f"SELECT COUNT(*) c FROM audit_log {where}", params).fetchone()["c"]
     rows  = db.execute(
         f"SELECT * FROM audit_log {where} ORDER BY created_at DESC LIMIT ?",
         (*params, limit)
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    return jsonify({"rows": [dict(r) for r in rows], "total": total})
 
 @app.route("/api/audit/export")
 @login_required

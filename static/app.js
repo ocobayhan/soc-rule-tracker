@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v42
+   SOC Tracker — Frontend  v43
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -36,6 +36,10 @@ async function apiFetch(path, opts = {}) {
     headers: { "Content-Type": "application/json" },
     ...opts,
   });
+  if (res.status === 401) {
+    window.location.href = "/login";
+    throw new Error("Oturum sona erdi, giriş sayfasına yönlendiriliyorsunuz…");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Sunucu hatası" }));
     throw new Error(err.error || "Sunucu hatası");
@@ -272,7 +276,7 @@ function populateEnvDropdowns() {
     const el = document.getElementById(id); if (!el) return;
     el.innerHTML = envOpsSimple;
   });
-  ["tune-filter-env","uc-filter-env","incident-filter-env"].forEach(id => {
+  ["tune-filter-env","uc-filter-env","incident-filter-env","hunt-filter-status-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value;
     el.innerHTML = `<option value="">Tüm Ortamlar</option>` +
@@ -1924,8 +1928,17 @@ async function loadAuditLog() {
     const p = new URLSearchParams({ limit: "1000" });
     if (category) p.set("category", category);
     if (username) p.set("username", username);
-    const rows  = await apiFetch(`/api/audit?${p}`);
+    const { rows, total } = await apiFetch(`/api/audit?${p}`);
     if (!category && !username) populateAuditUsernameDropdown(rows);
+    const note = document.getElementById("audit-truncated-note");
+    if (note) {
+      if (total > rows.length) {
+        note.textContent = `Son ${rows.length.toLocaleString("tr-TR")} kayıt gösteriliyor (toplam: ${total.toLocaleString("tr-TR")}) — tam liste için Excel indirin.`;
+        note.style.display = "block";
+      } else {
+        note.style.display = "none";
+      }
+    }
     const tbody = document.getElementById("audit-tbody");
     const empty = document.getElementById("audit-empty");
     if (!rows.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }

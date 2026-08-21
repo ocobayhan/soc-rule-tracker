@@ -1159,6 +1159,56 @@ Hunt/Incident PDF'lerinde ve diğer "göze batan" yerlerde fark edip istedi.
   audit izini ve XSOAR çapraz referanslarını yanıltıcı hale getirir.
   Kullanıcıya bu risk anlatılıp alternatif soruldu, cevap bekleniyor.
 
+### Takip (2026-08-21) — UI/UX + performans denetimi
+
+Kullanıcı genel bir "hata/eksik var mı, hızlandırma neresi gerekli" denetimi
+istedi. Canlı uygulamayı admin hesabıyla gezip kod tarafını (sorgu desenleri,
+index'ler, hata yönetimi) inceledim; bulunanlar önceliklendirilip kullanıcıyla
+paylaşıldı, "gerçek hata" + "risksiz performans" kategorisindeki 4 madde onay
+alıp uygulandı:
+
+- **Threat Hunting ortam filtresi tamamen boştu:** `populateEnvFilters()`
+  (`app.js`) ortam listesini `["tune-filter-env","uc-filter-env",
+  "incident-filter-env"]` elemanlarına dolduruyordu — Hunt'ın kendi filtre
+  elemanı (`hunt-filter-status-env`, isimlendirmesi diğer üçünden farklı
+  olduğu için muhtemelen bu yüzden atlanmış) listede hiç yoktu. Listeye
+  eklendi.
+- **Oturum süresi dolunca kullanıcı anlamsız bir "Unauthorized" hatasıyla
+  baş başa kalıyordu:** `apiFetch()` artık `401`'i özel olarak yakalayıp
+  doğrudan `/login`'e yönlendiriyor (diğer hata kodları eskisi gibi
+  `Error` fırlatıp çağıran yerin kendi hata kutusunda gösteriliyor).
+- **Audit Log 1000 kayıtta sessizce kesiliyordu, arayüzde hiçbir uyarı
+  yoktu:** `/api/audit` artık `{rows, total}` şeklinde dönüyor (önceden
+  düz dizi); `loadAuditLog()` `total > rows.length` olduğunda "Son N kayıt
+  gösteriliyor (toplam: M) — tam liste için Excel indirin" notunu
+  gösteriyor. Excel export zaten sınırsızdı, değişmedi — bu sadece
+  ekrandaki görünümün şeffaflığıyla ilgili.
+- **Hiçbir tabloda index yoktu** (sadece implicit PK/UNIQUE index'leri) —
+  `init_db()`'ye 9 tane `CREATE INDEX IF NOT EXISTS` eklendi: her üç
+  modülün + Olay Raporu'nun `status` kolonu (KPI COUNT sorguları ve liste
+  filtreleri için), Tune + Olay Raporu'nun `xsoar_case_id`'si (mükerrer-case
+  kontrolü için), audit_log'un `created_at`/`username`/`action`'ı (sıralama
+  + filtre için). Bilinçli olarak `created_at` üzerine tune/uc/hunt/incident
+  tablolarına index eklenmedi — ay filtreleri `strftime()` ile sarılı
+  olduğu için düz bir index'ten faydalanamazlar, boşuna index bakımı
+  olurdu.
+- **Ertelenen bulgular (kullanıcıyla ayrıca karar verilecek):** `/api/kpi`
+  24 ayrı `COUNT(*)` sorgusu atıyor (3 modül × 8 durum, `GROUP BY` ile 3'e
+  inebilir); Tune/UC/Hunt/Olay Raporu tabloları tüm kayıtları tek seferde
+  çekip client-side filtreliyor (mimari, şu anki veri hacminde sorun değil);
+  şifre politikası sadece min 6 karakter; pratikte mobil/responsive destek
+  yok (sidebar her ekranda sabit 210px, sadece 3 media query var, hiçbiri
+  sidebar/tabloyu etkilemiyor).
+- **Doğrulandı:** geçici bir admin debug hesabıyla gerçek tarayıcı + gerçek
+  API: Hunt ortam dropdown'ı artık `["Tüm Ortamlar","sdadsa"]` gösteriyor;
+  `/api/audit` yanıtı `{rows,total}` şeklinde geliyor, Audit Log sekmesi
+  251 satırı doğru render ediyor, not mantığı (sahte 1000/4523 verisiyle)
+  doğru metni/görünürlüğü üretiyor; oturum temizlenip `apiFetch` çağrısı
+  yapıldığında gerçekten `/login`'e yönlendirildiği (sayfa metninden)
+  doğrulandı; 9 index'in hepsi `sqlite_master`'da göründü. `app.js` `v43`'e
+  yükseltildi. Test hesabı temizlendi, audit zinciri geçerli (251 kayıt,
+  227 zincirli — bu faz veri mutasyonu içermedi).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
