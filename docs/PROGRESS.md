@@ -1209,6 +1209,80 @@ alıp uygulandı:
   yükseltildi. Test hesabı temizlendi, audit zinciri geçerli (251 kayıt,
   227 zincirli — bu faz veri mutasyonu içermedi).
 
+### Takip (2026-09-07) — Olay Raporu/Hunt PDF sayfalama hatası
+
+- **Kullanıcı bulgusu (ekran görüntüleriyle):** Olay Raporu PDF'lerinde
+  Onay Bilgileri'nden sonra sayfa geçişinde büyük bir boşluk oluşuyor;
+  "Görseller" başlığı bazen bir sayfanın en üstünde tek başına kalıp
+  altındaki görseller ancak bir sonraki sayfada başlıyordu.
+- **Kök neden:** `templates/incident_report_print.html` ve
+  `templates/hunt_report_print.html`'de `.section { break-inside: avoid }`
+  TÜM bölümlere (kısa/sabit olanlara da, döngüden gelip uzayabilenlere de)
+  uygulanmıştı. Bir bölüm (Olay Detayları, Görseller, Hunt'ta Bulgular/
+  MITRE/Öneriler/Zafiyetler) mevcut sayfaya sığmadığında WeasyPrint
+  bölümün TAMAMINI bir sonraki sayfaya atıyor, önceki sayfada kalan boşluk
+  öylece kalıyordu. Ayrıca Incident'ın "Görseller" galerisi `display:flex`
+  kullanıyordu — WeasyPrint flex/grid konteynerlerini sayfalar arası
+  bölemiyor, bu da "Görseller" başlığının galeri bir sonraki sayfaya
+  komple atılınca yalnız kalmasına sebep oluyordu.
+- **Düzeltme:** `break-inside:avoid`, büyüyebilen kapsayıcılardan alınıp
+  en küçük atomik birime taşındı — yeni `.section-flow` sınıfı (sadece
+  Olay Detayları/Görseller/Bulgular/MITRE/Öneriler/Zafiyetler'e uygulandı,
+  Rapor Bilgileri/Onay Bilgileri gibi kısa/sabit bölümler eskisi gibi
+  `break-inside:avoid` korudu) bölümün kendisinin doğal sayfalanmasına
+  izin veriyor; `.report-body-block`/`.image-item`/`.finding-block`/tablo
+  satırları/liste öğeleri kendi `break-inside:avoid`'ını alıp bölüm
+  ortasında değil, sadece öğeler arasında bölünüyor. `.section-title`'a
+  `break-after:avoid` eklendi (bir başlık hiçbir zaman altında içerik
+  olmadan yalnız kalmasın diye). Incident'ın `.image-grid`'i
+  `display:flex`'ten `display:block` + `.image-item { display:inline-block }`
+  düzenine çevrildi — WeasyPrint bunu normal satır-içi akış gibi görüp
+  doğal sayfalayabiliyor.
+- **Doğrulandı:** gerçek uygulama üzerinden (XSOAR webhook + manuel
+  onay akışı), 6 bölümlü/6 görselli sentetik bir test raporu VE
+  kullanıcının kendi örnek kaydı (id=7) ile gerçek PDF üretilip
+  PyMuPDF'le sayfa sayfa görsel incelendi — artık her bölüm başlığı
+  hemen altındaki içerikle aynı sayfada başlıyor, büyük boşluk yok,
+  içerik sayfa sığdığı kadarını alıp doğal şekilde bir sonraki sayfaya
+  akıyor. Hunt tarafı da (8 satırlık MITRE tablosu, 6 görselli bulgu,
+  10 maddelik öneri listesi, 6 maddelik zafiyet listesi içeren sentetik
+  bir test kaydıyla) aynı şekilde doğrulandı. Test verileri (2 olay
+  raporu, 1 hunt kaydı, yüklenen test görselleri, debug hesabı)
+  temizlendi.
+  **Not (kendi hatam):** Temizlik sırasında audit_log'dan doğrudan satır
+  sildim, bu tamper-evident zinciri kırdı (`verify_audit.py` yakaladı) —
+  zincir `write_audit()`'in kullandığı aynı `audit_hash()` fonksiyonuyla
+  mevcut satır kümesi üzerinden yeniden hesaplanıp onarıldı (252/252
+  zincirli, geçerli). Bundan sonra temizlikte audit_log'a hiç
+  dokunulmayacak, sadece kayıt/kullanıcı tabloları silinecek.
+
+### Takip (2026-09-07) — Aylık Rapor'da ay filtresi eksik kalmıştı
+
+- **Kullanıcı bulgusu:** Dashboard'daki "Görsel aylık rapor oluştur"
+  sayfasında bir ay seçince, o ay TAMAMLANAN ama başka bir ayda AÇILAN
+  kayıtlar tabloya düşmüyordu (örn. Ağustos'ta filtrelenince Ağustos'ta
+  kapatılan ama Temmuz'da açılmış bir use-case görünmüyordu).
+- **Kök neden:** Bu tam olarak 2026-08-16'da `/api/tune`, `/api/usecase`,
+  `/api/hunt` liste endpoint'lerinde ve Excel export'ta düzeltilmiş olan
+  hatanın aynısı — ama `/report` (`monthly_report()`, `app.py`) o düzeltme
+  turunda atlanmış. Sayfanın KPI sayıları zaten doğruydu (her durum kendi
+  tarihine bakıyor, örn. "Tune Başarılı" → `approved_at`) — sorun sadece
+  alttaki kayıt tablolarında (`tune_rows`/`uc_rows`/`hunt_rows`), bunlar
+  `rows()` yardımcısıyla sadece `created_at`'e bakıyordu.
+- **Düzeltme:** `rows()` yardımcısı `(table, extra_col=None)` alacak
+  şekilde güncellendi — `extra_col` verildiğinde liste endpoint'leriyle
+  aynı `(strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',extra_col)=?)`
+  deseni kullanılıyor. Üç çağrı da kendi tamamlanma kolonuyla güncellendi:
+  `tune_requests`/`usecase_requests`/`threat_hunt_requests` → `completed_at`.
+  Olay Raporu bu sayfada hiç yok (modül, bu rapordan sonra eklenmiş),
+  kapsam dışı bırakıldı.
+- **Doğrulandı:** veritabanında zaten var olan, oluşturma/tamamlanma ayı
+  farklı 3 gerçek kayıtla (tune #1: Mayıs→Haziran, UC #1: Nisan→Haziran,
+  hunt #6: Temmuz→Ağustos) test edildi — her biri artık tamamlandığı ayın
+  raporunda doğru görünüyor, alakasız bir ayda (negatif kontrol) hâlâ
+  görünmüyor. Test hesabı temizlendi (audit_log'a dokunulmadı), audit
+  zinciri geçerli (252 kayıt, 252 zincirli).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

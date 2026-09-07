@@ -3230,15 +3230,24 @@ def monthly_report():
     kpi.update(get_hunt_program_stats(month or None))
 
     # ── Records for tables ─────────────────────────────────────────────────
-    def rows(sql, col="created_at"):
-        cond, args = mf(col)
+    # O ay açılan VEYA o ay tamamlanan kayıtlar (liste endpoint'leri/Excel'le
+    # aynı düzeltme, 2026-08-16) — bu sayfa o geçişte atlanmış, sadece
+    # created_at'e bakıyordu.
+    def rows(table, extra_col=None):
+        if month and extra_col:
+            cond = f" WHERE (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',{extra_col})=?)"
+            args = (month, month)
+        elif month:
+            cond, args = " WHERE strftime('%Y-%m',created_at)=?", (month,)
+        else:
+            cond, args = "", ()
         return [dict(r) for r in db.execute(
-            f"SELECT * FROM {sql}{cond} ORDER BY id DESC LIMIT 50", args
+            f"SELECT * FROM {table}{cond} ORDER BY id DESC LIMIT 50", args
         ).fetchall()]
 
-    tune_rows = rows("tune_requests WHERE 1=1")
-    uc_rows   = rows("usecase_requests WHERE 1=1")
-    hunt_rows = rows("threat_hunt_requests WHERE 1=1")
+    tune_rows = rows("tune_requests", "completed_at")
+    uc_rows   = rows("usecase_requests", "completed_at")
+    hunt_rows = rows("threat_hunt_requests", "completed_at")
 
     # ── Month display label ────────────────────────────────────────────────
     month_label = ""

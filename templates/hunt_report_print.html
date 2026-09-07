@@ -66,11 +66,21 @@ body {
 .badge-cancel { background: rgba(85,85,85,0.15);   color: var(--text-2); }
 
 .section { margin-bottom: 22px; break-inside: avoid; }
+/* Bulgular/MITRE/Öneriler/Zafiyetler gibi bölümler bir listeden/döngüden
+   geliyor ve sayfa boyunu aşabilir — bunlarda break-inside:avoid tüm
+   bölümü tek parça tutmaya çalışıp sığmayınca hepsini bir sonraki sayfaya
+   atıyor, önceki sayfada büyük bir boşluk bırakıyordu. .section-flow bu
+   bölümlerde avoid'ı kaldırıp doğal sayfalamaya bırakır; iç öğeler
+   (.finding-block, tablo satırları, liste öğeleri) kendi
+   break-inside:avoid'ını koruyor, sadece bölüm ortasında bölünebiliyorlar,
+   tek bir öğenin ortasında değil. */
+.section-flow { break-inside: auto; }
 .section-title {
   font-size: 12px; font-weight: 700; color: var(--accent);
   text-transform: uppercase; letter-spacing: 0.03em;
   margin-bottom: 8px; padding-bottom: 5px;
   border-bottom: 1px solid var(--border);
+  break-after: avoid;
 }
 .row { display: flex; padding: 4px 0; font-size: 11px; }
 .row-label { width: 160px; flex-shrink: 0; color: var(--text-2); font-weight: 500; }
@@ -102,7 +112,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 4px;
 }
-.finding-block { margin-bottom: 12px; }
+.finding-block { margin-bottom: 12px; break-inside: avoid; }
 .finding-block:last-child { margin-bottom: 0; }
 .finding-num { font-size: 10.5px; font-weight: 700; color: var(--text-2); margin-bottom: 3px; }
 
@@ -111,9 +121,10 @@ table.mitre-table th, table.mitre-table td {
   border: 1px solid var(--border); padding: 5px 8px; text-align: left; vertical-align: top;
 }
 table.mitre-table th { background: var(--surface); color: var(--text-2); font-weight: 600; }
+table.mitre-table tr { break-inside: avoid; }
 
 ol.list-block { margin-left: 18px; font-size: 11px; }
-ol.list-block li { padding: 2px 0; }
+ol.list-block li { padding: 2px 0; break-inside: avoid; }
 
 .footer {
   margin-top: 30px; padding-top: 10px; border-top: 1px solid var(--border);
@@ -186,7 +197,7 @@ ol.list-block li { padding: 2px 0; }
   {% endif %}
 
   {% if mitre_entries %}
-  <div class="section">
+  <div class="section section-flow">
     <div class="section-title">MITRE ATT&amp;CK Teknikleri</div>
     <table class="mitre-table">
       <thead><tr><th style="width:70px">ID</th><th style="width:130px">Teknik</th><th style="width:110px">Taktik</th><th>Yöntem Notu</th></tr></thead>
@@ -204,7 +215,7 @@ ol.list-block li { padding: 2px 0; }
   </div>
   {% endif %}
 
-  <div class="section">
+  <div class="section section-flow">
     <div class="section-title">Bulgular</div>
     {% if finding_items %}
       {% for f in finding_items %}
@@ -244,7 +255,7 @@ ol.list-block li { padding: 2px 0; }
   </div>
 
   {% if recommendations %}
-  <div class="section">
+  <div class="section section-flow">
     <div class="section-title">Öneriler</div>
     <ol class="list-block">
       {% for rec in recommendations %}<li>{{ rec }}</li>{% endfor %}
@@ -254,7 +265,7 @@ ol.list-block li { padding: 2px 0; }
   {% endif %}
 
   {% if vulnerabilities %}
-  <div class="section">
+  <div class="section section-flow">
     <div class="section-title">Keşfedilen Zafiyetler</div>
     <ol class="list-block">
       {% for v in vulnerabilities %}<li>{{ v }}</li>{% endfor %}

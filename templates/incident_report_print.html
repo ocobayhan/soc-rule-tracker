@@ -61,11 +61,20 @@ body {
 .badge-done { background: rgba(45,178,125,0.14); color: var(--green); }
 
 .section { margin-bottom: 22px; break-inside: avoid; }
+/* Olay Detayları/Görseller gibi bölümler bir listeden/döngüden geliyor ve
+   sayfa boyunu aşabilir — bunlarda break-inside:avoid tüm bölümü tek
+   parça tutmaya çalışıp sığmayınca hepsini bir sonraki sayfaya atıyor,
+   önceki sayfada büyük bir boşluk bırakıyordu. .section-flow bu bölümlerde
+   avoid'ı kaldırıp doğal sayfalamaya bırakır; iç öğeler (.report-body-block,
+   .image-item) kendi break-inside:avoid'ını koruyor, sadece bölüm ortasında
+   bölünebiliyorlar, tek bir öğenin ortasında değil. */
+.section-flow { break-inside: auto; }
 .section-title {
   font-size: 12px; font-weight: 700; color: var(--accent);
   text-transform: uppercase; letter-spacing: 0.03em;
   margin-bottom: 8px; padding-bottom: 5px;
   border-bottom: 1px solid var(--border);
+  break-after: avoid;
 }
 .sub-title {
   font-size: 12px; font-weight: 600; color: var(--text-1);
@@ -81,7 +90,7 @@ body {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 6px; padding: 10px 12px; margin-top: 4px;
 }
-.report-body-block { margin-bottom: 14px; }
+.report-body-block { margin-bottom: 14px; break-inside: avoid; }
 .report-body-block:last-child { margin-bottom: 0; }
 
 /* Hunt raporundaki 420×280 üst sınırıyla aynı desen — küçük görsel doğal
@@ -97,8 +106,20 @@ body {
   border: 1px solid var(--border);
   border-radius: 4px;
 }
-.image-grid { display: flex; flex-wrap: wrap; gap: 16px; }
-.image-item { text-align: center; }
+/* flex/grid konteynerleri WeasyPrint'te sayfalar arası bölünemiyor — tüm
+   galeri tek parça sayılıp sığmayınca komple bir sonraki sayfaya atılıyor,
+   üstündeki "Görseller" başlığı yalnız kalıp altı boş görünüyordu. inline-
+   block, normal satır-içi akış gibi davranıp doğal sayfalanabiliyor. */
+.image-grid { display: block; font-size: 0; }
+.image-item {
+  display: inline-block;
+  vertical-align: top;
+  text-align: center;
+  width: 420px;
+  margin: 0 16px 16px 0;
+  font-size: 12px;
+  break-inside: avoid;
+}
 .image-caption { font-size: 10.5px; font-weight: 600; color: var(--text-2); margin-top: 4px; }
 
 .footer {
@@ -151,7 +172,7 @@ body {
   </div>
 
   {% if sections %}
-  <div class="section">
+  <div class="section section-flow">
     <div class="section-title">Olay Detayları</div>
     {% for s in sections %}
     <div class="report-body-block">
@@ -163,7 +184,7 @@ body {
   {% endif %}
 
   {% if image_items %}
-  <div class="section">
+  <div class="section section-flow">
     <div class="section-title">Görseller</div>
     <div class="image-grid">
       {% for img in image_items %}
