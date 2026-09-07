@@ -1343,6 +1343,79 @@ uygulandı (üçü de aynı modülleri/dosyaları etkiliyor).
   `v44`'e yükseltildi. Test hesapları/kayıtları temizlendi (audit_log'a
   dokunulmadı), audit zinciri geçerli (263 kayıt, 263 zincirli).
 
+### Takip (2026-09-08) — Liste ekleme deneyimi: otomatik büyüme + iki adımlı ekleme
+
+Kullanıcı "Etkilenen Varlık Ekle" gibi listelere madde ekleme kısımlarını
+"güncel/profesyonel" bulmadı — metin kutuları içerik ne olursa olsun sabit
+boyutta kalıyordu, "+ Ekle" de kalıcı olarak açık bir kutu ekliyordu.
+Araştırma sonucu uygulamada bu deseni paylaşan **6 liste** bulundu:
+Olay Raporu Bölümleri, Etkilenen Varlıklar, Hunt Bulguları, Hunt MITRE
+teknik notları, Hunt Önerileri, Hunt Keşfedilen Zafiyetleri. ("Seç/yaz +
+Ekle → sabit etiket" deseniyle çalışan 6 tag listesi — UC MITRE, IOC,
+ortam seçimleri — kullanıcının şikayetiyle ilgisiz, dokunulmadı.)
+
+- **Otomatik büyüyen metin kutuları:** `.form-textarea` artık `resize:none;
+  min-height:40px; max-height:280px; overflow-y:auto` — JS'teki
+  `autoGrowTextarea()`/`autoGrowAll()` yazdıkça `scrollHeight`'e göre
+  büyütüyor (global `input` dinleyicisiyle), 280px sonrası kaydırmaya
+  geçiyor. `resize:vertical` bilinçli olarak kaldırıldı — otomatik
+  büyümeyle birlikte kullanıcının elle sürüklediği boyut bir sonraki
+  tuşta sıfırlanıp kırık bir davranış üretirdi. Var olan bir kayıt açılıp
+  içine önceden yazılmış uzun metin geldiğinde de doğru boyunun baştan
+  görünmesi için her ilgili `open*Modal()`'ın (Tune/UC/Hunt/Olay Raporu,
+  15 fonksiyon) ve her liste `render*()`'ının sonuna `autoGrowAll()`
+  eklendi — `input` olayı sadece yazarken tetiklenir, `innerHTML` ile
+  basılan/`.value=` ile doldurulan mevcut içerik için ayrıca çağrı gerekti.
+- **İki adımlı ekleme (yaz → onayla → yerleş):** "+ Ekle" artık kalıcı
+  açık bir kutu değil, önce bir yazma alanı + İptal/Ekle butonu gösteriyor;
+  onaylanınca madde düz/temiz bir "yerleşmiş" görünüme geçiyor (kalın
+  başlık + metin, ya da "isim — tür" gibi listeye özgü bir özet), kalem
+  ikonuyla tekrar düzenlenebiliyor. Tek, paylaşılan bir state machine
+  (`makeListEditState`/`listEditBeginNew`/`listEditBeginEdit`/
+  `listEditConfirm`/`listEditSettleActive`/`listRemoveItem`/
+  `renderComposeRow`, `app.js`) 6 listenin hepsinde kullanıldı — her
+  listenin kendi alan şekli (başlık+metin, metin+görsel, isim+tür, düz
+  metin) ve kaydetme/doğrulama mantığı aynen korundu. Düzenleme durumu
+  **hiçbir zaman** dizi elemanlarının içine yazılmadı (ayrı `_*Edit`
+  nesnelerinde tutuldu) — bu sayede backend'e giden veri şekli hiç
+  değişmedi, `app.py`'de tek satır bile dokunulmadı.
+  MITRE teknik notları hibrit: id/taktik/teknik başlığı bugünkü gibi
+  seçimle sabitleniyor, sadece `method` (yöntem notu) alanı bu davranışı
+  aldı — opsiyonel olduğu için onaylama hiçbir zaman engellenmiyor.
+- **Bulunan/düzeltilen iki gerçek hata (uygulamadan önce, kod okuyarak ve
+  test ederek):**
+  1. Düz string listelerinde (Öneriler/Zafiyetler) paylaşılan snapshot
+     mantığı `{ ...string }` yapıyordu — bu bir string'i karakter
+     dizisine çeviriyor, İptal ile geri dönüşü bozuyordu. String'ler
+     immutable olduğu için `typeof` kontrolüyle obje değilse doğrudan
+     referans alınacak şekilde düzeltildi.
+  2. `openIncidentCreateModal()`/`openIncidentEditModal()` ve Hunt'ın 4
+     liste yükleme noktası, yeni state machine'i hiç kullanmadan diziyi
+     doğrudan dolduruyordu — bu, yeni bir olay raporu açıldığında ilk
+     bölümün "boş" bir SETTLED satır olarak görünmesine (yazma kutusu
+     hiç açılmadan) sebep oluyordu. Her ilgili `open*` fonksiyonuna
+     `_*Edit = makeListEditState()` sıfırlaması ve (Olay Raporu Bölümleri
+     için, tek zorunlu liste) `listEditBeginNew` ile ilk satırın gerçekten
+     compose modunda açılması eklendi.
+- **Doğrulandı:** gerçek tarayıcıda DOM/state incelemesiyle (ekran görüntüsü
+  bu ortamda güvenilmez, `requestAnimationFrame`'in gizli pane'de hiç
+  tetiklenmediği doğrulanıp piksel bazlı büyüme ölçümü yerine mantık
+  doğrulamasına geçildi) — Olay Raporu Bölümleri: yeni rapor açılışında
+  compose kutusu geliyor, yazıp onaylayınca settled'a dönüyor, kalemle
+  tekrar açılınca eski değerler geliyor, değiştirip İptal'e basınca ESKİ
+  değere dönüyor (rollback), boşken onaylamak satır içi hata veriyor,
+  "+ Ekle" sonra İptal taslağı tamamen kaldırıyor. Etkilenen Varlıklar:
+  "isim — tür" doğru yerleşiyor. Hunt Önerileri (düz string): aynı
+  rollback akışı string'lerde de doğru çalışıyor (yukarıdaki 1. hatanın
+  düzeltmesi doğrulandı). Hunt MITRE: teknik başlığı sabit kalıp sadece
+  yöntem notu compose/settled arasında geçiş yapıyor. Gerçek bir olay
+  raporu oluşturulup (bölüm + varlık, compose→onayla akışıyla) kaydedilip
+  DB'de `sections`/`affected_assets` alanlarının tamamen temiz kaldığı
+  (index/snapshot/error gibi yabancı bir anahtar sızmadığı) doğrulandı.
+  `app.js` `v45`'e, `styles.css` `v11.17`'ye yükseltildi. Test hesabı/
+  kaydı temizlendi (audit_log'a dokunulmadı), audit zinciri geçerli
+  (264 kayıt, 264 zincirli).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

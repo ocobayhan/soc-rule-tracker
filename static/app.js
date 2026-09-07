@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v44
+   SOC Tracker — Frontend  v45
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -75,6 +75,84 @@ function esc(str) {
   return String(str)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ---------------------------------------------------------------------------
+// Otomatik büyüyen metin kutuları (2026-09-07) — .form-textarea yazdıkça
+// içeriğe göre büyür, styles.css'teki max-height'ten sonra kaydırmaya geçer.
+// ---------------------------------------------------------------------------
+function autoGrowTextarea(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
+function autoGrowAll(root) {
+  (root || document).querySelectorAll(".form-textarea").forEach(autoGrowTextarea);
+}
+document.addEventListener("input", e => {
+  if (e.target.matches && e.target.matches(".form-textarea")) autoGrowTextarea(e.target);
+});
+
+// ---------------------------------------------------------------------------
+// Liste ekleme: yaz → onayla → yerleş (2026-09-07) — Bölümler/Bulgular/MITRE
+// notu/Etkilenen Varlıklar/Öneriler/Zafiyetler listelerinin paylaştığı state
+// machine. Düzenleme durumu ASLA dizi elemanlarının içine yazılmaz (ayrı bir
+// state nesnesinde tutulur) — kaydetme/doğrulama kodu ve backend'e giden veri
+// şekli hiç değişmez, bkz. docs/PROGRESS.md.
+// ---------------------------------------------------------------------------
+function makeListEditState() { return { index: null, snapshot: null, error: null }; }
+
+function listEditSettleActive(state, list) {
+  if (state.index === null) return;
+  if (state.snapshot === null) list.splice(state.index, 1);
+  else list[state.index] = state.snapshot;
+  state.index = null; state.snapshot = null; state.error = null;
+}
+function listEditBeginNew(state, list, blankItem) {
+  listEditSettleActive(state, list);
+  list.push(blankItem);
+  state.index = list.length - 1;
+  state.snapshot = null;
+}
+function listEditBeginEdit(state, list, index) {
+  const shift = state.index !== null && state.snapshot === null && state.index < index;
+  listEditSettleActive(state, list);
+  state.index = shift ? index - 1 : index;
+  const current = list[state.index];
+  // Düz string listeleri (Öneriler/Zafiyetler) için obje spread'i yanlış
+  // sonuç üretir (string'i karakter dizisine çevirir) — string'ler zaten
+  // immutable olduğu için doğrudan referans almak güvenli bir "kopya"dır.
+  state.snapshot = (current !== null && typeof current === "object") ? { ...current } : current;
+}
+function listEditConfirm(state, list, isValidFn, errorMsg, renderFn) {
+  if (state.index === null) return;
+  if (!isValidFn(list[state.index])) { state.error = errorMsg; renderFn(); return; }
+  state.index = null; state.snapshot = null; state.error = null;
+  renderFn();
+}
+function listRemoveItem(state, list, index) {
+  list.splice(index, 1);
+  if (state.index === null) return;
+  if (state.index === index) { state.index = null; state.snapshot = null; state.error = null; }
+  else if (state.index > index) { state.index -= 1; }
+}
+
+function renderComposeRow({ isEditing, isNew, composeHtml, settledHtml, error, index, confirmFn, cancelFn, editFn, removeFn }) {
+  if (isEditing) {
+    return `<div class="mitre-entry compose-row">
+      ${composeHtml}
+      ${error ? `<div class="compose-row-error">${esc(error)}</div>` : ""}
+      <div class="compose-row-actions">
+        <button type="button" class="btn-ghost-sm" onclick="${cancelFn}(${index})">İptal</button>
+        <button type="button" class="btn btn-primary" onclick="${confirmFn}(${index})">${isNew ? "Ekle" : "Kaydet"}</button>
+      </div></div>`;
+  }
+  return `<div class="mitre-entry settled-row">
+    <div class="settled-row-body">${settledHtml}</div>
+    <div class="settled-row-actions">
+      <button type="button" class="btn-icon success" title="Düzenle" onclick="${editFn}(${index})">&#9998;</button>
+      <button type="button" class="btn-icon danger" title="Kaldır" onclick="${removeFn}(${index})">&#x2715;</button>
+    </div></div>`;
 }
 
 /** data-copy attribute'ündeki metni panoya kopyalar, butonda kısa bir
@@ -1062,6 +1140,7 @@ function openTuneModal() {
   clearPastePreview("tune-evidence-preview","tune-evidence-image");
   document.getElementById("tune-modal-error").style.display = "none";
   document.getElementById("tune-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("tune-modal"));
 }
 function closeTuneModal() { document.getElementById("tune-modal").style.display = "none"; }
 
@@ -1158,6 +1237,7 @@ function openTuneEditModal(id) {
   }
   document.getElementById("tune-edit-modal-error").style.display = "none";
   document.getElementById("tune-edit-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("tune-edit-modal"));
 }
 function closeTuneEditModal() { document.getElementById("tune-edit-modal").style.display = "none"; }
 
@@ -1233,6 +1313,7 @@ function openTuneCloseModal(id) {
   clearPastePreview("close-tune-img-preview","close-tune-resolution-image");
   document.getElementById("close-tune-error").style.display = "none";
   document.getElementById("tune-close-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("tune-close-modal"));
 }
 function closeTuneCloseModal() { document.getElementById("tune-close-modal").style.display = "none"; }
 
@@ -1275,6 +1356,7 @@ function openTuneApproveModal(id) {
   const retryBtn = document.getElementById("btn-retry-tune");
   if (retryBtn) retryBtn.style.display = IS_SENIOR ? "" : "none";
   document.getElementById("tune-approve-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("tune-approve-modal"));
 }
 
 async function execApproveTune() {
@@ -1323,6 +1405,7 @@ function openValidateModal(type, id) {
   document.getElementById("validate-note").value = "";
   document.getElementById("validate-error").style.display = "none";
   document.getElementById("validate-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("validate-modal"));
 }
 
 // Olay raporlarının API yolu diğer üçünden farklı (/api/incident-reports,
@@ -1380,6 +1463,7 @@ function openHuntResultModal(id) {
   document.getElementById("hunt-result-note").value = "";
   document.getElementById("hunt-result-error").style.display = "none";
   document.getElementById("hunt-result-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("hunt-result-modal"));
 }
 
 async function execApproveHuntResult() {
@@ -1519,6 +1603,7 @@ function openUCModal() {
   }
   document.getElementById("uc-modal-error").style.display = "none";
   document.getElementById("uc-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("uc-modal"));
 }
 function closeUCModal() { document.getElementById("uc-modal").style.display = "none"; }
 
@@ -1588,6 +1673,7 @@ function openUCEditModal(id) {
   }
   document.getElementById("uc-edit-modal-error").style.display = "none";
   document.getElementById("uc-edit-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("uc-edit-modal"));
 }
 function closeUCEditModal() { document.getElementById("uc-edit-modal").style.display = "none"; }
 
@@ -1708,6 +1794,7 @@ async function openUCCloseModal(id) {
   renderUCMitreList();
   document.getElementById("close-uc-error").style.display = "none";
   document.getElementById("uc-close-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("uc-close-modal"));
 }
 function closeUCCloseModal() { document.getElementById("uc-close-modal").style.display = "none"; }
 
@@ -1748,6 +1835,7 @@ function openUCTestApproveModal(id) {
   document.getElementById("test-approve-notes").value = "";
   document.getElementById("test-approve-uc-error").style.display = "none";
   document.getElementById("uc-test-approve-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("uc-test-approve-modal"));
 }
 
 async function execTestApproveUC() {
@@ -2449,6 +2537,7 @@ function openHuntModal() {
   }
   document.getElementById("hunt-modal-error").style.display = "none";
   document.getElementById("hunt-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("hunt-modal"));
 }
 function closeHuntModal() { document.getElementById("hunt-modal").style.display = "none"; }
 
@@ -2505,6 +2594,7 @@ function openHuntEditModal(id) {
   }
   document.getElementById("hunt-edit-modal-error").style.display = "none";
   document.getElementById("hunt-edit-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("hunt-edit-modal"));
 }
 function closeHuntEditModal() { document.getElementById("hunt-edit-modal").style.display = "none"; }
 
@@ -2610,6 +2700,12 @@ function populateMitreTechniqueSelect(selectId, tactic) {
 // Hunt MITRE entry state
 // ---------------------------------------------------------------------------
 let _huntMitreEntries = [];
+// Sadece "method" (yöntem notu) alanı yaz→onayla→yerleş davranışını alıyor —
+// id/taktik/teknik başlığı zaten seçimle geldiği an sabitleniyor (Family C
+// deseni), bu yüzden genel renderComposeRow yerine burada elle küçük bir
+// varyant kuruluyor: kaldırma (✕) her zaman başlıkta, sadece method alanı
+// compose/settled arasında geçiş yapıyor.
+let _huntMitreEntriesEdit = makeListEditState();
 
 function onMitreTacticChange() {
   const tactic = document.getElementById("mitre-tactic-select").value;
@@ -2628,34 +2724,63 @@ function addMitreTechniqueEntry() {
   renderHuntMitreEntries();
 }
 
-function removeHuntMitreEntry(techId) {
-  _huntMitreEntries = _huntMitreEntries.filter(e => e.id !== techId);
+function removeHuntMitreEntry(i) {
+  listRemoveItem(_huntMitreEntriesEdit, _huntMitreEntries, i);
   renderHuntMitreEntries();
 }
 
-function updateHuntMitreMethod(techId, value) {
-  const entry = _huntMitreEntries.find(e => e.id === techId);
-  if (entry) entry.method = value;
-  document.getElementById("report-hunt-mitre-json").value = JSON.stringify(_huntMitreEntries);
+function editHuntMitreMethod(i) {
+  listEditBeginEdit(_huntMitreEntriesEdit, _huntMitreEntries, i);
+  renderHuntMitreEntries();
+}
+function cancelHuntMitreMethod() {
+  listEditSettleActive(_huntMitreEntriesEdit, _huntMitreEntries);
+  renderHuntMitreEntries();
+}
+function confirmHuntMitreMethod() {
+  // Yöntem notu opsiyonel — her zaman geçerli, onayla hiçbir zaman engellenmez.
+  listEditConfirm(_huntMitreEntriesEdit, _huntMitreEntries, () => true, "", renderHuntMitreEntries);
+}
+
+function updateHuntMitreMethod(i, value) {
+  if (_huntMitreEntries[i]) _huntMitreEntries[i].method = value;
+  const hidden = document.getElementById("report-hunt-mitre-json");
+  if (hidden) hidden.value = JSON.stringify(_huntMitreEntries);
 }
 
 function renderHuntMitreEntries() {
   const container = document.getElementById("hunt-mitre-entries"); if (!container) return;
   document.getElementById("report-hunt-mitre-json").value = JSON.stringify(_huntMitreEntries);
   if (!_huntMitreEntries.length) { container.innerHTML = ""; return; }
-  container.innerHTML = _huntMitreEntries.map(e => `
+  container.innerHTML = _huntMitreEntries.map((e, i) => {
+    const editing = _huntMitreEntriesEdit.index === i;
+    const body = editing
+      ? `<textarea class="form-input form-textarea" style="margin-top:6px"
+          placeholder="Bu teknikle ilgili bulgular, araçlar, gözlemler…"
+          oninput="updateHuntMitreMethod(${i},this.value)">${esc(e.method)}</textarea>
+        <div class="compose-row-actions">
+          <button type="button" class="btn-ghost-sm" onclick="cancelHuntMitreMethod()">İptal</button>
+          <button type="button" class="btn btn-primary" onclick="confirmHuntMitreMethod()">Kaydet</button>
+        </div>`
+      : `<div class="settled-row" style="margin-top:6px">
+          <div class="settled-row-body">${e.method ? esc(e.method) : `<span class="settled-row-empty">Yöntem notu eklenmedi</span>`}</div>
+          <div class="settled-row-actions">
+            <button type="button" class="btn-icon success" title="Düzenle" onclick="editHuntMitreMethod(${i})">&#9998;</button>
+          </div>
+        </div>`;
+    return `
     <div class="mitre-entry">
       <div class="mitre-entry-header">
         <span class="mitre-tag">${esc(e.id)}</span>
         <span class="text-muted" style="font-size:11px;margin-left:4px">${esc(e.tactic)}</span>
         <span style="font-size:12px;margin-left:6px">${esc(e.name)}</span>
         <button type="button" class="btn-icon danger" style="margin-left:auto;font-size:11px"
-                onclick="removeHuntMitreEntry('${esc(e.id)}')">&#x2715;</button>
+                onclick="removeHuntMitreEntry(${i})">&#x2715;</button>
       </div>
-      <textarea class="form-input form-textarea" style="margin-top:6px;min-height:60px"
-        placeholder="Bu teknikle ilgili bulgular, araçlar, gözlemler…"
-        oninput="updateHuntMitreMethod('${esc(e.id)}',this.value)">${esc(e.method)}</textarea>
-    </div>`).join("");
+      ${body}
+    </div>`;
+  }).join("");
+  autoGrowAll(container);
 }
 
 // ---------------------------------------------------------------------------
@@ -2814,74 +2939,141 @@ function huntReportOverlayClick(e) {
 }
 
 let _huntRecommendations = [];
+let _huntRecommendationsEdit = makeListEditState();
 let _huntVulnerabilities = [];
+let _huntVulnerabilitiesEdit = makeListEditState();
+
+function _plainTextValid(v) { return !!(v || "").trim(); }
 
 function renderRecommendations() {
   const list = document.getElementById("rec-list");
   if (!list) return;
-  list.innerHTML = _huntRecommendations.map((v, i) => `
-    <div class="list-item-row">
-      <textarea class="form-input" rows="2" placeholder="Öneri maddesi…" oninput="_huntRecommendations[${i}]=this.value">${esc(v)}</textarea>
-      <button class="btn-remove" onclick="removeRecommendation(${i})">×</button>
-    </div>`).join("");
+  list.innerHTML = _huntRecommendations.map((v, i) => renderComposeRow({
+    isEditing: _huntRecommendationsEdit.index === i,
+    isNew: _huntRecommendationsEdit.snapshot === null,
+    error: _huntRecommendationsEdit.index === i ? _huntRecommendationsEdit.error : null,
+    index: i,
+    confirmFn: "confirmRecommendation", cancelFn: "cancelRecommendation",
+    editFn: "editRecommendation", removeFn: "removeRecommendation",
+    composeHtml: `<textarea class="form-input form-textarea" placeholder="Öneri maddesi…" oninput="_huntRecommendations[${i}]=this.value">${esc(v)}</textarea>`,
+    settledHtml: v ? esc(v) : `<span class="settled-row-empty">Boş öneri</span>`,
+  })).join("");
+  autoGrowAll(list);
 }
 function addRecommendation() {
-  _huntRecommendations.push("");
+  listEditBeginNew(_huntRecommendationsEdit, _huntRecommendations, "");
   renderRecommendations();
   const els = document.querySelectorAll("#rec-list textarea");
   if (els.length) els[els.length - 1].focus();
 }
-function removeRecommendation(i) { _huntRecommendations.splice(i, 1); renderRecommendations(); }
+function editRecommendation(i) {
+  listEditBeginEdit(_huntRecommendationsEdit, _huntRecommendations, i);
+  renderRecommendations();
+}
+function cancelRecommendation() {
+  listEditSettleActive(_huntRecommendationsEdit, _huntRecommendations);
+  renderRecommendations();
+}
+function confirmRecommendation() {
+  listEditConfirm(_huntRecommendationsEdit, _huntRecommendations, _plainTextValid, "Öneri metni girin.", renderRecommendations);
+}
+function removeRecommendation(i) {
+  listRemoveItem(_huntRecommendationsEdit, _huntRecommendations, i);
+  renderRecommendations();
+}
 
 function renderVulnerabilities() {
   const list = document.getElementById("vuln-list");
   if (!list) return;
-  list.innerHTML = _huntVulnerabilities.map((v, i) => `
-    <div class="list-item-row">
-      <textarea class="form-input" rows="2" placeholder="Güvenlik açığı…" oninput="_huntVulnerabilities[${i}]=this.value">${esc(v)}</textarea>
-      <button class="btn-remove" onclick="removeVulnerability(${i})">×</button>
-    </div>`).join("");
+  list.innerHTML = _huntVulnerabilities.map((v, i) => renderComposeRow({
+    isEditing: _huntVulnerabilitiesEdit.index === i,
+    isNew: _huntVulnerabilitiesEdit.snapshot === null,
+    error: _huntVulnerabilitiesEdit.index === i ? _huntVulnerabilitiesEdit.error : null,
+    index: i,
+    confirmFn: "confirmVulnerability", cancelFn: "cancelVulnerability",
+    editFn: "editVulnerability", removeFn: "removeVulnerability",
+    composeHtml: `<textarea class="form-input form-textarea" placeholder="Güvenlik açığı…" oninput="_huntVulnerabilities[${i}]=this.value">${esc(v)}</textarea>`,
+    settledHtml: v ? esc(v) : `<span class="settled-row-empty">Boş madde</span>`,
+  })).join("");
+  autoGrowAll(list);
 }
 function addVulnerability() {
-  _huntVulnerabilities.push("");
+  listEditBeginNew(_huntVulnerabilitiesEdit, _huntVulnerabilities, "");
   renderVulnerabilities();
   const els = document.querySelectorAll("#vuln-list textarea");
   if (els.length) els[els.length - 1].focus();
 }
-function removeVulnerability(i) { _huntVulnerabilities.splice(i, 1); renderVulnerabilities(); }
+function editVulnerability(i) {
+  listEditBeginEdit(_huntVulnerabilitiesEdit, _huntVulnerabilities, i);
+  renderVulnerabilities();
+}
+function cancelVulnerability() {
+  listEditSettleActive(_huntVulnerabilitiesEdit, _huntVulnerabilities);
+  renderVulnerabilities();
+}
+function confirmVulnerability() {
+  listEditConfirm(_huntVulnerabilitiesEdit, _huntVulnerabilities, _plainTextValid, "Zafiyet metni girin.", renderVulnerabilities);
+}
+function removeVulnerability(i) {
+  listRemoveItem(_huntVulnerabilitiesEdit, _huntVulnerabilities, i);
+  renderVulnerabilities();
+}
 
 // ---------------------------------------------------------------------------
 // Hunt — Bulgular (numaralı liste, her madde kendi metni + görseliyle)
 // ---------------------------------------------------------------------------
 let _huntFindings = [];
+let _huntFindingsEdit = makeListEditState();
+
+function _huntFindingValid(f) { return !!((f.text || "").trim() || f.image); }
 
 function renderFindings() {
   const list = document.getElementById("finding-list");
   if (!list) return;
-  list.innerHTML = _huntFindings.map((f, i) => `
-    <div class="mitre-entry">
+  list.innerHTML = _huntFindings.map((f, i) => renderComposeRow({
+    isEditing: _huntFindingsEdit.index === i,
+    isNew: _huntFindingsEdit.snapshot === null,
+    error: _huntFindingsEdit.index === i ? _huntFindingsEdit.error : null,
+    index: i,
+    confirmFn: "confirmFinding", cancelFn: "cancelFinding",
+    editFn: "editFinding", removeFn: "removeFinding",
+    composeHtml: `
       <div class="mitre-entry-header">
         <span style="font-size:12px;font-weight:600;color:var(--text-2)">${i + 1}. Bulgu</span>
-        <button type="button" class="btn-icon danger" style="margin-left:auto;font-size:11px"
-                onclick="removeFinding(${i})">&#x2715;</button>
       </div>
-      <textarea class="form-input form-textarea" style="margin-top:6px;min-height:56px"
+      <textarea class="form-input form-textarea" style="margin-top:6px"
         placeholder="Bu bulgunun açıklaması…"
         oninput="_huntFindings[${i}].text=this.value"
         onpaste="handleFindingPaste(event, ${i})">${esc(f.text)}</textarea>
-      <div id="finding-preview-${i}" class="paste-preview-area"></div>
-    </div>`).join("");
+      <div id="finding-preview-${i}" class="paste-preview-area"></div>`,
+    settledHtml: (f.text || f.image)
+      ? `${f.text ? esc(f.text) : ""}${f.image ? `<div style="margin-top:6px"><img class="paste-thumb" src="/static/uploads/${f.image}" onclick="openLightbox('/static/uploads/${f.image}')" title="Büyütmek için tıklayın"/></div>` : ""}`
+      : `<span class="settled-row-empty">Boş bulgu</span>`,
+  })).join("");
   _huntFindings.forEach((_, i) => renderFindingPreview(i));
 }
 
 function addFinding() {
-  _huntFindings.push({ text: "", image: null });
+  listEditBeginNew(_huntFindingsEdit, _huntFindings, { text: "", image: null });
   renderFindings();
   const els = document.querySelectorAll("#finding-list textarea");
   if (els.length) els[els.length - 1].focus();
 }
-
-function removeFinding(i) { _huntFindings.splice(i, 1); renderFindings(); }
+function editFinding(i) {
+  listEditBeginEdit(_huntFindingsEdit, _huntFindings, i);
+  renderFindings();
+}
+function cancelFinding() {
+  listEditSettleActive(_huntFindingsEdit, _huntFindings);
+  renderFindings();
+}
+function confirmFinding() {
+  listEditConfirm(_huntFindingsEdit, _huntFindings, _huntFindingValid, "Metin veya görsel ekleyin.", renderFindings);
+}
+function removeFinding(i) {
+  listRemoveItem(_huntFindingsEdit, _huntFindings, i);
+  renderFindings();
+}
 
 async function handleFindingPaste(e, i) {
   const items = Array.from(e.clipboardData?.items || []);
@@ -2957,6 +3149,7 @@ async function openHuntReportModal(id) {
     _huntMitreEntries = JSON.parse(r.mitre_techniques || "[]");
     if (!Array.isArray(_huntMitreEntries)) _huntMitreEntries = [];
   } catch { _huntMitreEntries = []; }
+  _huntMitreEntriesEdit = makeListEditState();
   renderHuntMitreEntries();
 
   // Findings section
@@ -2983,6 +3176,7 @@ async function openHuntReportModal(id) {
   if (!_huntFindings.length && (r.findings || r.findings_image)) {
     _huntFindings = [{ text: r.findings || "", image: r.findings_image || null }];
   }
+  _huntFindingsEdit = makeListEditState();
   renderFindings();
 
   document.getElementById("report-hunt-detection-suggest").value = r.detection_suggestion || "Hayır";
@@ -2994,6 +3188,7 @@ async function openHuntReportModal(id) {
     _huntRecommendations = JSON.parse(r.recommendations || "[]");
     if (!Array.isArray(_huntRecommendations)) _huntRecommendations = r.recommendations ? [r.recommendations] : [];
   } catch { _huntRecommendations = r.recommendations ? [r.recommendations] : []; }
+  _huntRecommendationsEdit = makeListEditState();
   renderRecommendations();
 
   // Vulnerabilities list
@@ -3001,6 +3196,7 @@ async function openHuntReportModal(id) {
     _huntVulnerabilities = JSON.parse(r.discovered_vulnerabilities || "[]");
     if (!Array.isArray(_huntVulnerabilities)) _huntVulnerabilities = [];
   } catch { _huntVulnerabilities = []; }
+  _huntVulnerabilitiesEdit = makeListEditState();
   renderVulnerabilities();
 
   // UC creation form — reset; disable if a linked UC already exists
@@ -3041,6 +3237,7 @@ async function openHuntReportModal(id) {
 
   document.getElementById("hunt-report-modal-error").style.display = "none";
   document.getElementById("hunt-report-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("hunt-report-modal"));
 }
 function closeHuntReportModal() { document.getElementById("hunt-report-modal").style.display = "none"; }
 
@@ -3383,62 +3580,111 @@ function renderIncidentRows() {
 
 // ---- Bölümler (sections) ve görsel galerisi — düzenleme modali -----------
 let _incidentSections = [];
+let _incidentSectionsEdit = makeListEditState();
 let _incidentImages   = [];   // [{order, filename}]
+
+function _incidentSectionValid(s) { return !!((s.heading || "").trim() || (s.text || "").trim()); }
 
 function renderIncidentSections() {
   const list = document.getElementById("incident-section-list");
   if (!list) return;
-  list.innerHTML = _incidentSections.map((s, i) => `
-    <div class="mitre-entry">
+  list.innerHTML = _incidentSections.map((s, i) => renderComposeRow({
+    isEditing: _incidentSectionsEdit.index === i,
+    isNew: _incidentSectionsEdit.snapshot === null,
+    error: _incidentSectionsEdit.index === i ? _incidentSectionsEdit.error : null,
+    index: i,
+    confirmFn: "confirmIncidentSection", cancelFn: "cancelIncidentSection",
+    editFn: "editIncidentSection", removeFn: "removeIncidentSection",
+    composeHtml: `
       <div class="mitre-entry-header">
         <input type="text" class="form-input input-sm" style="max-width:240px;font-weight:500"
                placeholder="Bölüm başlığı…" value="${esc(s.heading)}"
                oninput="_incidentSections[${i}].heading=this.value"/>
-        <button type="button" class="btn-icon danger" style="margin-left:auto;font-size:11px"
-                onclick="removeIncidentSection(${i})">&#x2715;</button>
       </div>
-      <textarea class="form-input form-textarea" style="margin-top:6px;min-height:60px"
+      <textarea class="form-input form-textarea" style="margin-top:6px"
         placeholder="Bölüm metni…"
-        oninput="_incidentSections[${i}].text=this.value">${esc(s.text)}</textarea>
-    </div>`).join("");
+        oninput="_incidentSections[${i}].text=this.value">${esc(s.text)}</textarea>`,
+    settledHtml: (s.heading || s.text)
+      ? `${s.heading ? `<div class="settled-row-title">${esc(s.heading)}</div>` : ""}${s.text ? esc(s.text) : ""}`
+      : `<span class="settled-row-empty">Boş bölüm</span>`,
+  })).join("");
+  autoGrowAll(list);
 }
 function addIncidentSection() {
-  _incidentSections.push({ heading: "", text: "" });
+  listEditBeginNew(_incidentSectionsEdit, _incidentSections, { heading: "", text: "" });
   renderIncidentSections();
   const els = document.querySelectorAll("#incident-section-list textarea");
   if (els.length) els[els.length - 1].focus();
 }
-function removeIncidentSection(i) { _incidentSections.splice(i, 1); renderIncidentSections(); }
+function editIncidentSection(i) {
+  listEditBeginEdit(_incidentSectionsEdit, _incidentSections, i);
+  renderIncidentSections();
+}
+function cancelIncidentSection() {
+  listEditSettleActive(_incidentSectionsEdit, _incidentSections);
+  renderIncidentSections();
+}
+function confirmIncidentSection() {
+  listEditConfirm(_incidentSectionsEdit, _incidentSections, _incidentSectionValid, "Başlık veya metin girin.", renderIncidentSections);
+}
+function removeIncidentSection(i) {
+  listRemoveItem(_incidentSectionsEdit, _incidentSections, i);
+  renderIncidentSections();
+}
 
 const INCIDENT_ASSET_TYPES = ["Makine/Bilgisayar", "Kullanıcı Hesabı", "Sunucu", "E-posta Hesabı", "Uygulama/Servis", "Diğer"];
 let _incidentAssets = [];   // [{name, type}]
+let _incidentAssetsEdit = makeListEditState();
+
+function _incidentAssetValid(a) { return !!(a.name || "").trim(); }
 
 function renderIncidentAssets() {
   const list = document.getElementById("incident-asset-list");
   if (!list) return;
-  list.innerHTML = _incidentAssets.map((a, i) => `
-    <div class="mitre-entry">
+  list.innerHTML = _incidentAssets.map((a, i) => renderComposeRow({
+    isEditing: _incidentAssetsEdit.index === i,
+    isNew: _incidentAssetsEdit.snapshot === null,
+    error: _incidentAssetsEdit.index === i ? _incidentAssetsEdit.error : null,
+    index: i,
+    confirmFn: "confirmIncidentAsset", cancelFn: "cancelIncidentAsset",
+    editFn: "editIncidentAsset", removeFn: "removeIncidentAsset",
+    composeHtml: `
       <div class="mitre-entry-header">
         <input type="text" class="form-input input-sm" style="max-width:240px;font-weight:500"
                placeholder="Varlık adı…" value="${esc(a.name)}"
                oninput="_incidentAssets[${i}].name=this.value"/>
-        <button type="button" class="btn-icon danger" style="margin-left:auto;font-size:11px"
-                onclick="removeIncidentAsset(${i})">&#x2715;</button>
       </div>
       <select class="form-input input-sm" style="margin-top:6px"
         onchange="_incidentAssets[${i}].type=this.value">
         <option value="">— Tür seçin —</option>
         ${INCIDENT_ASSET_TYPES.map(t => `<option value="${esc(t)}" ${a.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}
-      </select>
-    </div>`).join("");
+      </select>`,
+    settledHtml: a.name
+      ? `${esc(a.name)}${a.type ? ` — ${esc(a.type)}` : ""}`
+      : `<span class="settled-row-empty">Boş varlık</span>`,
+  })).join("");
 }
 function addIncidentAsset() {
-  _incidentAssets.push({ name: "", type: "" });
+  listEditBeginNew(_incidentAssetsEdit, _incidentAssets, { name: "", type: "" });
   renderIncidentAssets();
   const els = document.querySelectorAll("#incident-asset-list input[type=text]");
   if (els.length) els[els.length - 1].focus();
 }
-function removeIncidentAsset(i) { _incidentAssets.splice(i, 1); renderIncidentAssets(); }
+function editIncidentAsset(i) {
+  listEditBeginEdit(_incidentAssetsEdit, _incidentAssets, i);
+  renderIncidentAssets();
+}
+function cancelIncidentAsset() {
+  listEditSettleActive(_incidentAssetsEdit, _incidentAssets);
+  renderIncidentAssets();
+}
+function confirmIncidentAsset() {
+  listEditConfirm(_incidentAssetsEdit, _incidentAssets, _incidentAssetValid, "Varlık adı girin.", renderIncidentAssets);
+}
+function removeIncidentAsset(i) {
+  listRemoveItem(_incidentAssetsEdit, _incidentAssets, i);
+  renderIncidentAssets();
+}
 
 function renderIncidentGallery() {
   const gallery = document.getElementById("incident-image-gallery");
@@ -3478,16 +3724,20 @@ function openIncidentCreateModal() {
   document.getElementById("incident-edit-env").value      = "";
   document.getElementById("incident-edit-case-id").value  = "";
 
-  _incidentSections = [{ heading: "", text: "" }];
+  _incidentSections = [];
+  _incidentSectionsEdit = makeListEditState();
+  listEditBeginNew(_incidentSectionsEdit, _incidentSections, { heading: "", text: "" });
   renderIncidentSections();
   _incidentImages = [];
   renderIncidentGallery();
   _incidentAssets = [];
+  _incidentAssetsEdit = makeListEditState();
   renderIncidentAssets();
 
   document.getElementById("incident-edit-image-paste").value = "";
   document.getElementById("incident-edit-modal-error").style.display = "none";
   document.getElementById("incident-edit-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("incident-edit-modal"));
 }
 
 function openIncidentEditModal(id) {
@@ -3503,7 +3753,8 @@ function openIncidentEditModal(id) {
     _incidentSections = JSON.parse(r.sections || "[]");
     if (!Array.isArray(_incidentSections)) _incidentSections = [];
   } catch { _incidentSections = []; }
-  if (!_incidentSections.length) _incidentSections = [{ heading: "", text: "" }];
+  _incidentSectionsEdit = makeListEditState();
+  if (!_incidentSections.length) listEditBeginNew(_incidentSectionsEdit, _incidentSections, { heading: "", text: "" });
   renderIncidentSections();
 
   try {
@@ -3516,11 +3767,13 @@ function openIncidentEditModal(id) {
     _incidentAssets = JSON.parse(r.affected_assets || "[]");
     if (!Array.isArray(_incidentAssets)) _incidentAssets = [];
   } catch { _incidentAssets = []; }
+  _incidentAssetsEdit = makeListEditState();
   renderIncidentAssets();
 
   document.getElementById("incident-edit-image-paste").value = "";
   document.getElementById("incident-edit-modal-error").style.display = "none";
   document.getElementById("incident-edit-modal").style.display = "flex";
+  autoGrowAll(document.getElementById("incident-edit-modal"));
 }
 function closeIncidentEditModal() { document.getElementById("incident-edit-modal").style.display = "none"; }
 
