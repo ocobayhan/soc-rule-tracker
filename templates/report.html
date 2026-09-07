@@ -420,6 +420,30 @@ body {
         <div class="kpi-value">{{ kpi.hunt_total_hours }} saat</div>
         <div class="kpi-sub">Tamamlanan hunt'ların toplam süresi</div>
       </div>
+      <div class="kpi-card amber">
+        <div class="kpi-label">Güvenlik Önerisi Sayısı</div>
+        <div class="kpi-value">{{ kpi.hunt_recommendations_count }}</div>
+        <div class="kpi-sub">Tüm hunt'lardaki toplam öneri maddesi</div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-label">Hunt'tan Açılan Use-Case</div>
+        <div class="kpi-value">{{ kpi.hunt_ucs_from_hunt }}</div>
+        <div class="kpi-sub">Durumdan bağımsız, toplam sayı</div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:20px">Olay Raporu{% if month_label %} — {{ month_label }}{% else %} — Tüm Zamanlar{% endif %}</div>
+    <div class="kpi-grid" style="margin-top:8px">
+      <div class="kpi-card green">
+        <div class="kpi-label">Toplam Olay Raporu</div>
+        <div class="kpi-value">{{ kpi.incident_total }}</div>
+        <div class="kpi-sub">Bu dönemde oluşturulan olay raporu sayısı</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-label">Toplam Etkilenen Varlık</div>
+        <div class="kpi-value">{{ kpi.incident_affected_assets_total }}</div>
+        <div class="kpi-sub">Bu dönemin olay raporlarındaki toplam varlık sayısı</div>
+      </div>
     </div>
 
     <!-- Summary progress bars -->

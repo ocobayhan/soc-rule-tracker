@@ -202,6 +202,12 @@
           Sonuç Onayı Bekliyor: <strong id="kpi-hunt-resultpending">—</strong> ·
           Reddedildi: <strong id="kpi-hunt-rejected">—</strong>
         </div>
+        <div class="kpi-module-extra">
+          Güvenlik Önerisi: <strong id="kpi-hunt-recommendations">—</strong> ·
+          Hunt'tan Açılan UC: <strong id="kpi-hunt-ucs">—</strong> ·
+          Planlanan/Gerçekleşen: <strong id="kpi-hunt-planned-rate">—</strong> ·
+          Toplam Süre: <strong id="kpi-hunt-total-hours">—</strong> saat
+        </div>
       </div>
 
     </div>
@@ -408,9 +414,9 @@
     </div>
     <p class="text-muted" style="font-size:12px;margin:-8px 0 12px">
       XSOAR'da "incident" olarak kapatılan case'ler için playbook webhook'unun
-      oluşturduğu raporlar, veya elle açılan olay raporları. Taslak
-      durumundakiler düzenlenebilir; bir Kıdemli Analist/Müdür onaylar veya
-      reddeder.
+      oluşturduğu raporlar, veya elle açılan olay raporları. Açıldı/İncelemede
+      durumundakiler düzenlenebilir; analist yazımı bitirince onaya gönderir,
+      bir Kıdemli Analist/Müdür kapatır veya notla İncelemede'ye geri gönderir.
     </p>
     <div class="filter-bar">
       <div class="search-wrap">
@@ -422,7 +428,7 @@
       <select id="incident-filter-env" class="form-input input-sm"><option value="">Tüm Ortamlar</option></select>
       <select id="incident-filter-status" class="form-input input-sm">
         <option value="">Tüm Durumlar</option>
-        <option>Taslak</option><option>Onaylandı</option><option>Reddedildi</option>
+        <option>Açıldı</option><option>İncelemede</option><option>Onay Bekliyor</option><option>Kapandı</option>
       </select>
       <button class="btn btn-secondary" onclick="loadIncidents()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearIncidentFilters()">Temizle</button>
@@ -436,7 +442,7 @@
         <colgroup>
           <col class="col-dot"/><col class="col-id"/>
           <col class="col-name"/><col style="width:90px"/><col class="col-env"/>
-          <col class="col-person"/><col class="col-status"/>
+          <col class="col-person"/><col style="width:120px"/><col class="col-status"/>
           <col class="col-date"/><col class="col-act"/>
         </colgroup>
         <thead>
@@ -446,6 +452,7 @@
           <th class="th-sortable" id="th-incident-title" onclick="sortIncident('title')">Başlık <span class="sort-arrow"></span></th>
           <th>Case No</th>
           <th>Ortam</th><th>Raporlayan</th>
+          <th>Etkilenen Varlık</th>
           <th class="th-sortable" id="th-incident-status" onclick="sortIncident('status')">Durum <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-incident-created_at" onclick="sortIncident('created_at')">Tarih <span class="sort-arrow"></span></th>
           <th>İşlem</th>
@@ -1644,6 +1651,14 @@
       </div>
 
       <div class="form-group form-col-2" style="margin-top:12px;margin-bottom:0">
+        <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Etkilenen Varlıklar <span class="text-muted" style="font-weight:400">(isim + tür, opsiyonel)</span></span>
+          <button type="button" class="btn btn-sm" onclick="addIncidentAsset()" style="padding:2px 10px;font-size:12px">+ Ekle</button>
+        </label>
+        <div id="incident-asset-list" style="display:flex;flex-direction:column;gap:8px;margin-top:4px"></div>
+      </div>
+
+      <div class="form-group form-col-2" style="margin-top:12px;margin-bottom:0">
         <label class="form-label">
           Görseller <span class="paste-hint">— sırayla "Görsel 1, Görsel 2…" olarak numaralanır; yeni eklemek için buraya tıklayıp Ctrl+V</span>
         </label>
@@ -1765,6 +1780,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=43"></script>
+<script src="/static/app.js?v=44"></script>
 </body>
 </html>

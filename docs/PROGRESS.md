@@ -1283,6 +1283,66 @@ alıp uygulandı:
   görünmüyor. Test hesabı temizlendi (audit_log'a dokunulmadı), audit
   zinciri geçerli (252 kayıt, 252 zincirli).
 
+### Takip (2026-09-07) — Olay Raporu durum akışı + Etkilenen Varlıklar + Hunt KPI'ları
+
+Kullanıcının netleştirme sorularıyla kesinleşen üç ayrı iyileştirme, birlikte
+uygulandı (üçü de aynı modülleri/dosyaları etkiliyor).
+
+- **Olay Raporu 4 durumlu döngüye geçti:** Eski tek-kapılı model (Taslak →
+  Onaylandı/Reddedildi) yerine **Açıldı → İncelemede → Onay Bekliyor →
+  Kapandı**. Açıldı→İncelemede (`start-review`) ve İncelemede→Onay Bekliyor
+  (`submit-for-approval`) için iki yeni, onay gerektirmeyen uç nokta eklendi
+  (`is_senior()` sadece Onay Bekliyor→Kapandı/İncelemede geçişinde gerekli).
+  Onay Bekliyor'da sorun bulunursa (Hunt'ın sonuç-onayı reddiyle aynı desen)
+  notla birlikte İncelemede'ye geri döner — artık terminal bir "Reddedildi"
+  yok. PDF export gate'i `Kapandı`'ya taşındı. Yeni audit action'ları:
+  `START_INCIDENT_REVIEW`/`SUBMIT_INCIDENT_FOR_APPROVAL`/`CLOSE_INCIDENT`/
+  `RETURN_INCIDENT_FOR_REVISION` (eski `APPROVE_INCIDENT`/`REJECT_INCIDENT`
+  geçmiş kayıtlar için dokunulmadan kaldı). Mevcut kayıtlar için idempotent
+  migration: Taslak→Açıldı, Onaylandı→Kapandı, Reddedildi→İncelemede
+  (validation_note/validated_by/validated_at BİLEREK korunuyor — geri
+  dönen bir kaydın gerekçesi kaybolmasın diye).
+  **Bulunan/düzeltilen bir yan hata:** mükerrer-case engeli üç yerde hâlâ
+  eski `STATUS_REJECTED` ("Reddedildi") değerini dışlıyordu — ama bu değer
+  artık olay raporlarında hiç kullanılmıyor, yani hiçbir kapanmış case asla
+  yeniden açılamıyordu (sonsuz mükerrer engeli). `INCIDENT_STATUS_CLOSED`
+  ("Kapandı") ile değiştirildi.
+- **Etkilenen Varlıklar:** Yeni `affected_assets` JSON kolonu (isim+tür,
+  sections'la aynı desen ama opsiyonel) — sabit tür listesi: Makine/
+  Bilgisayar, Kullanıcı Hesabı, Sunucu, E-posta Hesabı, Uygulama/Servis,
+  Diğer. Tabloya "Etkilenen Varlık" kolonu (sayı gösterir, tür bazlı
+  filtrelenebilir — filtre için türetilmiş `_affected_asset_types` alanı
+  kullanıldı, ham JSON alanı değil). `/report` ve Excel "KPI Özeti"ne yeni
+  paylaşılan `get_incident_stats()` fonksiyonuyla toplam rapor + toplam
+  varlık sayısı eklendi. Dashboard'a bilinçli olarak eklenmedi (Olay
+  Raporu için orada hiç kart yok, sıfırdan tasarım ayrı bir karar).
+- **Hunt KPI'ları:** `get_hunt_program_stats()`'a iki yeni metrik —
+  `hunt_recommendations_count` (tüm hunt'ların öneri listesi toplamı) ve
+  `hunt_ucs_from_hunt` (hunt'tan açılan TÜM Use-Case sayısı, durumdan
+  bağımsız — mevcut `hunt_detections_created`'la KARIŞTIRILMAMASI gerektiği
+  docstring'e not edildi, o sadece Prod'da Aktif'e ulaşanları sayıyor).
+  Zaten var olan `hunt_total_hours`/`hunt_planned_executed_rate` ile
+  birlikte Dashboard'a ilk kez taşındı — `/api/kpi` artık
+  `get_hunt_program_stats()`'ı da çağırıp birleştiriyor (önceden tamamen
+  ayrı, kopya bir hesaplamaydı), Threat Hunting kartına ikinci bir
+  `.kpi-module-extra` satırı eklendi.
+- **Doğrulandı:** iki geçici hesapla (analist + kıdemli analist) gerçek API
+  üzerinden tam döngü — oluştur (Açıldı) → düzenle → incelemeye başla
+  (İncelemede) → 2 etkilenen varlık ekle → onaya gönder (Onay Bekliyor) →
+  bu durumda düzenleme denemesi `400` → notsuz reddet `400` → notlu reddet
+  (İncelemede'ye döner, not korunur) → tekrar onaya gönder → onayla
+  (Kapandı) → PDF `200`. Webhook path ayrıca test edildi: yeni kayıt
+  Açıldı ile başlıyor, aktifken mükerrer case `409`, Kapandı olduktan
+  sonra aynı case için yeni kayıt `201` (düzeltilen davranış). Migration
+  sentetik Taslak/Onaylandı/Reddedildi(notlu) kayıtlarla doğrulandı — üçü
+  de doğru eşlendi, gerçek örnek kayıt (id=7) de doğru şekilde Kapandı'ya
+  geçti. `/api/kpi`, `/report`, Excel'in yeni metrikleri birbiriyle
+  tutarlı gösterdiği (4 olay raporu, 3 etkilenen varlık, 4 öneri, 1 UC)
+  sayısal olarak doğrulandı. Gerçek tarayıcıda tablo kolonu/durum
+  rozetleri/aksiyon butonları kontrol edildi, konsol hatası yok. `app.js`
+  `v44`'e yükseltildi. Test hesapları/kayıtları temizlendi (audit_log'a
+  dokunulmadı), audit zinciri geçerli (263 kayıt, 263 zincirli).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

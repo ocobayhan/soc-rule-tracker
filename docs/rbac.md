@@ -90,10 +90,14 @@ tutarlıdır.
   `test_approve_uc`/`test_reject_uc`, Q&A formuyla genişletilecek)
 - Threat Hunt: ön onay (hipotez onayı) ve rapor tamamlandıktan sonraki
   ikinci onay
-- Olay Raporu (Incident Report, Faz W): tek onay kapısı — Taslak → Onaylandı/
-  Reddedildi (`validate_incident_report`/`reject_incident_report`). Diğer üç
-  modülden farklı olarak ön onay yok (webhook'tan zaten Taslak olarak açılır,
-  ikinci bir "işleme alınsın mı" kapısına gerek yok) — tek soru Hunt'ın son
-  onayıyla aynı: "bitmiş içerik iyi mi".
+- Olay Raporu (Incident Report, 2026-09-07 itibarıyla): kendi 4 durumlu
+  döngüsü — Açıldı → İncelemede → Onay Bekliyor → Kapandı. `is_senior()`
+  sadece `Onay Bekliyor → Kapandı`/`İncelemede` geçişinde
+  (`validate_incident_report`/`reject_incident_report`) gerekir; Açıldı →
+  İncelemede (`start_incident_review`) ve İncelemede → Onay Bekliyor
+  (`submit_incident_for_approval`) herhangi bir giriş yapmış kullanıcı
+  tarafından yapılabilir, onay değildir. Onay Bekliyor'da sorun bulunursa
+  Hunt'ın sonuç-onayı reddiyle aynı desen — notla birlikte İncelemede'ye
+  geri döner, terminal bir "Reddedildi" durumu yok.
 
 Detaylar için `docs/PROGRESS.md`'deki Faz 4/5/W maddelerine bakın.

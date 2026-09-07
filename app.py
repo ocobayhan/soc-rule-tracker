@@ -43,13 +43,14 @@ XSOAR_WEBHOOK_TOKEN = os.environ.get("XSOAR_WEBHOOK_TOKEN", "soc-tracker-xsoar-w
 AUDIT_CATEGORIES = {
     "create":         ["CREATE_TUNE", "CREATE_TUNE_XSOAR", "CREATE_UC", "CREATE_HUNT", "CREATE_USER",
                         "CREATE_INCIDENT_XSOAR", "CREATE_INCIDENT"],
-    "claim":          ["CLAIM_TUNE", "CLAIM_UC", "CLAIM_HUNT", "START_HUNT"],
+    "claim":          ["CLAIM_TUNE", "CLAIM_UC", "CLAIM_HUNT", "START_HUNT", "START_INCIDENT_REVIEW"],
     "pre_approval":   ["VALIDATE_TUNE", "VALIDATE_UC", "VALIDATE_HUNT",
                         "REJECT_VALIDATION_TUNE", "REJECT_VALIDATION_UC", "REJECT_VALIDATION_HUNT"],
     "final_approval": ["APPROVE_TUNE", "RETRY_TUNE", "TEST_APPROVE_UC", "TEST_REJECT_UC",
                         "APPROVE_HUNT_RESULT", "REJECT_HUNT_RESULT",
-                        "APPROVE_INCIDENT", "REJECT_INCIDENT"],
-    "work_done":      ["CLOSE_TUNE", "CLOSE_UC", "CLOSE_HUNT", "REPORT_HUNT"],
+                        "APPROVE_INCIDENT", "REJECT_INCIDENT",
+                        "CLOSE_INCIDENT", "RETURN_INCIDENT_FOR_REVISION"],
+    "work_done":      ["CLOSE_TUNE", "CLOSE_UC", "CLOSE_HUNT", "REPORT_HUNT", "SUBMIT_INCIDENT_FOR_APPROVAL"],
     "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER", "EDIT_INCIDENT",
                         "ADD_INCIDENT_IMAGE_XSOAR"],
     "delete":         ["DELETE_TUNE", "DELETE_UC", "DELETE_HUNT", "DELETE_USER", "DELETE_INCIDENT"],
@@ -71,6 +72,18 @@ SENIOR_TIERS = (TIER_KIDEMLI, TIER_MUDUR)
 # kullanıldığından kasıtlı olarak farklı adlandırıldı — bkz. docs/rbac.md.
 STATUS_PENDING_VALIDATION = "Ön Onay Bekliyor"
 STATUS_REJECTED           = "Reddedildi"
+
+# Olay Raporu (Incident Report) durum akışı — diğer üç modülden farklı,
+# kendi 4 durumlu döngüsü (2026-09-07): Açıldı → İncelemede → Onay Bekliyor
+# → Kapandı. Onay Bekliyor'da sorun bulunursa (Hunt'ın sonuç-onayı
+# deseniyle aynı mantık) notla birlikte İncelemede'ye geri döner — ayrı bir
+# terminal "Reddedildi" durumu yok. "Onay Bekliyor" (Ön'süz) yukarıdaki
+# STATUS_PENDING_VALIDATION'dan (Ön Onay Bekliyor) kasıtlı olarak farklı bir
+# string — iki modülün durumları asla karışmaz.
+INCIDENT_STATUS_OPEN    = "Açıldı"
+STATUS_INCIDENT_REVIEW  = "İncelemede"
+STATUS_INCIDENT_PENDING = "Onay Bekliyor"
+INCIDENT_STATUS_CLOSED  = "Kapandı"
 
 # PUT /api/tune|usecase üzerinden durum değişikliği kısıtları (bkz. update_tune/
 # update_usecase). "LEAVE" kümesindeki bir durumdan çıkış, "ARRIVE" kümesindeki
@@ -262,10 +275,13 @@ def init_db():
     # XSOAR Olay Raporu (2026-08-16) — XSOAR'da "incident" olarak kapatılan
     # case'ler için bir playbook webhook'unun doldurduğu, yapılandırılmış
     # bölümlerden (sections) ve sıralı görsel galerisinden (images) oluşan
-    # küçük olay raporları. Onay akışı Tune/UC/Hunt'tan bilinçli olarak daha
-    # sade — tek kapı (Taslak -> Onaylandı/Reddedildi), çünkü "iş" zaten
-    # XSOAR'da bitmiş, burada sadece webhook'tan gelen (bozuk/eksik olabilen)
-    # içeriğin bir analist tarafından düzenlenip onaylanması var.
+    # küçük olay raporları. Durum akışı (2026-09-07 itibarıyla): Açıldı →
+    # İncelemede → Onay Bekliyor → Kapandı — case XSOAR'da bitmiş olsa bile
+    # rapor yazımı sürebildiği için Tune/UC/Hunt'ın tek-kapılı ön onay
+    # deseni yerine kendi 4 durumlu döngüsü var (bkz. INCIDENT_STATUS_*
+    # sabitleri). affected_assets: yapılandırılmış (isim+tür) etkilenen
+    # varlık listesi — threat_hunt_requests'teki AYNI isimli ama düz metin
+    # olan affected_assets kolonuyla karıştırılmamalı, farklı tablo/şema.
     db.execute("""
         CREATE TABLE IF NOT EXISTS incident_reports (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -276,7 +292,8 @@ def init_db():
             reporter      TEXT NOT NULL DEFAULT '',
             sections      TEXT DEFAULT '[]',
             images        TEXT DEFAULT '[]',
-            status        TEXT NOT NULL DEFAULT 'Taslak',
+            affected_assets TEXT DEFAULT '[]',
+            status        TEXT NOT NULL DEFAULT 'Açıldı',
             validated_by  TEXT,
             validated_at  TEXT,
             validation_note TEXT,
@@ -396,6 +413,23 @@ def init_db():
     if stale > 0:
         db.execute("DELETE FROM mitre_cache")
 
+    # affected_assets (2026-09-07) — CREATE TABLE'daki yeni kolon sadece
+    # sıfırdan kurulan DB'leri kapsar, mevcut canlı DB için idempotent ekleme.
+    if not _col_exists(db, "incident_reports", "affected_assets"):
+        db.execute("ALTER TABLE incident_reports ADD COLUMN affected_assets TEXT DEFAULT '[]'")
+
+    # Olay Raporu durum akışı yenilendi (2026-09-07): eski 3 durumlu tek-kapı
+    # modelden yeni 4 durumlu döngüye (Açıldı/İncelemede/Onay Bekliyor/
+    # Kapandı) geçildi. Bu üç eski değer state machine'den tamamen emekli
+    # olduğu için UPDATE'leri koşulsuz çalıştırmak güvenli — ilk çalıştırmadan
+    # sonra hiçbir satır bir daha eşleşmez, sonraki her başlangıçta no-op'tur.
+    # validated_by/validated_at/validation_note BİLEREK dokunulmadan kalıyor:
+    # eski "Reddedildi" bir kayıt İncelemede'ye dönünce neden geri döndüğü
+    # notu hâlâ görünür olsun diye (Hunt'ın sonuç-onayı deseniyle aynı mantık).
+    db.execute("UPDATE incident_reports SET status=? WHERE status='Taslak'",    (INCIDENT_STATUS_OPEN,))
+    db.execute("UPDATE incident_reports SET status=? WHERE status='Onaylandı'", (INCIDENT_STATUS_CLOSED,))
+    db.execute("UPDATE incident_reports SET status=? WHERE status='Reddedildi'",(STATUS_INCIDENT_REVIEW,))
+
     # Migrate legacy 'user' role → 'admin'
     db.execute("UPDATE users SET role='admin' WHERE role='user'")
 
@@ -514,6 +548,14 @@ def get_hunt_program_stats(month=None):
     - hunt_total_hours: SADECE bu ay filtreye duyarlı — kullanıcı toplam
       hunt saatini kendi dışarıdaki "toplam analist saati" karşılaştırmasında
       kullanacağını söyledi, bu yüzden aylık bir sayı olarak veriliyor.
+    - hunt_recommendations_count (2026-09-07): tüm hunt'ların `recommendations`
+      JSON listesindeki toplam madde sayısı — "Güvenlik Önerisi sayısı" KPI'ı.
+    - hunt_ucs_from_hunt (2026-09-07): `source_hunt_id` dolu olan TÜM
+      Use-Case sayısı (durumdan bağımsız) — "Hunt'tan açılan Use-Case
+      sayısı" KPI'ı. DİKKAT: bu, yukarıdaki hunt_detections_created'dan
+      KASITLI OLARAK farklı bir metrik — hunt_detections_created sadece
+      Prod'da Aktif'e ulaşan bağlı Use-Case'leri sayıyor (dönüşüm oranı
+      için), bu ikisi asla birbirinin yerine kullanılmamalı.
     """
     db = get_db()
     hunt_planned = db.execute(
@@ -540,6 +582,23 @@ def get_hunt_program_stats(month=None):
         hours_row = db.execute(
             "SELECT COALESCE(SUM(hunt_duration_hours),0) s FROM threat_hunt_requests WHERE status='Tamamlandı'"
         ).fetchone()
+
+    import json as _json
+    rec_rows = db.execute("SELECT recommendations FROM threat_hunt_requests").fetchall()
+    hunt_recommendations_count = 0
+    for r in rec_rows:
+        try:
+            lst = _json.loads(r["recommendations"] or "[]")
+            if not isinstance(lst, list):
+                lst = [r["recommendations"]] if r["recommendations"] else []
+        except Exception:
+            lst = [r["recommendations"]] if r["recommendations"] else []
+        hunt_recommendations_count += len([v for v in lst if str(v).strip()])
+
+    hunt_ucs_from_hunt = db.execute(
+        "SELECT COUNT(*) c FROM usecase_requests WHERE source_hunt_id IS NOT NULL"
+    ).fetchone()["c"]
+
     return {
         "hunt_planned":  hunt_planned,
         "hunt_executed": hunt_executed,
@@ -548,6 +607,32 @@ def get_hunt_program_stats(month=None):
         "hunt_detections_created":   hunt_detections_created,
         "hunt_detection_conversion_rate": round(hunt_detections_created / hunt_detections_suggested * 100) if hunt_detections_suggested else 0,
         "hunt_total_hours": hours_row["s"],
+        "hunt_recommendations_count": hunt_recommendations_count,
+        "hunt_ucs_from_hunt": hunt_ucs_from_hunt,
+    }
+
+def get_incident_stats(month=None):
+    """Olay Raporu KPI özeti (2026-09-07) — `get_hunt_program_stats()` ile
+    aynı desen, `/report` ve Excel "KPI Özeti" arasında tek kaynak. Ay
+    filtresi `created_at`'e bakar (diğer olay raporu sorgularıyla tutarlı)."""
+    db = get_db()
+    import json as _json
+    cond, args = (" WHERE strftime('%Y-%m',created_at)=?", (month,)) if month else ("", ())
+    incident_total = db.execute(
+        f"SELECT COUNT(*) c FROM incident_reports{cond}", args
+    ).fetchone()["c"]
+    rows = db.execute(f"SELECT affected_assets FROM incident_reports{cond}", args).fetchall()
+    affected_assets_total = 0
+    for r in rows:
+        try:
+            lst = _json.loads(r["affected_assets"] or "[]")
+            if isinstance(lst, list):
+                affected_assets_total += len(lst)
+        except Exception:
+            pass
+    return {
+        "incident_total": incident_total,
+        "incident_affected_assets_total": affected_assets_total,
     }
 
 def get_app_setting(key, default=None):
@@ -914,7 +999,7 @@ def get_kpi():
     uc_rejection_rate   = rejection_rate(uc_rejected,   uc_total,   uc_pending_validation)
     hunt_rejection_rate = rejection_rate(hunt_rejected, hunt_total, hunt_pending_validation)
 
-    return jsonify({
+    data = {
         "tune_pending_validation": tune_pending_validation,
         "tune_open":          tune_open,
         "tune_reviewing":     tune_reviewing,
@@ -944,7 +1029,12 @@ def get_kpi():
         "hunt_rejected":      hunt_rejected,
         "hunt_total":         hunt_total,
         "hunt_rejection_rate": hunt_rejection_rate,
-    })
+    }
+    # Hunt Programı metrikleri (hunt saati, planlanan/gerçekleşen oranı,
+    # öneri sayısı, hunt'tan açılan UC sayısı) — /report ve Excel'le aynı
+    # kaynağı paylaşır (2026-09-07), Dashboard'da ilk kez gösteriliyor.
+    data.update(get_hunt_program_stats(month or None))
+    return jsonify(data)
 
 # Terminal (kapanmış) durumlar — "üzerimdeki bitmemiş işler" listesi bunları hariç tutar.
 _TUNE_TERMINAL = ("Tune Başarılı", "Tune Edilmedi", STATUS_REJECTED)
@@ -1292,13 +1382,26 @@ def _decode_incident_image(raw):
         return None
     return filename
 
+def _parse_affected_assets(raw):
+    """Etkilenen varlık listesi — {name, type} sözlüklerinden, boş isimliler
+    elenerek. Tür (type) için backend'de sabit liste zorunluluğu yok (severity/
+    trigger_frequency gibi diğer alanlarla tutarlı) — kısıt frontend'deki
+    seçim kutusunda. Alan tamamen opsiyonel, boş liste geçerli (sections'ın
+    aksine — her olayda tespit edilmiş bir varlık olmayabilir)."""
+    return [
+        {"name": str(a.get("name", "")).strip(), "type": str(a.get("type", "")).strip()}
+        for a in (raw or [])
+        if isinstance(a, dict) and str(a.get("name", "")).strip()
+    ]
+
 @app.route("/api/integrations/xsoar/incident-report", methods=["POST"])
 @api_key_required
 def xsoar_create_incident_report():
     """XSOAR'da bir case 'incident' olarak kapatıldığında bir playbook bu uca
     çağrı yapar — yapılandırılmış bölümler (sections) + sıralı görsel
-    galerisi (images) ile küçük bir olay raporu 'Taslak' durumunda açılır;
-    bir analist düzenleyip bir Kıdemli Analist/Müdür onaylar/reddeder."""
+    galerisi (images) ile küçük bir olay raporu 'Açıldı' durumunda açılır;
+    bir analist inceleyip onaya gönderir, bir Kıdemli Analist/Müdür kapatır
+    veya notla İncelemede'ye geri gönderir (bkz. INCIDENT_STATUS_* sabitleri)."""
     import json
     data = request.json or {}
     required = ["xsoar_case_id", "title", "environment", "sections"]
@@ -1327,9 +1430,12 @@ def xsoar_create_incident_report():
     case_id = str(data["xsoar_case_id"]).strip()
 
     # Mükerrer case engeli — Tune webhook'undaki aynı kural (bkz. yukarısı).
+    # Not (2026-09-07): dışlanan durum artık STATUS_REJECTED değil
+    # INCIDENT_STATUS_CLOSED — Olay Raporu'nda "Reddedildi" hiç
+    # kullanılmıyor, tek terminal/serbest bırakan durum Kapandı.
     dup = db.execute(
         "SELECT id FROM incident_reports WHERE xsoar_case_id=? AND status!=? ORDER BY id LIMIT 1",
-        (case_id, STATUS_REJECTED),
+        (case_id, INCIDENT_STATUS_CLOSED),
     ).fetchone()
     if dup:
         return jsonify({
@@ -1343,16 +1449,19 @@ def xsoar_create_incident_report():
         if fn:
             images.append({"order": len(images) + 1, "filename": fn})
 
+    affected_assets = _parse_affected_assets(data.get("affected_assets"))
+
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     cur = db.execute("""
         INSERT INTO incident_reports
           (xsoar_case_id, xsoar_url, title, environment, reporter,
-           sections, images, status, created_at, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+           sections, images, affected_assets, status, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
     """, (
         case_id, build_xsoar_url(case_id), str(data["title"]).strip(),
         str(data["environment"]).strip(), reporter,
-        json.dumps(sections), json.dumps(images), "Taslak", now, now,
+        json.dumps(sections), json.dumps(images), json.dumps(affected_assets),
+        INCIDENT_STATUS_OPEN, now, now,
     ))
     db.commit()
     new_row = db.execute("SELECT * FROM incident_reports WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1441,9 +1550,9 @@ def xsoar_add_incident_image():
 def create_incident_report():
     """Manuel olay raporu oluşturma — XSOAR webhook'undan bağımsız, bir analist
     doğrudan SOC Tracker'dan da bir olay raporu başlatabilir. Diğer tüm
-    modüllerle tutarlı olarak aynı Taslak → onay akışından geçer; manuel
-    oluşturma onay kapısını atlamaz. SOAR case no opsiyonel (elle açılan bir
-    rapor bir case'e hiç bağlı olmayabilir)."""
+    modüllerle tutarlı olarak aynı Açıldı → İncelemede → Onay Bekliyor →
+    Kapandı akışından geçer; manuel oluşturma onay kapısını atlamaz. SOAR
+    case no opsiyonel (elle açılan bir rapor bir case'e hiç bağlı olmayabilir)."""
     import json
     data  = request.json or {}
     title = str(data.get("title", "")).strip()
@@ -1464,12 +1573,14 @@ def create_incident_report():
         if isinstance(im, dict) and im.get("filename")
     ]
 
+    affected_assets = _parse_affected_assets(data.get("affected_assets"))
+
     case_id = str(data.get("xsoar_case_id", "")).strip() or None
     db = get_db()
     if case_id:
         dup = db.execute(
             "SELECT id FROM incident_reports WHERE xsoar_case_id=? AND status!=? ORDER BY id LIMIT 1",
-            (case_id, STATUS_REJECTED),
+            (case_id, INCIDENT_STATUS_CLOSED),
         ).fetchone()
         if dup:
             return jsonify({
@@ -1481,12 +1592,13 @@ def create_incident_report():
     cur = db.execute("""
         INSERT INTO incident_reports
           (xsoar_case_id, xsoar_url, title, environment, reporter,
-           sections, images, status, created_at, updated_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+           sections, images, affected_assets, status, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
     """, (
         case_id, build_xsoar_url(case_id) if case_id else None,
         title, str(data.get("environment", "")).strip(), session.get("username", ""),
-        json.dumps(sections), json.dumps(images), "Taslak", now, now,
+        json.dumps(sections), json.dumps(images), json.dumps(affected_assets),
+        INCIDENT_STATUS_OPEN, now, now,
     ))
     db.commit()
     new_row = db.execute("SELECT * FROM incident_reports WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -1511,17 +1623,17 @@ def list_incident_reports():
 @app.route("/api/incident-reports/<int:item_id>", methods=["PUT"])
 @login_required
 def update_incident_report(item_id):
-    """XSOAR'dan gelen içerik bozuk/eksik olabilir — bir analist Taslak
-    durumundaki raporu serbestçe düzenleyebilir (onaylanmış/reddedilmiş
-    raporlar kilitli)."""
+    """XSOAR'dan gelen içerik bozuk/eksik olabilir — bir analist Açıldı veya
+    İncelemede durumundaki raporu serbestçe düzenleyebilir (onaya gönderilmiş/
+    kapanmış raporlar kilitli)."""
     import json
     data = request.json or {}
     db   = get_db()
     row  = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
-    if row["status"] != "Taslak":
-        return jsonify({"error": "Sadece 'Taslak' durumundaki olay raporları düzenlenebilir."}), 400
+    if row["status"] not in (INCIDENT_STATUS_OPEN, STATUS_INCIDENT_REVIEW):
+        return jsonify({"error": "Sadece 'Açıldı' veya 'İncelemede' durumundaki olay raporları düzenlenebilir."}), 400
 
     def sv(key, fallback=""):
         v = data.get(key)
@@ -1532,7 +1644,7 @@ def update_incident_report(item_id):
     if case_changed:
         dup = db.execute(
             "SELECT id FROM incident_reports WHERE xsoar_case_id=? AND id!=? AND status!=? ORDER BY id LIMIT 1",
-            (new_case_id, item_id, STATUS_REJECTED),
+            (new_case_id, item_id, INCIDENT_STATUS_CLOSED),
         ).fetchone()
         if dup:
             return jsonify({"error": f"Bu SOAR Case ID ({new_case_id}) için zaten başka bir olay raporu var: #{dup['id']}."}), 409
@@ -1551,67 +1663,116 @@ def update_incident_report(item_id):
     if images is None:
         images = json.loads(row["images"] or "[]")
 
+    affected_assets_in = data.get("affected_assets")
+    if affected_assets_in is not None:
+        affected_assets = _parse_affected_assets(affected_assets_in)
+    else:
+        affected_assets = json.loads(row["affected_assets"] or "[]")
+
     now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     db.execute("""
         UPDATE incident_reports SET
           xsoar_case_id=?, xsoar_url=?, title=?, environment=?,
-          sections=?, images=?, updated_at=?
+          sections=?, images=?, affected_assets=?, updated_at=?
         WHERE id=?
     """, (
         new_case_id,
         build_xsoar_url(new_case_id) if case_changed else row["xsoar_url"],
         sv("title"), sv("environment"),
-        json.dumps(sections), json.dumps(images), now, item_id,
+        json.dumps(sections), json.dumps(images), json.dumps(affected_assets), now, item_id,
     ))
     db.commit()
     updated = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
     write_audit("EDIT_INCIDENT", "incident", item_id, f"Başlık: {updated['title']}")
     return jsonify(dict(updated))
 
-@app.route("/api/incident-reports/<int:item_id>/validate", methods=["POST"])
+@app.route("/api/incident-reports/<int:item_id>/start-review", methods=["POST"])
 @login_required
-def validate_incident_report(item_id):
+def start_incident_review(item_id):
+    """Açıldı → İncelemede: bir analist raporu yazmaya/düzenlemeye başlar.
+    Onay gerektirmez (Tune/UC/Hunt'ın claim'i gibi) — sadece kimin baktığını
+    audit log'a düşürür, ayrı bir 'atanan analist' alanı tutmuyoruz."""
     db  = get_db()
     row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
-    if row["status"] != "Taslak":
-        return jsonify({"error": "Sadece 'Taslak' durumundaki olay raporları onaylanabilir."}), 400
+    if row["status"] != INCIDENT_STATUS_OPEN:
+        return jsonify({"error": "Sadece 'Açıldı' durumundaki olay raporları incelemeye alınabilir."}), 400
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("UPDATE incident_reports SET status=?, updated_at=? WHERE id=?",
+               (STATUS_INCIDENT_REVIEW, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    write_audit("START_INCIDENT_REVIEW", "incident", item_id, f"Başlık: {row['title']}")
+    return jsonify(dict(updated))
+
+@app.route("/api/incident-reports/<int:item_id>/submit-for-approval", methods=["POST"])
+@login_required
+def submit_incident_for_approval(item_id):
+    """İncelemede → Onay Bekliyor: analist yazımı bitirip kıdemli analist
+    kuyruğuna gönderir. Rapor bu noktadan sonra analist için kilitlenir."""
+    db  = get_db()
+    row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_INCIDENT_REVIEW:
+        return jsonify({"error": "Sadece 'İncelemede' durumundaki olay raporları onaya gönderilebilir."}), 400
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("UPDATE incident_reports SET status=?, updated_at=? WHERE id=?",
+               (STATUS_INCIDENT_PENDING, now, item_id))
+    db.commit()
+    updated = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    write_audit("SUBMIT_INCIDENT_FOR_APPROVAL", "incident", item_id, f"Başlık: {row['title']}")
+    return jsonify(dict(updated))
+
+@app.route("/api/incident-reports/<int:item_id>/validate", methods=["POST"])
+@login_required
+def validate_incident_report(item_id):
+    """Onay Bekliyor → Kapandı: kıdemli analist raporu onaylayıp kapatır."""
+    db  = get_db()
+    row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Kayıt bulunamadı"}), 404
+    if row["status"] != STATUS_INCIDENT_PENDING:
+        return jsonify({"error": "Sadece 'Onay Bekliyor' durumundaki olay raporları kapatılabilir."}), 400
     if not is_senior():
         return jsonify({"error": "Onay için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
     note  = (request.json or {}).get("validation_note", "").strip()
     uname = session.get("username", "")
     now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    db.execute("""UPDATE incident_reports SET status='Onaylandı',
+    db.execute("""UPDATE incident_reports SET status=?,
                   validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
-               (uname, now, note, now, item_id))
+               (INCIDENT_STATUS_CLOSED, uname, now, note, now, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
-    write_audit("APPROVE_INCIDENT", "incident", item_id, f"Başlık: {row['title']}")
+    write_audit("CLOSE_INCIDENT", "incident", item_id, f"Başlık: {row['title']}")
     return jsonify(dict(updated))
 
 @app.route("/api/incident-reports/<int:item_id>/reject-validation", methods=["POST"])
 @login_required
 def reject_incident_report(item_id):
+    """Onay Bekliyor → İncelemede: kıdemli analist bir sorun bulur, notla
+    birlikte revizyon için analiste geri gönderir. Hunt'ın sonuç-onayı
+    reddiyle aynı desen — bu artık terminal bir 'Reddedildi' değil, döngüsel."""
     db  = get_db()
     row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
-    if row["status"] != "Taslak":
-        return jsonify({"error": "Sadece 'Taslak' durumundaki olay raporları reddedilebilir."}), 400
+    if row["status"] != STATUS_INCIDENT_PENDING:
+        return jsonify({"error": "Sadece 'Onay Bekliyor' durumundaki olay raporları revizyona gönderilebilir."}), 400
     if not is_senior():
-        return jsonify({"error": "Red için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
+        return jsonify({"error": "Bu işlem için Kıdemli Analist veya Müdür onay seviyesi gereklidir."}), 403
     note = (request.json or {}).get("validation_note", "").strip()
     if not note:
-        return jsonify({"error": "Red gerekçesi zorunludur."}), 400
+        return jsonify({"error": "Gerekçe zorunludur."}), 400
     uname = session.get("username", "")
     now   = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    db.execute("""UPDATE incident_reports SET status='Reddedildi',
+    db.execute("""UPDATE incident_reports SET status=?,
                   validated_by=?, validated_at=?, validation_note=?, updated_at=? WHERE id=?""",
-               (uname, now, note, now, item_id))
+               (STATUS_INCIDENT_REVIEW, uname, now, note, now, item_id))
     db.commit()
     updated = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
-    write_audit("REJECT_INCIDENT", "incident", item_id, f"Başlık: {row['title']} | Gerekçe: {note[:80]}")
+    write_audit("RETURN_INCIDENT_FOR_REVISION", "incident", item_id, f"Başlık: {row['title']} | Gerekçe: {note[:80]}")
     return jsonify(dict(updated))
 
 @app.route("/api/incident-reports/<int:item_id>", methods=["DELETE"])
@@ -3126,6 +3287,17 @@ def export_data():
         ("Detection Dönüşüm Oranı (%)",        hunt_prog["hunt_detection_conversion_rate"]),
         ("Toplam Hunt Süresi (saat)" + (f" — {exp_month}" if exp_month else " — Tüm Zamanlar"),
          hunt_prog["hunt_total_hours"]),
+        ("Güvenlik Önerisi Sayısı",         hunt_prog["hunt_recommendations_count"]),
+        ("Hunt'tan Açılan Use-Case Sayısı", hunt_prog["hunt_ucs_from_hunt"]),
+        ("", ""),
+    ]
+    incident_stats = get_incident_stats(exp_month or None)
+    kpi_rows += [
+        ("── OLAY RAPORU ──", ""),
+        ("Toplam Olay Raporu" + (f" — {exp_month}" if exp_month else " — Tüm Zamanlar"),
+         incident_stats["incident_total"]),
+        ("Toplam Etkilenen Varlık" + (f" — {exp_month}" if exp_month else " — Tüm Zamanlar"),
+         incident_stats["incident_affected_assets_total"]),
         ("", ""),
         ("Dışa Aktarım Tarihi",       date.today().isoformat()),
         ("Uygulama Versiyonu",        f"v{APP_VERSION}"),
@@ -3228,6 +3400,7 @@ def monthly_report():
 
     # SOC-CMM tarzı hunt programı metrikleri (bkz. get_hunt_program_stats)
     kpi.update(get_hunt_program_stats(month or None))
+    kpi.update(get_incident_stats(month or None))
 
     # ── Records for tables ─────────────────────────────────────────────────
     # O ay açılan VEYA o ay tamamlanan kayıtlar (liste endpoint'leri/Excel'le
@@ -3398,14 +3571,14 @@ def hunt_report_pdf(item_id):
 @app.route("/incident-reports/<int:item_id>/report/pdf")
 @login_required
 def incident_report_pdf(item_id):
-    """Onaylanmış bir olay raporunu PDF olarak üretir. Sadece status ==
-    'Onaylandı' için — Hunt PDF export'uyla (Faz 6) aynı altyapı/desen."""
+    """Kapanmış bir olay raporunu PDF olarak üretir. Sadece status ==
+    'Kapandı' için — Hunt PDF export'uyla (Faz 6) aynı altyapı/desen."""
     db  = get_db()
     row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
     if not row:
         return jsonify({"error": "Kayıt bulunamadı"}), 404
-    if row["status"] != "Onaylandı":
-        return jsonify({"error": "Sadece 'Onaylandı' durumundaki olay raporları için PDF alınabilir."}), 400
+    if row["status"] != INCIDENT_STATUS_CLOSED:
+        return jsonify({"error": "Sadece 'Kapandı' durumundaki olay raporları için PDF alınabilir."}), 400
 
     import json as _j
 

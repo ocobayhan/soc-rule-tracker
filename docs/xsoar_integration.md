@@ -130,11 +130,13 @@ bir hata döner.
 
 ## Davranış
 
-- Oluşan rapor **`status = "Taslak"`** ile açılır — XSOAR'dan gelen veri
+- Oluşan rapor **`status = "Açıldı"`** ile açılır — XSOAR'dan gelen veri
   bozuk/eksik olabileceğinden, doğrudan nihai rapor haline gelmez: bir
-  analist SOC Tracker üzerinde başlığı/bölümleri/görselleri serbestçe
-  düzenleyebilir, ardından bir Kıdemli Analist/Müdür Onaylar veya (zorunlu
-  gerekçe notuyla) Reddeder.
+  analist SOC Tracker üzerinde başlığı/bölümleri/görselleri/etkilenen
+  varlıkları serbestçe düzenleyebilir (Açıldı veya İncelemede durumundayken),
+  yazımı bitirince onaya gönderir; bir Kıdemli Analist/Müdür kapatır veya
+  (zorunlu gerekçe notuyla) İncelemede'ye geri gönderir. Tam akış: Açıldı →
+  İncelemede → Onay Bekliyor → Kapandı (bkz. `docs/rbac.md`).
 - `xsoar_url`, Tuning'le aynı mekanizmayla (bkz. "SOAR Case URL Şablonu"
   bölümü) `xsoar_case_id`'den otomatik oluşturulur.
 - Audit log'a `CREATE_INCIDENT_XSOAR` aksiyonu ile, bölüm/görsel sayısı ve
@@ -145,9 +147,9 @@ bir hata döner.
   `"sections": "[{\"heading\": ...}]"`) — playbook bu alanları okuyup bir
   şey yapacaksa ikinci bir `json.loads()` gerekir.
 - **Mükerrer case koruması:** Tuning'le aynı kural — gönderilen
-  `xsoar_case_id` için zaten aktif (`Reddedildi` olmayan) bir olay raporu
+  `xsoar_case_id` için zaten aktif (`Kapandı` olmayan) bir olay raporu
   varsa yeni kayıt açılmaz, `409` + `{"existing_id": ..., "duplicate": true}`
-  döner. Reddedilmiş bir case için gönderim yine yeni rapor açar.
+  döner. Kapanmış bir case için gönderim yine yeni rapor açar.
 
 ## Örnek İstek
 
@@ -177,9 +179,9 @@ curl -X POST https://<sunucu>:9897/api/integrations/xsoar/incident-report \
 Ana webhook "tek çağrıda hepsi birden" mantığıyla çalışır (rapor + tüm
 görseller aynı istekte). Bunun dışında, bir case için **ayrı ayrı, farklı
 zamanlarda** görsel eklemek isteyen playbook'lar için ayrı, daha hafif bir
-uç nokta da var — raporun durumuna bakılmaksızın çalışır (Taslak, Onaylandı
-veya Reddedildi fark etmez; geç gelen ek kanıt senaryosu için bilinçli
-tercih).
+uç nokta da var — raporun durumuna bakılmaksızın çalışır (Açıldı, İncelemede,
+Onay Bekliyor veya Kapandı fark etmez; geç gelen ek kanıt senaryosu için
+bilinçli tercih).
 
 ### Uç Nokta
 
@@ -206,7 +208,7 @@ Kimlik doğrulama ana webhook'la aynı (`X-API-Key`).
   çünkü tek görsel gönderiliyor, atlanacak bir "isteğin geri kalanı" yok.
 - Audit log'a `ADD_INCIDENT_IMAGE_XSOAR` aksiyonu ile, hangi etiketle
   eklendiği ve raporun güncel toplam görsel sayısı detayında yazılır.
-- **Not:** Bir analist Taslak durumundaki bir raporu SOC Tracker
+- **Not:** Bir analist Açıldı/İncelemede durumundaki bir raporu SOC Tracker
   arayüzünden düzenleyip kaydettiğinde, o ana kadar eklenmiş tüm
   görsellerin etiketleri (`1`, `1a` dahil) olduğu gibi korunur —
   sıralama sadece görsel silinip eklendiğinde değişir.
@@ -225,7 +227,7 @@ curl -X POST https://<sunucu>:9897/api/integrations/xsoar/incident-report/image 
 
 ## PDF Export (2026-08-16)
 
-Onaylanmış (`Onaylandı`) bir olay raporu, `GET /incident-reports/<id>/report/pdf`
+Kapanmış (`Kapandı`) bir olay raporu, `GET /incident-reports/<id>/report/pdf`
 (oturum gerektirir, webhook'un konusu değil — SOC Tracker arayüzündeki "PDF
 İndir" butonu bunu çağırır) ile Hunt raporuyla aynı desende (Montserrat
 font, kurum logosu, sabit görsel sınırları) PDF'e çevrilebilir. Her görsel

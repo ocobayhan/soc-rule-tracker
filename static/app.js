@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v43
+   SOC Tracker — Frontend  v44
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -341,6 +341,10 @@ async function loadKPI() {
     set("kpi-hunt-pendingval",   d.hunt_pending_validation);
     set("kpi-hunt-resultpending", d.hunt_result_pending);
     set("kpi-hunt-rejected",     d.hunt_rejected);
+    set("kpi-hunt-recommendations", d.hunt_recommendations_count);
+    set("kpi-hunt-ucs",             d.hunt_ucs_from_hunt);
+    set("kpi-hunt-planned-rate",    (d.hunt_planned_executed_rate ?? 0) + "%");
+    set("kpi-hunt-total-hours",     d.hunt_total_hours);
   } catch (_) {}
 }
 
@@ -1313,8 +1317,9 @@ function openValidateModal(type, id) {
   const label = type === "tune" ? r.rule_name : (type === "usecase" ? (r.usecase_description || "").slice(0, 80) : (type === "incident" ? r.title : (r.hunt_title || r.hunt_subject)));
   document.getElementById("validate-type").value = type;
   document.getElementById("validate-id").value   = id;
-  document.getElementById("validate-desc").textContent =
-    `"${label}" talebinin geçerliliğini onaylıyor musunuz? Reddederseniz talep "Reddedildi" olarak kapanır.`;
+  document.getElementById("validate-desc").textContent = type === "incident"
+    ? `"${label}" olay raporunu onaylıyor musunuz? Onaylarsanız rapor "Kapandı" olur. Reddederseniz gerekçenizle birlikte "İncelemede"ye geri döner.`
+    : `"${label}" talebinin geçerliliğini onaylıyor musunuz? Reddederseniz talep "Reddedildi" olarak kapanır.`;
   document.getElementById("validate-note").value = "";
   document.getElementById("validate-error").style.display = "none";
   document.getElementById("validate-modal").style.display = "flex";
@@ -1829,6 +1834,10 @@ const ACTION_TR = {
   "APPROVE_INCIDENT":       "Olay raporu onaylandı",
   "REJECT_INCIDENT":        "Olay raporu reddedildi",
   "DELETE_INCIDENT":        "Olay raporu silindi",
+  "START_INCIDENT_REVIEW":         "Olay raporu incelemeye alındı",
+  "SUBMIT_INCIDENT_FOR_APPROVAL":  "Olay raporu onaya gönderildi",
+  "CLOSE_INCIDENT":                "Olay raporu kapatıldı",
+  "RETURN_INCIDENT_FOR_REVISION":  "Olay raporu revizyona gönderildi",
 };
 const ACTION_CLS = {
   "LOGIN": "audit-login",
@@ -1853,6 +1862,10 @@ const ACTION_CLS = {
   "APPROVE_INCIDENT": "audit-close",
   "REJECT_INCIDENT": "audit-delete",
   "DELETE_INCIDENT": "audit-delete",
+  "START_INCIDENT_REVIEW": "audit-claim",
+  "SUBMIT_INCIDENT_FOR_APPROVAL": "audit-edit",
+  "CLOSE_INCIDENT": "audit-close",
+  "RETURN_INCIDENT_FOR_REVISION": "audit-delete",
 };
 // Audit Log filtre kategorileri — hangi action'ın hangi kategoriye girdiği
 // app.py'deki AUDIT_CATEGORIES ile eşleşmeli (bkz. docs/audit_logging.md).
@@ -3258,12 +3271,13 @@ const INCIDENT_COLUMNS = [
   { index: 3, key: "xsoar_case_id", label: "Case No",      filterType: "text" },
   { index: 4, key: "environment",   label: "Ortam",        filterType: "select" },
   { index: 5, key: "reporter",      label: "Raporlayan",   filterType: "text" },
-  { index: 6, key: "status",        label: "Durum",        filterType: "select" },
-  { index: 7, key: "created_at",    label: "Tarih",        filterType: "text" },
+  { index: 6, key: "_affected_asset_types", label: "Etkilenen Varlık", filterType: "select" },
+  { index: 7, key: "status",        label: "Durum",        filterType: "select" },
+  { index: 8, key: "created_at",    label: "Tarih",        filterType: "text" },
 ];
 
-const INCIDENT_CLS = { "Taslak": "status-pending", "Onaylandı": "status-success", "Reddedildi": "status-rejected" };
-const INCIDENT_DOT = { "Taslak": "dot-pending",     "Onaylandı": "dot-success",   "Reddedildi": "dot-rejected" };
+const INCIDENT_CLS = { "Açıldı": "status-open", "İncelemede": "status-reviewing", "Onay Bekliyor": "status-tuned", "Kapandı": "status-done" };
+const INCIDENT_DOT = { "Açıldı": "dot-open",     "İncelemede": "dot-reviewing",    "Onay Bekliyor": "dot-tuned",    "Kapandı": "dot-done" };
 
 function sortIncident(col) {
   incidentSortDir = incidentSortCol === col ? incidentSortDir * -1 : 1;
@@ -3283,6 +3297,12 @@ async function loadIncidents() {
   if (status) p.set("status", status);
   try {
     incidentRows = await apiFetch(`/api/incident-reports?${p}`);
+    incidentRows.forEach(r => {
+      let assets = [];
+      try { assets = JSON.parse(r.affected_assets || "[]"); if (!Array.isArray(assets)) assets = []; } catch {}
+      r._affected_asset_count = assets.length;
+      r._affected_asset_types = [...new Set(assets.map(a => a.type).filter(Boolean))].sort().join(", ");
+    });
     buildColumnFilterRow("incident", incidentRows);
     renderIncidentRows();
   } catch (e) { console.error(e); }
@@ -3298,21 +3318,39 @@ function clearIncidentFilters() {
 }
 
 function incidentActionBtns(r) {
-  const isDraft = r.status === "Taslak";
   let btns = "";
-  if (isDraft) {
-    btns += `<button class="btn-action-claim" onclick="openIncidentEditModal(${r.id})">Düzenle</button> `;
-    if (IS_SENIOR) {
-      btns += `<button class="btn-action-close" onclick="openValidateModal('incident', ${r.id})">Onayla / Reddet</button> `;
-    }
+  if (r.status === "Açıldı") {
+    btns += `<button class="btn-action-claim" onclick="startIncidentReview(${r.id})">İncelemeye Başla</button> `;
+    btns += `<button class="btn-icon" title="Düzenle" onclick="openIncidentEditModal(${r.id})">&#9998;</button> `;
   }
-  if (r.status === "Onaylandı") {
+  if (r.status === "İncelemede") {
+    btns += `<button class="btn-action-close" onclick="submitIncidentForApproval(${r.id})">Onaya Gönder</button> `;
+    btns += `<button class="btn-icon" title="Düzenle" onclick="openIncidentEditModal(${r.id})">&#9998;</button> `;
+  }
+  if (r.status === "Onay Bekliyor" && IS_SENIOR) {
+    btns += `<button class="btn-action-close" onclick="openValidateModal('incident', ${r.id})">Onayla / Reddet</button> `;
+  }
+  if (r.status === "Kapandı") {
     btns += `<a class="btn-icon" title="PDF İndir" href="/incident-reports/${r.id}/report/pdf" target="_blank" style="color:var(--red)">&#8681;</a> `;
   }
   if (USER_ROLE === "admin" || USER_ROLE === "user" || USER_ROLE === "settings") {
     btns += `<button class="btn-icon danger" onclick="deleteIncident(${r.id})" title="Sil">&#128465;</button>`;
   }
   return btns || '<span class="text-muted">—</span>';
+}
+
+async function startIncidentReview(id) {
+  try {
+    await apiFetch(`/api/incident-reports/${id}/start-review`, { method: "POST" });
+    loadIncidents();
+  } catch (e) { alert(e.message); }
+}
+
+async function submitIncidentForApproval(id) {
+  try {
+    await apiFetch(`/api/incident-reports/${id}/submit-for-approval`, { method: "POST" });
+    loadIncidents();
+  } catch (e) { alert(e.message); }
 }
 
 function renderIncidentRows() {
@@ -3335,6 +3373,7 @@ function renderIncidentRows() {
     <td class="td-truncate" style="font-size:11px" title="${esc(r.xsoar_case_id || '')}">${r.xsoar_case_id ? esc(r.xsoar_case_id) : '<span class="text-muted">—</span>'}</td>
     <td class="td-truncate" title="${esc(r.environment || '')}">${r.environment ? esc(r.environment) : '<span class="text-muted">—</span>'}</td>
     <td class="td-truncate" title="${esc(r.reporter)}">${esc(displayName(r.reporter))}</td>
+    <td class="text-muted" title="${esc(r._affected_asset_types || '')}">${r._affected_asset_count ? `${r._affected_asset_count} varlık` : '<span class="text-muted">—</span>'}</td>
     <td>${badge(r.status, INCIDENT_CLS)}</td>
     <td class="text-muted">${fmtDate(r.created_at)}</td>
     <td style="white-space:nowrap">${incidentActionBtns(r)}</td>
@@ -3370,6 +3409,36 @@ function addIncidentSection() {
   if (els.length) els[els.length - 1].focus();
 }
 function removeIncidentSection(i) { _incidentSections.splice(i, 1); renderIncidentSections(); }
+
+const INCIDENT_ASSET_TYPES = ["Makine/Bilgisayar", "Kullanıcı Hesabı", "Sunucu", "E-posta Hesabı", "Uygulama/Servis", "Diğer"];
+let _incidentAssets = [];   // [{name, type}]
+
+function renderIncidentAssets() {
+  const list = document.getElementById("incident-asset-list");
+  if (!list) return;
+  list.innerHTML = _incidentAssets.map((a, i) => `
+    <div class="mitre-entry">
+      <div class="mitre-entry-header">
+        <input type="text" class="form-input input-sm" style="max-width:240px;font-weight:500"
+               placeholder="Varlık adı…" value="${esc(a.name)}"
+               oninput="_incidentAssets[${i}].name=this.value"/>
+        <button type="button" class="btn-icon danger" style="margin-left:auto;font-size:11px"
+                onclick="removeIncidentAsset(${i})">&#x2715;</button>
+      </div>
+      <select class="form-input input-sm" style="margin-top:6px"
+        onchange="_incidentAssets[${i}].type=this.value">
+        <option value="">— Tür seçin —</option>
+        ${INCIDENT_ASSET_TYPES.map(t => `<option value="${esc(t)}" ${a.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}
+      </select>
+    </div>`).join("");
+}
+function addIncidentAsset() {
+  _incidentAssets.push({ name: "", type: "" });
+  renderIncidentAssets();
+  const els = document.querySelectorAll("#incident-asset-list input[type=text]");
+  if (els.length) els[els.length - 1].focus();
+}
+function removeIncidentAsset(i) { _incidentAssets.splice(i, 1); renderIncidentAssets(); }
 
 function renderIncidentGallery() {
   const gallery = document.getElementById("incident-image-gallery");
@@ -3413,6 +3482,8 @@ function openIncidentCreateModal() {
   renderIncidentSections();
   _incidentImages = [];
   renderIncidentGallery();
+  _incidentAssets = [];
+  renderIncidentAssets();
 
   document.getElementById("incident-edit-image-paste").value = "";
   document.getElementById("incident-edit-modal-error").style.display = "none";
@@ -3421,7 +3492,7 @@ function openIncidentCreateModal() {
 
 function openIncidentEditModal(id) {
   const r = incidentRows.find(x => x.id === id); if (!r) return;
-  if (r.status !== "Taslak") { alert("Sadece Taslak durumundaki olay raporları düzenlenebilir."); return; }
+  if (!["Açıldı", "İncelemede"].includes(r.status)) { alert("Sadece Açıldı veya İncelemede durumundaki olay raporları düzenlenebilir."); return; }
   document.getElementById("incident-edit-modal-title").textContent = "Olay Raporunu Düzenle";
   document.getElementById("incident-edit-id").value       = id;
   document.getElementById("incident-edit-title").value    = r.title || "";
@@ -3440,6 +3511,12 @@ function openIncidentEditModal(id) {
     if (!Array.isArray(_incidentImages)) _incidentImages = [];
   } catch { _incidentImages = []; }
   renderIncidentGallery();
+
+  try {
+    _incidentAssets = JSON.parse(r.affected_assets || "[]");
+    if (!Array.isArray(_incidentAssets)) _incidentAssets = [];
+  } catch { _incidentAssets = []; }
+  renderIncidentAssets();
 
   document.getElementById("incident-edit-image-paste").value = "";
   document.getElementById("incident-edit-modal-error").style.display = "none";
@@ -3464,6 +3541,7 @@ async function saveIncidentEdit() {
       order: (img.order !== undefined && img.order !== null) ? img.order : i + 1,
       filename: img.filename,
     })),
+    affected_assets: _incidentAssets.filter(a => (a.name || "").trim()),
   };
   try {
     if (id) {
@@ -3505,6 +3583,12 @@ async function openIncidentDetail(id) {
       }).join("")}
     </div>` : "";
 
+  let assets = [];
+  try { assets = JSON.parse(r.affected_assets || "[]"); if (!Array.isArray(assets)) assets = []; } catch {}
+  const assetsHtml = assets.length ? `
+    <div class="detail-section-title" style="margin-top:12px">Etkilenen Varlıklar</div>
+    <div class="detail-value">${assets.map(a => `${esc(a.name)}${a.type ? ` (${esc(a.type)})` : ""}`).join(", ")}</div>` : "";
+
   const body = `
     <div class="detail-grid">
       ${detailRow("Case No", r.xsoar_case_id ? "#" + r.xsoar_case_id : "")}
@@ -3512,22 +3596,30 @@ async function openIncidentDetail(id) {
       ${detailRow("Raporlayan", displayName(r.reporter))}
       ${detailRow("Durum", r.status)}
       ${detailRow("Tarih", fmtDate(r.created_at))}
-      ${r.validated_by ? detailRow("Onaylayan/Reddeden", displayName(r.validated_by)) : ""}
-      ${r.validated_at ? detailRow("Onay/Red Tarihi", fmtDate(r.validated_at)) : ""}
+      ${r.validated_by ? detailRow("İşlemi Yapan", displayName(r.validated_by)) : ""}
+      ${r.validated_at ? detailRow("İşlem Tarihi", fmtDate(r.validated_at)) : ""}
     </div>
-    ${r.validation_note ? `<div class="detail-section-title" style="margin-top:12px">Onay/Red Notu</div><div class="detail-value">${esc(r.validation_note)}</div>` : ""}
+    ${r.validation_note ? `<div class="detail-section-title" style="margin-top:12px">Son İnceleme Notu</div><div class="detail-value">${esc(r.validation_note)}</div>` : ""}
     <div class="detail-section-title" style="margin-top:12px">Bölümler</div>
     ${sectionsHtml}
+    ${assetsHtml}
     ${imagesHtml}
   `;
   document.getElementById("incident-detail-body").innerHTML = body;
 
   const footer = document.getElementById("incident-detail-footer");
-  if (r.status === "Taslak") {
+  if (r.status === "Açıldı") {
     footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
-      <button class="btn btn-secondary" onclick="closeIncidentDetailModal();openIncidentEditModal(${r.id})">Düzenle</button>` +
+      <button class="btn btn-secondary" onclick="closeIncidentDetailModal();openIncidentEditModal(${r.id})">Düzenle</button>
+      <button class="btn btn-primary" onclick="closeIncidentDetailModal();startIncidentReview(${r.id})">İncelemeye Başla</button>`;
+  } else if (r.status === "İncelemede") {
+    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
+      <button class="btn btn-secondary" onclick="closeIncidentDetailModal();openIncidentEditModal(${r.id})">Düzenle</button>
+      <button class="btn btn-primary" onclick="closeIncidentDetailModal();submitIncidentForApproval(${r.id})">Onaya Gönder</button>`;
+  } else if (r.status === "Onay Bekliyor") {
+    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>` +
       (IS_SENIOR ? `<button class="btn btn-primary" onclick="closeIncidentDetailModal();openValidateModal('incident', ${r.id})">Onayla / Reddet</button>` : "");
-  } else if (r.status === "Onaylandı") {
+  } else if (r.status === "Kapandı") {
     footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
       <a class="btn btn-primary" href="/incident-reports/${r.id}/report/pdf" target="_blank">&#128424; PDF İndir</a>`;
   } else {

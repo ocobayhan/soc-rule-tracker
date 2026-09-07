@@ -52,6 +52,7 @@ Proaktif tehdit avı taleplerinin ve raporlarının yönetimi.
 7. Rapor Durumu (Taslak / Tamamlandı)
 
 **Durumlar:** Ön Onay Bekliyor → Açık → İnceleniyor → Sonuç Onayı Bekliyor → Tamamlandı (veya revizyon → İnceleniyor) / İptal — ön onay reddedilirse Reddedildi (bkz. "Onay Süreci" altta). İptal, sonuç onayı gerektirmez.  
+**Program KPI'ları** (`get_hunt_program_stats()`, Dashboard/`/report`/Excel ortak kaynağı): planlanan/gerçekleşen hunt oranı, detection önerisi→kurala dönüşüm oranı, toplam hunt saati, güvenlik önerisi sayısı (2026-09-07), hunt'tan açılan Use-Case sayısı (2026-09-07, durumdan bağımsız basit sayım — Prod'da Aktif'e ulaşanları sayan ayrı "kurala dönüşüm" metriğiyle karıştırılmamalı)  
 
 ### 4. Olay Raporu (Incident Report) — 2026-08-16 (Faz W)
 XSOAR'da bir case bir playbook tarafından "incident" olarak kapatıldığında oluşturulan, veya bir analistin doğrudan SOC Tracker'dan elle açtığı, küçük/minik kapsamlı olay raporlarının yönetimi. RBAC gate'i yok (Tune/UC/Hunt gibi tüm giriş yapmış kullanıcılara açık).
@@ -59,9 +60,10 @@ XSOAR'da bir case bir playbook tarafından "incident" olarak kapatıldığında 
 **Alanlar:** Başlık, Ortam, Raporlayan, Case No (`xsoar_case_id`/`xsoar_url`, opsiyonel — elle açılan bir rapor bir case'e bağlı olmayabilir)  
 **Bölümler:** Sabit alan listesi yok — `sections` bir `{heading, text}` dizisi, başlıkları playbook/analist serbestçe belirler (yapılandırılmış ama esnek bir "olay raporu" formatı)  
 **Görseller:** Sıralı bir galeri (`images`, `sections`'dan bağımsız) — "Görsel 1, Görsel 2…" diye sırayla numaralanır; hem ekranda hem PDF çıktısında aynı etiketle görünür ki bölüm metinlerindeki "Görsel N" atıfları doğru görsele karşılık gelsin  
-**Durumlar:** Taslak (webhook veya elle açılır, düzenlenebilir) → Onaylandı / Reddedildi (zorunlu gerekçe notuyla) — bkz. "Onay Süreci" altta, Hunt'ın sonuç-onayı kapısıyla aynı mantık ("bitmiş içerik iyi mi")  
-**XSOAR entegrasyonu:** Webhook ile otomatik rapor açılır (`xsoar_case_id`, `title`, `environment`, `sections`, opsiyonel `images`/`requested_by`), ayrıca mevcut bir rapora sonradan tek tek görsel eklemek için ayrı bir webhook — bkz. `docs/xsoar_integration.md`, "Olay Raporu Webhook'u" bölümü  
-**PDF export:** Sadece Onaylandı raporlar için — Hunt'ın PDF altyapısıyla (logo, Montserrat font, sabit görsel sınırı) aynı desen
+**Etkilenen Varlıklar** (2026-09-07): `affected_assets` bir `{name, type}` dizisi, opsiyonel — `type` sabit bir listeden (Makine/Bilgisayar, Kullanıcı Hesabı, Sunucu, E-posta Hesabı, Uygulama/Servis, Diğer). Tabloda sayı olarak gösterilir, türe göre filtrelenebilir; Dashboard'da değil ama `/report` ve Excel "KPI Özeti"nde toplam rapor/toplam varlık sayısı olarak yer alır (KPI için sayılabilir/filtrelenebilir olması gerektiğinden serbest metin değil, yapılandırılmış veri)  
+**Durumlar** (2026-09-07 itibarıyla): **Açıldı** (webhook veya elle açılır) → **İncelemede** (analist yazıma başlar, düzenleyebilir) → **Onay Bekliyor** (analist onaya gönderir, kilitlenir) → **Kapandı** (Kıdemli Analist/Müdür onaylar). Onay Bekliyor'da sorun bulunursa zorunlu gerekçe notuyla İncelemede'ye geri döner — Hunt'ın sonuç-onayı kapısıyla aynı mantık ("bitmiş içerik iyi mi"), ayrı bir terminal "Reddedildi" durumu yok. Açıldı→İncelemede ve İncelemede→Onay Bekliyor onay gerektirmez, herhangi bir kullanıcı yapabilir; sadece Onay Bekliyor'dan çıkış `is_senior()` gerektirir  
+**XSOAR entegrasyonu:** Webhook ile otomatik rapor açılır (`xsoar_case_id`, `title`, `environment`, `sections`, opsiyonel `images`/`affected_assets`/`requested_by`), ayrıca mevcut bir rapora sonradan tek tek görsel eklemek için ayrı bir webhook — bkz. `docs/xsoar_integration.md`, "Olay Raporu Webhook'u" bölümü  
+**PDF export:** Sadece Kapandı raporlar için — Hunt'ın PDF altyapısıyla (logo, Montserrat font, sabit görsel sınırı) aynı desen
 
 ---
 
