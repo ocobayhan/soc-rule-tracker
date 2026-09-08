@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=11.19"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.20"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -14,14 +14,17 @@
 <div class="app">
 
 <!-- SIDEBAR -->
-<aside class="sidebar">
+<aside class="sidebar" id="app-sidebar">
   <div class="sidebar-logo">
     <svg class="sidebar-logo-icon" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12 2.2 4.5 5v6.1c0 5.1 3.3 9.1 7.5 10.7 4.2-1.6 7.5-5.6 7.5-10.7V5L12 2.2z" fill="#5E6AD2"/>
       <path d="M8.7 12.3l2.1 2.1 4.5-4.5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    SOC Tracker
+    <span class="sidebar-logo-text">SOC Tracker</span>
   </div>
+  <button class="nav-btn sidebar-toggle" id="sidebar-toggle-btn" onclick="toggleSidebar()" title="Daralt">
+    <span class="sidebar-toggle-icon">&#8249;</span> <span class="nav-label">Daralt</span>
+  </button>
   <div class="sidebar-search">
     <input type="text" id="global-search" class="sidebar-search-input" autocomplete="off"
            placeholder="Ara: case, kural, konu…"/>
@@ -29,44 +32,44 @@
   </div>
   <div class="sidebar-section">
     {% if not is_settings %}
-    <button class="nav-btn active" data-tab="dashboard">
-      <span>&#9632;</span> Dashboard
+    <button class="nav-btn active" data-tab="dashboard" title="Dashboard">
+      <span>&#9632;</span> <span class="nav-label">Dashboard</span>
     </button>
     {% endif %}
-    <button class="nav-btn {% if is_settings %}{% else %}{% endif %}" data-tab="tuning">
-      <span>&#8801;</span> Kural Tuning
+    <button class="nav-btn {% if is_settings %}{% else %}{% endif %}" data-tab="tuning" title="Kural Tuning">
+      <span>&#8801;</span> <span class="nav-label">Kural Tuning</span>
     </button>
-    <button class="nav-btn" data-tab="usecase">
-      <span>&#9670;</span> Use-Case
+    <button class="nav-btn" data-tab="usecase" title="Use-Case">
+      <span>&#9670;</span> <span class="nav-label">Use-Case</span>
     </button>
-    <button class="nav-btn" data-tab="threat-hunting">
-      <span>&#9650;</span> Threat Hunting
+    <button class="nav-btn" data-tab="threat-hunting" title="Threat Hunting">
+      <span>&#9650;</span> <span class="nav-label">Threat Hunting</span>
     </button>
-    <button class="nav-btn" data-tab="incident">
-      <span>&#9873;</span> Olay Raporları
+    <button class="nav-btn" data-tab="incident" title="Olay Raporları">
+      <span>&#9873;</span> <span class="nav-label">Olay Raporları</span>
     </button>
     {% if user_role == "admin" %}
-    <button class="nav-btn" data-tab="auditlog">
-      <span>&#9776;</span> Audit Log
+    <button class="nav-btn" data-tab="auditlog" title="Audit Log">
+      <span>&#9776;</span> <span class="nav-label">Audit Log</span>
     </button>
     {% endif %}
     {% if is_settings or user_role == "admin" %}
     <div class="sidebar-divider"></div>
-    <button class="nav-btn{% if is_settings %} active{% endif %}" data-tab="settings">
-      <span>&#9881;</span> Ayarlar
+    <button class="nav-btn{% if is_settings %} active{% endif %}" data-tab="settings" title="Ayarlar">
+      <span>&#9881;</span> <span class="nav-label">Ayarlar</span>
     </button>
     {% endif %}
   </div>
   <div class="sidebar-bottom">
     <div class="sidebar-divider"></div>
-    <div class="sidebar-user">
+    <div class="sidebar-user" title="{{ display_name(username) }}">
       <div class="sidebar-user-avatar" id="sidebar-user-avatar">{{ display_name(username)[0]|upper if username else "?" }}</div>
       <span id="sidebar-user-name">{{ display_name(username) }}</span>
     </div>
-    <a href="/logout" class="nav-btn" style="color:var(--text-2)">
-      <span>&#8617;</span> Çıkış
+    <a href="/logout" class="nav-btn" style="color:var(--text-2)" title="Çıkış">
+      <span>&#8617;</span> <span class="nav-label">Çıkış</span>
     </a>
-    <div class="text-muted" style="font-size:10px;text-align:center;padding:6px 0 2px;opacity:0.6">v{{ app_version }}</div>
+    <div class="text-muted sidebar-version" style="font-size:10px;text-align:center;padding:6px 0 2px;opacity:0.6">v{{ app_version }}</div>
   </div>
 </aside>
 
@@ -1836,6 +1839,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=47"></script>
+<script src="/static/app.js?v=48"></script>
 </body>
 </html>

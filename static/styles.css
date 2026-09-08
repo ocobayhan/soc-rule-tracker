@@ -112,6 +112,7 @@ input, select, textarea { font-family: inherit; }
   flex-direction: column;
   padding: 12px 0;
   overflow-y: auto;
+  transition: width 0.15s ease;
   scrollbar-width: none;
 }
 .sidebar::-webkit-scrollbar { display: none; }
@@ -228,6 +229,25 @@ input, select, textarea { font-family: inherit; }
   border: 0.5px solid var(--border-md);
   flex-shrink: 0;
 }
+
+/* ---- Daraltılabilir sidebar (2026-09-08) — sadece ikonlar görünür,
+   çalışma alanı genişler. Tercih localStorage'a yazılır (toggleSidebar(),
+   app.js), sayfa yeniden açıldığında korunur. ---- */
+.sidebar-toggle-icon { display: inline-block; transition: transform 0.15s ease; }
+.sidebar.collapsed { width: 52px; }
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .sidebar-logo-text,
+.sidebar.collapsed .sidebar-search,
+.sidebar.collapsed .sidebar-label,
+.sidebar.collapsed #sidebar-user-name,
+.sidebar.collapsed .sidebar-version {
+  display: none;
+}
+.sidebar.collapsed .sidebar-toggle-icon { transform: rotate(180deg); }
+.sidebar.collapsed .sidebar-logo { justify-content: center; padding: 2px 0 14px; }
+.sidebar.collapsed .nav-btn { justify-content: center; padding: 6px; }
+.sidebar.collapsed .sidebar-user { justify-content: center; padding: 8px 0; }
+.sidebar.collapsed .sidebar-divider { margin: 8px 10px; }
 
 /* ============================================================ MAIN CONTENT */
 .main-content {

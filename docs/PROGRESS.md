@@ -1718,6 +1718,41 @@ bırakıldı.)
   export testinin kendisinin ürettiği gerçek, meşru bir `EXPORT_INCIDENT_
   PDF` audit kaydından, audit_log'a hiç elle dokunulmadı).
 
+### Takip (2026-09-08) — Daraltılabilir sidebar
+
+Kullanıcı sol navigasyonun daraltılıp genişletilebilmesini istedi —
+daraltılınca sadece ikonlar görünüp çalışma alanı genişlesin.
+
+- `.sidebar`'a bir `.collapsed` durumu eklendi (210px → 52px, `width`
+  geçişi animasyonlu). Logo yazısı, madde etiketleri (Dashboard/Kural
+  Tuning/vb.), kullanıcı adı, arama kutusu ve sürüm satırı daraltılmış
+  halde gizleniyor; her nav butonuna zaten `title` eklendi ki üzerine
+  gelince (tooltip) hangi sayfa olduğu görünsün. Tercih `localStorage`'a
+  yazılıyor (`toggleSidebar()`), sayfa yeniden açılınca korunuyor.
+  Daraltma butonunun oku (‹) CSS `transform:rotate(180deg)` ile yön
+  değiştiriyor, ayrı bir ikon/metin yönetimine gerek kalmadı.
+- **Uygulamadan önce koddan bulunan gerçek bir hata**: sekme geçiş
+  listener'ı `document.querySelectorAll(".nav-btn")` ile TÜM
+  `.nav-btn` sınıflı elemanlara bağlanıyordu — ama "Çıkış" linki de
+  (ve şimdi yeni daraltma butonu da) aynı sınıfı görsel tutarlılık için
+  kullanıyor, `data-tab` özniteliği olmadan. Tıklanınca
+  `document.getElementById("tab-undefined")` `null` dönüp
+  `.classList.add()` çağrısı JS hatası fırlatıyordu — "Çıkış" linkinde
+  zararsızdı (sayfa zaten `/logout`'a gidiyordu) ama yeni daraltma
+  butonunda ÇALIŞAN sekmenin `active` sınıfını kaybedip hiç geri
+  koymayacağı, dolayısıyla tüm içerik alanının boş kalacağı bir
+  senaryo olurdu. Seçici `.nav-btn[data-tab]`'e daraltılarak düzeltildi.
+- **Doğrulandı:** gerçek tarayıcıda ekran görüntüsüyle (bu ortamda
+  `getComputedStyle().width` daraltılmış halde bile eski değeri
+  döndürüyordu — daha önce bu oturumda kurulan "pane görünür değilken
+  layout'a bağlı computed-style'lar güvenilmez" desenine uyularak
+  ekran görüntüsüne geçildi, sidebar'ın gerçekten sadece ikonlara
+  daraldığı doğrulandı) daraltma/genişletme, sayfa yenilemesinde
+  tercihin korunduğu, ve `.nav-btn[data-tab]`/`.nav-btn:not([data-tab])`
+  sayımlarının (7/2) beklenen ayrımı doğru yaptığı doğrulandı. Konsol
+  hatasız. `node -c`/Jinja2 kontrolleri geçti. `app.js` `v48`'e,
+  `styles.css` sürüm sorgu dizesi `v11.20`'ye yükseltildi.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

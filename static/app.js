@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v47
+   SOC Tracker — Frontend  v48
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -12,7 +12,11 @@ const HAS_DASHBOARD = !!document.getElementById("tab-dashboard");
 // ---------------------------------------------------------------------------
 // Tab navigation
 // ---------------------------------------------------------------------------
-document.querySelectorAll(".nav-btn").forEach(btn => {
+// [data-tab] şart — "Çıkış" linki ve sidebar daraltma butonu da .nav-btn
+// sınıfını (görsel tutarlılık için) kullanıyor ama gerçek bir sekme değil;
+// data-tab'sız bir düğmede document.getElementById("tab-undefined") null
+// dönüp .classList.add çağrısı hata fırlatırdı (2026-09-08, koddan bulundu).
+document.querySelectorAll(".nav-btn[data-tab]").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
@@ -27,6 +31,27 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     if (btn.dataset.tab === "auditlog")       loadAuditLog();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sidebar daraltma/genişletme — tercih localStorage'da kalıcı (2026-09-08)
+// ---------------------------------------------------------------------------
+function toggleSidebar() {
+  const sb = document.getElementById("app-sidebar");
+  if (!sb) return;
+  const collapsed = sb.classList.toggle("collapsed");
+  try { localStorage.setItem("soc_sidebar_collapsed", collapsed ? "1" : "0"); } catch {}
+  const btn = document.getElementById("sidebar-toggle-btn");
+  if (btn) btn.title = collapsed ? "Genişlet" : "Daralt";
+}
+(function restoreSidebarState() {
+  let collapsed = false;
+  try { collapsed = localStorage.getItem("soc_sidebar_collapsed") === "1"; } catch {}
+  if (!collapsed) return;
+  const sb = document.getElementById("app-sidebar");
+  if (sb) sb.classList.add("collapsed");
+  const btn = document.getElementById("sidebar-toggle-btn");
+  if (btn) btn.title = "Genişlet";
+})();
 
 // ---------------------------------------------------------------------------
 // Helpers
