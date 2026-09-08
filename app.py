@@ -2379,7 +2379,10 @@ def list_hunts():
     if p.get("month"):
         q += " AND (strftime('%Y-%m',created_at)=? OR strftime('%Y-%m',completed_at)=?)"; args += [p["month"], p["month"]]
     if p.get("environment"):
-        q += " AND environment=?"; args.append(p["environment"])
+        # hunt_environment gerçek (çoklu-seçim, virgülle ayrılmış) kolon;
+        # eski/legacy "environment" kolonu her zaman boş — INSTR deseni
+        # UC'nin zaten kullandığıyla aynı (2026-09-08).
+        q += " AND INSTR(',' || hunt_environment || ',', ',' || ? || ',') > 0"; args.append(p["environment"])
     if p.get("status"):
         q += " AND status=?"; args.append(p["status"])
     q += " ORDER BY id DESC"

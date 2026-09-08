@@ -77,6 +77,26 @@ function esc(str) {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Arama/filtre karşılaştırmaları için küçük harfe çevirme. Sadece Türkçe
+ * büyük noktalı İ (U+0130) için hedefli düzeltme yapar — düz `.toLowerCase()`
+ * bunu "i" + ayrı bir kombine nokta karakterine ayırıyor, düz "istanbul" arama
+ * terimiyle asla eşleşmiyor. Tam Türkçe locale'ine (`toLocaleLowerCase("tr")`)
+ * GEÇİLMİYOR — o da düz ASCII "I"yı "ı"ya çeviriyor, bu da İngilizce/teknik
+ * terimlerde ("MITRE", "UNIQUE" vb.) aramayı bozuyor (canlı testte
+ * doğrulandı: "MITRE" ıTRE'ye dönüşüp arama terimiyle eşleşmiyordu). */
+function trLower(s) { return String(s).replace(/İ/g, "i").toLowerCase(); }
+
+/** Serbest metin aramasında bir alanın ham değeriyle VEYA görünen adıyla
+ * (displayName) eşleşip eşleşmediğini kontrol eder — kullanıcı tabloda
+ * "Ahmet Yılmaz" görüp aynı ismi arayınca ham kullanıcı adına ("ayilmaz")
+ * göre eşleşme yapılmadığı için 0 sonuç dönmesin diye (2026-09-08). */
+function fieldMatchesTerm(row, field, term) {
+  const raw = row[field];
+  if (raw == null) return false;
+  if (trLower(String(raw)).includes(term)) return true;
+  return trLower(displayName(raw)).includes(term);
+}
+
 /** created_at "YYYY-MM-DD HH:MM:SS" son N ay içinde mi? (varsayılan tarih filtresi) */
 function withinLastMonths(dateStr, months) {
   if (!dateStr) return true;
@@ -372,7 +392,7 @@ function populateEnvDropdowns() {
     const el = document.getElementById(id); if (!el) return;
     el.innerHTML = envOpsSimple;
   });
-  ["tune-filter-env","uc-filter-env","incident-filter-env","hunt-filter-status-env"].forEach(id => {
+  ["tune-filter-env","uc-filter-env","incident-filter-env","hunt-filter-env"].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const cur = el.value;
     el.innerHTML = `<option value="">Tüm Ortamlar</option>` +
@@ -870,8 +890,8 @@ let ucSearch   = "";
 let tuneShowAll = false;
 let ucShowAll   = false;
 
-function onTuneSearch(val) { tuneSearch = val.toLowerCase(); renderTuneRows(); }
-function onUCSearch(val)   { ucSearch   = val.toLowerCase(); renderUCRows();  }
+function onTuneSearch(val) { tuneSearch = trLower(val); renderTuneRows(); }
+function onUCSearch(val)   { ucSearch   = trLower(val); renderUCRows();  }
 
 function toggleTuneRange() { tuneShowAll = !tuneShowAll; renderTuneRows(); }
 function toggleUCRange()   { ucShowAll   = !ucShowAll;   renderUCRows();  }
@@ -1019,7 +1039,13 @@ function buildColumnFilterRow(tableKey, rows) {
   const current = _colFilters[tableKey];
   row.innerHTML = `<td></td>` + columns.map(c => {
     if (c.filterType === "select") {
-      const values = [...new Set(rows.map(r => r[c.key]).filter(Boolean))].sort((a,b) => String(a).localeCompare(String(b), "tr"));
+      // Virgülle ayrılmış çoklu değerli hücreler (örn. "DEV,PROD") tek bir
+      // seçenek olarak değil, her değer ayrı seçenek olarak listelenir —
+      // aksi halde sadece bir kombinasyonda geçen bir değer (örn. sadece
+      // "Server,Workstation" içindeki "Workstation") hiç seçilemez olurdu
+      // (2026-09-08).
+      const values = [...new Set(rows.flatMap(r => String(r[c.key] || "").split(/,\s*/)).filter(Boolean))]
+        .sort((a,b) => String(a).localeCompare(String(b), "tr"));
       const sel = current[c.key] || "";
       return `<td><select class="col-filter-input" onchange="onColumnFilterInput('${tableKey}','${c.key}',this.value)">
         <option value="">Tümü</option>
@@ -1034,7 +1060,7 @@ function buildColumnFilterRow(tableKey, rows) {
 }
 
 function onColumnFilterInput(tableKey, key, value) {
-  _colFilters[tableKey][key] = value.trim().toLowerCase();
+  _colFilters[tableKey][key] = trLower(value.trim());
   if (tableKey === "tune")     renderTuneRows();
   if (tableKey === "uc")       renderUCRows();
   if (tableKey === "hunt")     renderHuntRows();
@@ -1048,7 +1074,14 @@ function matchesColumnFilters(tableKey, row) {
     const val = filters[c.key];
     if (!val) return true;
     const cell = row[c.key];
-    return cell != null && String(cell).toLowerCase().includes(val);
+    if (cell == null) return false;
+    if (c.filterType === "select") {
+      // Tam/üye eşleşmesi — "PROD" seçince "PROD-DR" sızmasın, çoklu
+      // değerli hücrelerde (virgülle ayrılmış) sıra farketmesin (2026-09-08).
+      return trLower(String(cell)).split(/,\s*/).includes(val);
+    }
+    if (trLower(String(cell)).includes(val)) return true;
+    return trLower(displayName(cell)).includes(val);
   });
 }
 
@@ -1111,11 +1144,12 @@ const TUNE_COLUMNS = [
 ];
 
 function renderTuneRows() {
-  const TUNE_FIELDS = ["rule_name","tune_reason","reporter","environment","tuning_analyst","how_tuned"];
+  const TUNE_FIELDS = ["rule_name","tune_reason","reporter","environment","tuning_analyst","how_tuned","xsoar_case_id"];
+  const tuneOtherFilterActive = !!tuneSearch || Object.values(_colFilters.tune).some(Boolean);
   const visible = tuneRows
-    .filter(r => !tuneSearch || TUNE_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(tuneSearch)))
+    .filter(r => !tuneSearch || TUNE_FIELDS.some(f => fieldMatchesTerm(r, f, tuneSearch)))
     .filter(r => matchesColumnFilters("tune", r))
-    .filter(r => tuneShowAll || withinLastMonths(r.created_at, 6));
+    .filter(r => tuneShowAll || tuneOtherFilterActive || withinLastMonths(r.created_at, 6));
   updateRangeToggleUI("tune", tuneShowAll);
   const sorted = clientSort(visible, tuneSortCol, tuneSortDir);
   updateSortUI("tune", tuneSortCol, tuneSortDir);
@@ -1164,6 +1198,7 @@ function clearTuneFilters() {
   const s = document.getElementById("tune-search"); if (s) s.value = "";
   tuneSearch = "";
   tuneShowAll = false;
+  _colFilters.tune = {};
   loadTune();
 }
 
@@ -1612,10 +1647,11 @@ const UC_COLUMNS = [
 
 function renderUCRows() {
   const UC_FIELDS = ["usecase_description","requester","environment","rule_name","rule_author","notes"];
+  const ucOtherFilterActive = !!ucSearch || Object.values(_colFilters.uc).some(Boolean);
   const visible = ucRows
-    .filter(r => !ucSearch || UC_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(ucSearch)))
+    .filter(r => !ucSearch || UC_FIELDS.some(f => fieldMatchesTerm(r, f, ucSearch)))
     .filter(r => matchesColumnFilters("uc", r))
-    .filter(r => ucShowAll || withinLastMonths(r.created_at, 6));
+    .filter(r => ucShowAll || ucOtherFilterActive || withinLastMonths(r.created_at, 6));
   updateRangeToggleUI("uc", ucShowAll);
   const sorted = clientSort(visible, ucSortCol, ucSortDir);
   updateSortUI("uc", ucSortCol, ucSortDir);
@@ -1663,6 +1699,7 @@ function clearUCFilters() {
   const s = document.getElementById("uc-search"); if (s) s.value = "";
   ucSearch = "";
   ucShowAll = false;
+  _colFilters.uc = {};
   loadUC();
 }
 
@@ -2503,7 +2540,7 @@ let huntSortCol = "id";
 let huntSortDir = -1;
 let huntShowAll = false;
 
-function onHuntSearch(val) { huntSearch = val.toLowerCase(); renderHuntRows(); }
+function onHuntSearch(val) { huntSearch = trLower(val); renderHuntRows(); }
 function toggleHuntRange() { huntShowAll = !huntShowAll; renderHuntRows(); }
 
 function sortHunt(col) {
@@ -2560,11 +2597,12 @@ const HUNT_COLUMNS = [
 ];
 
 function renderHuntRows() {
-  const HUNT_FIELDS = ["hunt_title","hunt_subject","requester","assigned_analyst","environment","notes"];
+  const HUNT_FIELDS = ["hunt_title","hunt_subject","requester","assigned_analyst","hunt_environment","notes"];
+  const huntOtherFilterActive = !!huntSearch || Object.values(_colFilters.hunt).some(Boolean);
   const visible = huntRows
-    .filter(r => !huntSearch || HUNT_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(huntSearch)))
+    .filter(r => !huntSearch || HUNT_FIELDS.some(f => fieldMatchesTerm(r, f, huntSearch)))
     .filter(r => matchesColumnFilters("hunt", r))
-    .filter(r => huntShowAll || withinLastMonths(r.created_at, 6));
+    .filter(r => huntShowAll || huntOtherFilterActive || withinLastMonths(r.created_at, 6));
   updateRangeToggleUI("hunt", huntShowAll);
   const sorted = clientSort(visible, huntSortCol, huntSortDir);
   updateSortUI("hunt", huntSortCol, huntSortDir);
@@ -2591,10 +2629,12 @@ function renderHuntRows() {
 async function loadHunt() {
   const p = new URLSearchParams();
   const month  = document.getElementById("hunt-filter-month")?.value;
+  const env    = document.getElementById("hunt-filter-env")?.value;
   const status = document.getElementById("hunt-filter-status")?.value;
   if (month)  p.set("month", month);
+  if (env)    p.set("environment", env);
   if (status) p.set("status", status);
-  if (month || status) huntShowAll = true;
+  if (month || env || status) huntShowAll = true;
   try {
     huntRows = await apiFetch(`/api/hunt?${p}`);
     buildColumnFilterRow("hunt", huntRows);
@@ -2603,12 +2643,13 @@ async function loadHunt() {
 }
 
 function clearHuntFilters() {
-  ["hunt-filter-month","hunt-filter-status"].forEach(id => {
+  ["hunt-filter-month","hunt-filter-env","hunt-filter-status"].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = "";
   });
   const s = document.getElementById("hunt-search"); if (s) s.value = "";
   huntSearch = "";
   huntShowAll = false;
+  _colFilters.hunt = {};
   loadHunt();
 }
 
@@ -3604,7 +3645,7 @@ function sortIncident(col) {
   renderIncidentRows();
 }
 
-function onIncidentSearch(val) { incidentSearch = val.toLowerCase(); renderIncidentRows(); }
+function onIncidentSearch(val) { incidentSearch = trLower(val); renderIncidentRows(); }
 function toggleIncidentRange() { incidentShowAll = !incidentShowAll; renderIncidentRows(); }
 
 async function loadIncidents() {
@@ -3636,6 +3677,7 @@ function clearIncidentFilters() {
   const s = document.getElementById("incident-search"); if (s) s.value = "";
   incidentSearch = "";
   incidentShowAll = false;
+  _colFilters.incident = {};
   loadIncidents();
 }
 
@@ -3676,11 +3718,12 @@ async function submitIncidentForApproval(id) {
 }
 
 function renderIncidentRows() {
-  const FIELDS = ["title", "xsoar_case_id", "reporter", "environment"];
+  const FIELDS = ["title", "xsoar_case_id", "reporter", "environment", "sections", "_affected_asset_types"];
+  const incidentOtherFilterActive = !!incidentSearch || Object.values(_colFilters.incident).some(Boolean);
   const visible = incidentRows
-    .filter(r => !incidentSearch || FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(incidentSearch)))
+    .filter(r => !incidentSearch || FIELDS.some(f => fieldMatchesTerm(r, f, incidentSearch)))
     .filter(r => matchesColumnFilters("incident", r))
-    .filter(r => incidentShowAll || withinLastMonths(r.created_at, 6));
+    .filter(r => incidentShowAll || incidentOtherFilterActive || withinLastMonths(r.created_at, 6));
   updateRangeToggleUI("incident", incidentShowAll);
   const sorted = clientSort(visible, incidentSortCol, incidentSortDir);
   updateSortUI("incident", incidentSortCol, incidentSortDir);

@@ -1561,6 +1561,74 @@ soruldu — istenmedi, kapsam sadece bilgi gösterimi ile sınırlı tutuldu.
   audit_log'a hiç yazılmadı; zincir yine de kontrol edildi, geçerli
   (271 kayıt, 271 zincirli).
 
+### Takip (2026-09-08) — Uygulama geneli filtreleme düzeltmeleri
+
+Kullanıcı "filtrelemede hata var mı bak" dedi. 3 paralel Explore ajanı +
+bizzat gerçek verilerle yapılan canlı tarayıcı testleriyle 4 modülün
+(Tune/UC/Hunt/Incident) hepsini etkileyen birkaç gerçek hata bulundu ve
+düzeltildi:
+
+- **Arama/kolon filtreleri görünen adı değil ham kullanıcı adını
+  arıyordu.** Tabloda `displayName()` ile "Ahmet Yılmaz" gösterilirken
+  arama/filtre hep ham `username`'e bakıyordu — kullanıcı gördüğü ismi
+  aratınca 0 sonuç alıyordu. Yeni `fieldMatchesTerm()` yardımcısı hem ham
+  değeri hem `displayName()`'i dener; `matchesColumnFilters()`'a da aynı
+  mantık eklendi. Canlı testte doğrulandı: bir kullanıcıya geçici
+  `full_name` verilip görünen adla arama yapıldı, doğru kayıtlar çıktı.
+- **Türkçe büyük/küçük harf.** Arama/filtre yolları düz `.toLowerCase()`
+  kullanıyordu — "İstanbul" içeren bir kayıt düz "istanbul" aramasıyla
+  bulunamıyordu (İ, `.toLowerCase()`'de "i" + görünmez bir kombine nokta
+  karakterine ayrılıyor). Yeni `trLower()` yardımcısı SADECE İ'yi hedefli
+  düzeltiyor (`.replace(/İ/g,"i")` sonra `.toLowerCase()`) — tam Türkçe
+  locale'ine (`toLocaleLowerCase("tr")`) bilerek GEÇİLMEDİ, çünkü o da düz
+  ASCII "I"yı "ı"ya çevirip İngilizce/teknik terimlerde ("MITRE", "UNIQUE"
+  gibi) aramayı bozuyordu — bu regresyon uygulamadan önce canlı testte
+  yakalanıp düzeltildi.
+- **"Temizle" kolon filtrelerini hiç sıfırlamıyordu** (bizzat doğrulandı,
+  4 modülün hepsinde) — artık `clearXFilters()`'ların hepsi `_colFilters`'ı
+  da sıfırlıyor.
+- **Varsayılan 6 aylık filtre, aktif arama/kolon filtresiyle TAM eşleşen
+  eski bir kaydı bile gizliyordu** (bizzat doğrulandı) — hem "kayıt
+  yokmuş gibi" görünmesine hem kolon filtresi dropdown'ının 6 ay dışı bir
+  değeri sunup sonra "0 sonuç" vermesine yol açıyordu. Düzeltme: 6 aylık
+  kapak sadece HİÇBİR arama/kolon filtresi aktif değilken uygulanıyor —
+  kullanıcı bir şey arıyorsa/filtreliyorsa tarih kısıtlaması devre dışı
+  kalıyor, `xShowAll`'a dokunmadan (varsayılan görünüm hâlâ 6 ayla sınırlı
+  kalmaya devam ediyor).
+- **Threat Hunt'ta ortam filtresi tamamen kırıktı** — `/api/hunt` yanlış
+  kolonu (`environment` — her zaman boş) sorguluyordu, gerçek veri
+  `hunt_environment`'ta; ayrıca çoklu-seçim olduğu için `=` değil `INSTR`
+  gerekiyordu (UC'nin zaten kullandığı desen). Filtre çubuğundaki
+  `hunt-filter-status-env` select'i doğru dolduruluyordu ama gizliydi ve
+  hiç okunmuyordu — görünür yapılıp `hunt-filter-env` olarak (diğer 3
+  modülle tutarlı isim) yeniden adlandırıldı, `loadHunt()`/
+  `clearHuntFilters()`'a bağlandı. Canlı testte doğrulandı: gerçek bir
+  ortam seçilince doğru 3 kayıt geldi.
+- **Kolon filtrelerinde "seçim" tipi de aslında "içerir" eşleşmesi
+  yapıyordu** — "PROD" seçince "PROD-DR" sızabiliyordu, UC'nin çoklu-
+  seçim ortamında sıra farkı ("DEV,PROD" ≠ "PROD,DEV") eşleşmeyi
+  bozuyordu, Incident'ın `_affected_asset_types` gibi virgülle birleşik
+  alanlarında tek başına hiç görünmeyen bir değer dropdown'da seçilemez
+  hale geliyordu. `matchesColumnFilters` artık seçim tipi için hücreyi
+  virgülle ayırıp üye-eşleşmesi yapıyor; `buildColumnFilterRow` da
+  dropdown seçeneklerini birleşik string yerine ayrı değerler olarak
+  üretiyor. Canlı testte doğrulandı: çoklu tür içeren bir olay
+  raporunda tek bir türü seçince doğru eşleşti, dropdown'da türler ayrı
+  ayrı listelendi.
+- Tune aramasına Case No, Incident aramasına rapor bölüm metni ve
+  etkilenen varlık türü eklendi.
+- **Kritik not:** İlk `trLower()` denemesi tam Türkçe locale kullanıyordu
+  ve canlı testte "UNIQUE" gibi düz İngilizce kelimeleri bozduğu (ASCII
+  "I"yı "ı"ya çevirip arama terimiyle eşleşmemesine yol açtığı)
+  tespit edilip düzeltildi — uygulamadan önce yakalanan gerçek bir hata.
+- **Doğrulandı:** tüm düzeltmeler geçici debug hesabıyla, gerçek verilerle
+  (gerekli yerlerde geçici SQL ile eski tarihli/çoklu-değerli test
+  kayıtları oluşturup hemen sonra geri alınarak, audit_log'a hiç
+  dokunulmadan) canlı tarayıcıda test edildi. `node -c`/`py_compile`
+  sözdizimi kontrolleri geçti. Audit zinciri geçerli (271 kayıt, 271
+  zincirli — bu iş salt frontend/backend sorgu mantığı, audit_log'a
+  hiç yazmıyor).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
