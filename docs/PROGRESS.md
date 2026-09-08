@@ -1483,6 +1483,16 @@ token'ları, filtre mimarisi, compose-row CSS'i) uygulandı.
   varsayılan `opacity:0` olduğu doğrulandı. `app.js` `v46`'ya, `styles.css`
   sürüm sorgu dizesi `v11.18`'e yükseltildi. Audit zinciri geçerli (270
   kayıt, 270 zincirli).
+- **Ek not:** `design-system/` klasörü (uygulamanın taşınabilir UI kiti,
+  `soc-ui.css`/`soc-ui.js` — başka projelere kopyalanmak için, uygulamanın
+  kendisi tarafından kullanılmıyor) bu turdaki iki uygulanabilir düzeltmeyi
+  de aldı: kolon sürükleme dondurma mantığı (`soc-ui.js`) ve tablo başlığı
+  kontrast/arka plan + `.freq-mid`→`.freq-medium` (`soc-ui.css`). Kit ayrı
+  bir geçici sunucuda (python http.server) gerçek tarayıcıda doğrulandı.
+  Kitin `.list-item-row`'u hâlâ 2026-09-07/08'deki compose/settled iki
+  adımlı ekleme özelliğinden önceki (tek adımlı, hep açık kutu) hâlde —
+  bu daha büyük, ayrı bir taşıma kararı olduğu için bu turda kapsam dışı
+  bırakıldı, kullanıcıya bildirildi.
 
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 

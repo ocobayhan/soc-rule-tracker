@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker UI Kit — davranış yardımcıları  v1
+   SOC Tracker UI Kit — davranış yardımcıları  v2
    ------------------------------------------------------------
    soc-ui.css'teki class'ları kullanan projeler için framework-
    bağımsız, saf DOM tabanlı yardımcı fonksiyonlar. React/Vue gibi
@@ -72,6 +72,19 @@ function makeColumnsResizable(table) {
     handle.addEventListener("mousedown", e => {
       e.preventDefault();
       e.stopPropagation();
+
+      // Kolonlar karışık %/px genişlikte olabilir (bkz. soc-ui.css'teki
+      // "column widths" örnekleri) - table-layout:fixed ile birlikte tek
+      // bir kolonu px'e sabitlemek diğer % kolonların tabloyu yeniden
+      // bölüşmesine yol açar (alakasız kolonlar oynar). Sürükleme
+      // başlarken TÜM kolonları o anki genişliğine dondurup tabloyu tam
+      // deterministik hale getiriyoruz.
+      ths.forEach((otherTh, j) => {
+        if (j === 0 || j === ths.length - 1) return;
+        const w = otherTh.offsetWidth;
+        otherTh.style.width = w + "px";
+        if (cols[j]) cols[j].style.width = w + "px";
+      });
 
       const startX = e.pageX;
       const startW = th.offsetWidth;
