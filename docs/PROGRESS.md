@@ -1416,6 +1416,74 @@ ortam seçimleri — kullanıcının şikayetiyle ilgisiz, dokunulmadı.)
   kaydı temizlendi (audit_log'a dokunulmadı), audit zinciri geçerli
   (264 kayıt, 264 zincirli).
 
+### Takip (2026-09-08) — Kolon sürükleme, varsayılan tarih filtresi, renk/okunabilirlik, kutu tasarımı
+
+Kullanıcı uygulamayı kendi tarayıcısında test ederken 4 ayrı iyileştirme
+istedi; hepsi tek planda araştırılıp (3 paralel Explore ajanı: renk
+token'ları, filtre mimarisi, compose-row CSS'i) uygulandı.
+
+- **Kolon genişliği sürükleme hatası** — kök neden: tablolar
+  `table-layout:fixed` ama kolonlar karışık `%`/`px` genişlikte tanımlıydı;
+  tek bir kolonu px'e sabitlemek diğer `%` kolonların tabloyu yeniden
+  bölüşmesine yol açıyordu (alakasız kolonlar oynuyordu).
+  `makeColumnsResizable()`'ın `mousedown` handler'ının başına, o tablodaki
+  TÜM kolonların o anki genişliğini px'e sabitleyen bir döngü eklendi —
+  sürükleme başladığı an tablo tam deterministik hale geliyor, sadece
+  sürüklenen kolon değişiyor. Sadece `app.js`, CSS'e dokunulmadı.
+- **Varsayılan tarih filtresi (son 6 ay):** Tune/UC/Hunt/Olay Raporu
+  tablolarının hepsi client-side'a `withinLastMonths(created_at, 6)`
+  filtresi eklendi (mevcut arama/kolon-filtresi zincirine katılan bir
+  adım daha) — backend'e dokunulmadı, veri zaten tamamen client'a geliyordu.
+  Her filtre çubuğuna sessiz bir gizleme olmasın diye durumu gösteren VE
+  kaldıran tek bir "Tümünü Göster" / "Son 6 Aya Dön" toggle butonu eklendi.
+  Kullanıcı zaten var olan ay/ortam/durum filtresini uygulayıp
+  "Filtrele"ye basarsa kapak otomatik kalkıyor (`xShowAll=true`) — yoksa
+  eski bir ayı bilerek seçtiğinde 6 aylık kapak sonucu saklardı. "Temizle"
+  kapağı varsayılana döndürüyor.
+- **Renk paleti ve tablo başlığı düzeltmeleri** — kapsamlı bir yeniden
+  tasarım değil, ölçülmüş bir okunabilirlik sorunu + Explore ajanının
+  bulduğu gerçek hatalar: `.table th` `color:var(--text-3)` (kontrast
+  ~2.3:1, WCAG AA'nın yarısından az) arka plansız haldeyken `var(--text-2)`
+  + `background:var(--bg-tertiary)`'e çevrildi. `:root`'ta hiç
+  tanımlanmamış (görünmez/varsayılana düşen) 7 CSS değişkeni gerçek
+  token'lara bağlandı: `--bg-1`→`--bg-tertiary`, `--accent-blue`→`--blue`,
+  `--accent-green`→`--green`, `--danger`→`--red`, `--border-subtle`→
+  `--border`, `--text-muted`→`--text-2`, `--text-primary`→`--text-1`.
+  `FREQ_CLS`'in ürettiği `freq-medium` sınıfı hiç CSS'te yoktu ("Orta"
+  sıklık rozeti renksiz çıkıyordu) — CSS'teki `.freq-mid` `.freq-medium`
+  olarak yeniden adlandırıldı. `--accent-orange` (== `--amber`, ayrı bir
+  token) kaldırıldı, 11 inline kullanım `--amber`'e çevrildi. Audit zinciri
+  doğrulama kutusu ve yedek silme ikonu tema dışı renk/inline stil yerine
+  gerçek token'lara/`.btn-icon.danger` sınıfına bağlandı.
+- **Kutu içi düzen — kullanıcıya iki mockup gösterilip seçilen yön
+  ("belirgin düzenleme + hover"):** Aktif düzenlenen satır (`.compose-row`)
+  artık `--accent` renginde sol kenarlık + `--bg-secondary` zeminle
+  vurgulanıyor (tek taraflı kenarlıkla köşe çakışmasın diye sol köşeler
+  keskin). Yerleşmiş (settled) satırlardaki kalem/sil ikonları varsayılan
+  gizli, sadece satırın üzerine gelince beliriyor (Notion/Linear tarzı,
+  daha sade bir liste görünümü) — `renderComposeRow()` paylaşılan
+  fonksiyon olduğu için bu CSS değişikliği 6 listenin hepsine otomatik
+  yayıldı. Şimdiye kadar hiçbir compose alanı etiket kullanmıyordu (sadece
+  placeholder metni) — Bölümler/Etkilenen Varlıklar/Öneriler/Zafiyetler/
+  MITRE yöntem notu alanlarına mevcut `.form-group`/`.form-label` deseniyle
+  etiket eklendi.
+- **Doğrulandı:** `node -c`/Jinja2 sözdizimi kontrolleri; gerçek tarayıcıda
+  — kolon dondurma: tek bir `mousedown` dispatch'i TÜM kolonların
+  `style.width`'ini gerçek piksel değerlerine sabitlediği doğrulandı
+  (bu ortamda pixel-bazlı sürükleme testi güvenilmez olduğundan, önceki
+  oturumlarda kurulan desene uyularak state/DOM incelemesine geçildi);
+  tarih filtresi — mevcut bir olay raporunun `created_at`'i geçici olarak
+  6 aydan eski bir tarihe çekilip varsayılanda gizlendiği, "Tümünü
+  Göster"le çıktığı, sonra orijinal değere geri döndürüldüğü doğrulandı
+  (audit_log'a dokunulmadı); Filtrele/Temizle ile `xShowAll` doğru
+  set/reset oluyor; tablo başlığı `computed style` ile `#1C1C1C`/`#888888`
+  render ettiği doğrulandı; kutu tasarımı — yeni bölüm eklerken
+  `.compose-row`'un doğru kenarlık/zemin/köşe değerleriyle geldiği, onay
+  sonrası settled satırın etiketi doğru gösterdiği, aksiyon ikonlarının
+  varsayılan `opacity:0` olduğu doğrulandı. `app.js` `v46`'ya, `styles.css`
+  sürüm sorgu dizesi `v11.18`'e yükseltildi. Audit zinciri geçerli (270
+  kayıt, 270 zincirli).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

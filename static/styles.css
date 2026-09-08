@@ -34,8 +34,6 @@
   --teal:         #2DD4BF;
   --teal-subtle:  rgba(45,212,191,0.12);
 
-  --accent-orange: #E8963C;
-
   --font: Inter, system-ui, -apple-system, sans-serif;
   --r-sm: 5px;
   --r:    7px;
@@ -133,7 +131,7 @@ input, select, textarea { font-family: inherit; }
 .sidebar-search { padding: 0 12px 10px; }
 .sidebar-search-input {
   width: 100%;
-  background: var(--bg-1);
+  background: var(--bg-tertiary);
   border: 0.5px solid var(--border-md);
   border-radius: var(--r-sm);
   color: var(--text-1);
@@ -150,7 +148,7 @@ input, select, textarea { font-family: inherit; }
   width: 340px;
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--bg-1);
+  background: var(--bg-tertiary);
   border: 0.5px solid var(--border-md);
   border-radius: var(--r);
   box-shadow: 0 8px 28px rgba(0,0,0,0.35);
@@ -539,6 +537,9 @@ input, select, textarea { font-family: inherit; }
   font-size: 12px; cursor: pointer;
 }
 .btn-ghost-sm:hover { background: var(--bg-hover); color: var(--text-1); }
+/* Varsayılan tarih filtresi aktifken (son 6 ay) ve "Tümünü Göster"e
+   basılıp kapak kaldırılmışken durumu göstermek için (2026-09-08). */
+.range-toggle-active { background: var(--accent-subtle); color: var(--accent); border-color: rgba(94,106,210,.25); }
 .btn-copy-inline {
   background: none;
   color: var(--text-2);
@@ -599,8 +600,9 @@ input, select, textarea { font-family: inherit; }
   text-align: left;
   font-size: 10px;
   font-weight: 500;
-  color: var(--text-3);
-  padding: 0 10px 8px;
+  color: var(--text-2);
+  background: var(--bg-tertiary);
+  padding: 7px 10px 8px;
   border-bottom: 0.5px solid var(--border);
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -964,7 +966,7 @@ input, select, textarea { font-family: inherit; }
   margin-bottom: 18px;
 }
 .mywork-col {
-  background: var(--bg-1);
+  background: var(--bg-tertiary);
   border: 0.5px solid var(--border-md);
   border-radius: var(--r);
   padding: 12px 14px;
@@ -1004,7 +1006,7 @@ input, select, textarea { font-family: inherit; }
   margin-top: 4px;
 }
 .trend-card {
-  background: var(--bg-1);
+  background: var(--bg-tertiary);
   border: 0.5px solid var(--border-md);
   border-radius: var(--r);
   padding: 10px 12px;
@@ -1030,7 +1032,7 @@ input, select, textarea { font-family: inherit; }
   white-space: nowrap;
 }
 .freq-low    { background: var(--green-subtle);  color: var(--green); }
-.freq-mid    { background: var(--amber-subtle);  color: var(--amber); }
+.freq-medium { background: var(--amber-subtle);  color: var(--amber); }
 .freq-high   { background: var(--red-subtle);    color: var(--red); }
 
 /* ============================================================ ROLE BADGE */
@@ -1102,11 +1104,19 @@ input, select, textarea { font-family: inherit; }
    compose'a dönülebilir. .mitre-entry'nin üstüne biner (aynı kart görünümü). */
 .compose-row-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
 .compose-row-error { font-size: 11px; color: var(--red); margin-top: 6px; }
+/* Aktif düzenlenen satır sol kenarlıkla vurgulanır, ayrı bir zeminle
+   ayrışır (2026-09-08) - tek taraflı kenarlıkla köşe yuvarlağı çakışmasın
+   diye sol köşeler keskin bırakılıyor. */
+.compose-row { background: var(--bg-secondary); border-left: 3px solid var(--accent); border-radius: 0 var(--r) var(--r) 0; }
 .settled-row { display: flex; align-items: flex-start; gap: 8px; }
 .settled-row-body { flex: 1; min-width: 0; font-size: 12px; color: var(--text-1); white-space: pre-wrap; overflow-wrap: break-word; }
 .settled-row-body .settled-row-title { font-weight: 600; color: var(--text-1); margin-bottom: 2px; }
 .settled-row-body .settled-row-empty { color: var(--text-3); font-style: italic; }
-.settled-row-actions { display: flex; gap: 4px; flex-shrink: 0; }
+/* Kalem/sil ikonları sadece satırın üzerine gelince görünür (2026-09-08) -
+   yerleşmiş listeler daha sade görünür, Notion/Linear tarzı. */
+.settled-row-actions { display: flex; gap: 4px; flex-shrink: 0; opacity: 0; transition: opacity .12s; }
+.settled-row:hover .settled-row-actions,
+.settled-row-actions:focus-within { opacity: 1; }
 
 /* Column resize handle */
 .col-resize-handle {
@@ -1176,4 +1186,4 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 .list-item-row { display: flex; align-items: flex-start; gap: 6px; }
 .list-item-row textarea { flex: 1; }
 .list-item-row .btn-remove { flex-shrink: 0; padding: 4px 8px; font-size: 16px; line-height: 1; color: var(--text-3); background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
-.list-item-row .btn-remove:hover { color: var(--danger, #e5534b); border-color: var(--danger, #e5534b); }
+.list-item-row .btn-remove:hover { color: var(--red); border-color: var(--red); }

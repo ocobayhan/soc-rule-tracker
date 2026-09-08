@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=11.17"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.18"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -261,6 +261,7 @@
       </select>
       <button class="btn btn-secondary" onclick="loadTune()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearTuneFilters()">Temizle</button>
+      <button class="btn-ghost-sm range-toggle" id="tune-range-toggle" onclick="toggleTuneRange()">Tümünü Göster</button>
       <div class="col-toggle-wrap">
         <button class="btn-ghost-sm" onclick="toggleColumnPanel('tune', this)">&#9776; Kolonlar</button>
         <div class="col-toggle-panel" id="tune-col-panel" style="display:none"></div>
@@ -318,6 +319,7 @@
       </select>
       <button class="btn btn-secondary" onclick="loadUC()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearUCFilters()">Temizle</button>
+      <button class="btn-ghost-sm range-toggle" id="uc-range-toggle" onclick="toggleUCRange()">Tümünü Göster</button>
       <div class="col-toggle-wrap">
         <button class="btn-ghost-sm" onclick="toggleColumnPanel('uc', this)">&#9776; Kolonlar</button>
         <div class="col-toggle-panel" id="uc-col-panel" style="display:none"></div>
@@ -373,6 +375,7 @@
       </select>
       <button class="btn btn-secondary" onclick="loadHunt()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearHuntFilters()">Temizle</button>
+      <button class="btn-ghost-sm range-toggle" id="hunt-range-toggle" onclick="toggleHuntRange()">Tümünü Göster</button>
       <div class="col-toggle-wrap">
         <button class="btn-ghost-sm" onclick="toggleColumnPanel('hunt', this)">&#9776; Kolonlar</button>
         <div class="col-toggle-panel" id="hunt-col-panel" style="display:none"></div>
@@ -432,6 +435,7 @@
       </select>
       <button class="btn btn-secondary" onclick="loadIncidents()">Filtrele</button>
       <button class="btn-ghost-sm" onclick="clearIncidentFilters()">Temizle</button>
+      <button class="btn-ghost-sm range-toggle" id="incident-range-toggle" onclick="toggleIncidentRange()">Tümünü Göster</button>
       <div class="col-toggle-wrap">
         <button class="btn-ghost-sm" onclick="toggleColumnPanel('incident', this)">&#9776; Kolonlar</button>
         <div class="col-toggle-panel" id="incident-col-panel" style="display:none"></div>
@@ -920,15 +924,15 @@
       <div class="settings-date-fields" style="display:none">
         <div class="form-grid" style="margin-top:8px">
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">🔢 ID</label>
+            <label class="form-label" style="color:var(--amber)">🔢 ID</label>
             <input type="number" class="form-input" id="edit-tune-new-id" min="1"/>
           </div>
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma Tarihi</label>
+            <label class="form-label" style="color:var(--amber)">📅 Oluşturulma Tarihi</label>
             <input type="datetime-local" class="form-input" id="edit-tune-created-at"/>
           </div>
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">📅 Tamamlanma Tarihi</label>
+            <label class="form-label" style="color:var(--amber)">📅 Tamamlanma Tarihi</label>
             <input type="datetime-local" class="form-input" id="edit-tune-completed-at"/>
           </div>
         </div>
@@ -1090,15 +1094,15 @@
       <div class="settings-date-fields" style="display:none">
         <div class="form-grid" style="margin-top:8px">
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">🔢 ID</label>
+            <label class="form-label" style="color:var(--amber)">🔢 ID</label>
             <input type="number" class="form-input" id="edit-uc-new-id" min="1"/>
           </div>
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma Tarihi</label>
+            <label class="form-label" style="color:var(--amber)">📅 Oluşturulma Tarihi</label>
             <input type="datetime-local" class="form-input" id="edit-uc-created-at"/>
           </div>
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">📅 Tamamlanma Tarihi</label>
+            <label class="form-label" style="color:var(--amber)">📅 Tamamlanma Tarihi</label>
             <input type="datetime-local" class="form-input" id="edit-uc-completed-at"/>
           </div>
         </div>
@@ -1166,7 +1170,7 @@
       <!-- MITRE ATT&CK sınıflandırma -->
       <div class="form-group form-col-2" style="margin-top:12px">
         <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer">
-          <input type="checkbox" id="close-uc-mitre-check" onchange="toggleUCMitre()" style="width:16px;height:16px;accent-color:var(--accent-blue)"/>
+          <input type="checkbox" id="close-uc-mitre-check" onchange="toggleUCMitre()" style="width:16px;height:16px;accent-color:var(--blue)"/>
           MITRE ATT&amp;CK sınıflandırması yapıldı
         </label>
       </div>
@@ -1289,23 +1293,23 @@
       <div class="settings-date-fields" style="display:none">
         <div class="form-grid" style="margin-top:8px">
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">🔢 ID</label>
+            <label class="form-label" style="color:var(--amber)">🔢 ID</label>
             <input type="number" class="form-input" id="edit-hunt-new-id" min="1"/>
           </div>
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">📅 Oluşturulma</label>
+            <label class="form-label" style="color:var(--amber)">📅 Oluşturulma</label>
             <input type="datetime-local" class="form-input" id="edit-hunt-created-at"/>
           </div>
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">📅 Hunt Başlangıç</label>
+            <label class="form-label" style="color:var(--amber)">📅 Hunt Başlangıç</label>
             <input type="datetime-local" class="form-input" id="edit-hunt-started-at"/>
           </div>
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">📅 Tamamlanma</label>
+            <label class="form-label" style="color:var(--amber)">📅 Tamamlanma</label>
             <input type="datetime-local" class="form-input" id="edit-hunt-completed-at"/>
           </div>
           <div class="form-group">
-            <label class="form-label" style="color:var(--accent-orange)">📅 Rapor Güncellenme</label>
+            <label class="form-label" style="color:var(--amber)">📅 Rapor Güncellenme</label>
             <input type="datetime-local" class="form-input" id="edit-hunt-report-updated-at"/>
           </div>
         </div>
@@ -1462,7 +1466,7 @@
           <div id="uc-create-form" style="margin-top:12px;padding:12px;background:var(--bg-secondary);border-radius:6px;border:1px solid var(--border)">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
               <input type="checkbox" id="report-create-uc" onchange="toggleUcCreateFields()" style="width:14px;height:14px;accent-color:var(--accent)">
-              <label for="report-create-uc" style="font-size:13px;font-weight:500;color:var(--text-primary);cursor:pointer">
+              <label for="report-create-uc" style="font-size:13px;font-weight:500;color:var(--text-1);cursor:pointer">
                 Bu Hunt için Use-Case oluştur
               </label>
             </div>
@@ -1484,7 +1488,7 @@
                 </div>
               </div>
               <div style="margin-top:8px">
-                <label class="form-label" style="margin-bottom:4px">UC Açıklaması <span style="color:var(--text-muted);font-weight:400">(boş bırakılırsa Detection Detayı kullanılır)</span></label>
+                <label class="form-label" style="margin-bottom:4px">UC Açıklaması <span style="color:var(--text-2);font-weight:400">(boş bırakılırsa Detection Detayı kullanılır)</span></label>
                 <textarea class="form-input form-textarea" id="uc-create-description" rows="2"
                           placeholder="Use-Case tanımı…" style="min-height:60px"></textarea>
               </div>
@@ -1496,7 +1500,7 @@
       <!-- Keşfedilen Güvenlik Açıkları (opsiyonel) -->
       <div class="form-group form-col-2" style="margin-top:8px">
         <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
-          <span>Keşfedilen Güvenlik Açıkları <span style="color:var(--text-muted);font-weight:400">(opsiyonel)</span></span>
+          <span>Keşfedilen Güvenlik Açıkları <span style="color:var(--text-2);font-weight:400">(opsiyonel)</span></span>
           <button type="button" class="btn btn-sm" onclick="addVulnerability()" style="padding:2px 10px;font-size:12px">+ Ekle</button>
         </label>
         <div id="vuln-list" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
@@ -1780,6 +1784,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=45"></script>
+<script src="/static/app.js?v=46"></script>
 </body>
 </html>

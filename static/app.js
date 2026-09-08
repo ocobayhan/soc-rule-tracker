@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v45
+   SOC Tracker — Frontend  v46
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -75,6 +75,24 @@ function esc(str) {
   return String(str)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** created_at "YYYY-MM-DD HH:MM:SS" son N ay içinde mi? (varsayılan tarih filtresi) */
+function withinLastMonths(dateStr, months) {
+  if (!dateStr) return true;
+  const d = new Date(String(dateStr).replace(" ", "T"));
+  if (isNaN(d)) return true;
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  return d >= cutoff;
+}
+
+/** "Son 6 Ay" / "Tümünü Göster" toggle butonunun etiketini günceller. */
+function updateRangeToggleUI(prefix, showAll) {
+  const btn = document.getElementById(`${prefix}-range-toggle`);
+  if (!btn) return;
+  btn.textContent = showAll ? "Son 6 Aya Dön" : "Tümünü Göster";
+  btn.classList.toggle("range-toggle-active", showAll);
 }
 
 // ---------------------------------------------------------------------------
@@ -665,7 +683,7 @@ async function loadBackupList() {
         <td>
           <a href="/api/admin/backup/${encodeURIComponent(b.filename)}"
              class="btn-icon" title="İndir" download>&#8675;</a>
-          <button class="btn-icon" title="Sil" style="color:var(--red)"
+          <button class="btn-icon danger" title="Sil"
                   onclick="deleteBackup('${esc(b.filename)}')">&#10005;</button>
         </td>
       </tr>`;
@@ -802,8 +820,17 @@ let ucSortCol   = "id", ucSortDir   = 1;
 let tuneSearch = "";
 let ucSearch   = "";
 
+// Varsayılan tarih filtresi (2026-09-08): tablolar büyüdükçe kalabalık
+// olmasın diye varsayılan olarak son 6 ay gösterilir; kullanıcı "Tümünü
+// Göster"e basınca (veya ay/ortam/durum filtresi uygulayınca) kalkar.
+let tuneShowAll = false;
+let ucShowAll   = false;
+
 function onTuneSearch(val) { tuneSearch = val.toLowerCase(); renderTuneRows(); }
 function onUCSearch(val)   { ucSearch   = val.toLowerCase(); renderUCRows();  }
+
+function toggleTuneRange() { tuneShowAll = !tuneShowAll; renderTuneRows(); }
+function toggleUCRange()   { ucShowAll   = !ucShowAll;   renderUCRows();  }
 
 // ---------------------------------------------------------------------------
 // Role-aware select helpers
@@ -1043,7 +1070,9 @@ function renderTuneRows() {
   const TUNE_FIELDS = ["rule_name","tune_reason","reporter","environment","tuning_analyst","how_tuned"];
   const visible = tuneRows
     .filter(r => !tuneSearch || TUNE_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(tuneSearch)))
-    .filter(r => matchesColumnFilters("tune", r));
+    .filter(r => matchesColumnFilters("tune", r))
+    .filter(r => tuneShowAll || withinLastMonths(r.created_at, 6));
+  updateRangeToggleUI("tune", tuneShowAll);
   const sorted = clientSort(visible, tuneSortCol, tuneSortDir);
   updateSortUI("tune", tuneSortCol, tuneSortDir);
   const tbody = document.getElementById("tune-tbody");
@@ -1078,6 +1107,7 @@ async function loadTune() {
   if (month)  p.set("month", month);
   if (env)    p.set("environment", env);
   if (status) p.set("status", status);
+  if (month || env || status) tuneShowAll = true;
   try {
     tuneRows = await apiFetch(`/api/tune?${p}`);
     buildColumnFilterRow("tune", tuneRows);
@@ -1089,6 +1119,7 @@ function clearTuneFilters() {
   ["tune-filter-month","tune-filter-env","tune-filter-status"].forEach(id => { document.getElementById(id).value = ""; });
   const s = document.getElementById("tune-search"); if (s) s.value = "";
   tuneSearch = "";
+  tuneShowAll = false;
   loadTune();
 }
 
@@ -1539,7 +1570,9 @@ function renderUCRows() {
   const UC_FIELDS = ["usecase_description","requester","environment","rule_name","rule_author","notes"];
   const visible = ucRows
     .filter(r => !ucSearch || UC_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(ucSearch)))
-    .filter(r => matchesColumnFilters("uc", r));
+    .filter(r => matchesColumnFilters("uc", r))
+    .filter(r => ucShowAll || withinLastMonths(r.created_at, 6));
+  updateRangeToggleUI("uc", ucShowAll);
   const sorted = clientSort(visible, ucSortCol, ucSortDir);
   updateSortUI("uc", ucSortCol, ucSortDir);
   const tbody = document.getElementById("uc-tbody");
@@ -1551,7 +1584,7 @@ function renderUCRows() {
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.usecase_description)}">
       <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
-      ${r.source_hunt_id ? `<span class="badge" style="font-size:10px;padding:1px 5px;margin-left:4px;background:rgba(94,106,210,.15);color:var(--accent-blue)">Hunt #${r.source_hunt_id}</span>` : ""}
+      ${r.source_hunt_id ? `<span class="badge" style="font-size:10px;padding:1px 5px;margin-left:4px;background:rgba(94,106,210,.15);color:var(--blue)">Hunt #${r.source_hunt_id}</span>` : ""}
     </td>
     <td class="td-truncate" title="${esc(parseEnvStr(r.environment).join(', ') || r.environment)}">${esc(parseEnvStr(r.environment).join(", ") || r.environment)}</td>
     <td class="td-truncate" title="${esc(r.requester)}">${esc(displayName(r.requester))}</td>
@@ -1573,6 +1606,7 @@ async function loadUC() {
   if (month)  p.set("month", month);
   if (env)    p.set("environment", env);
   if (status) p.set("status", status);
+  if (month || env || status) ucShowAll = true;
   try {
     ucRows = await apiFetch(`/api/usecase?${p}`);
     buildColumnFilterRow("uc", ucRows);
@@ -1584,6 +1618,7 @@ function clearUCFilters() {
   ["uc-filter-month","uc-filter-env","uc-filter-status"].forEach(id => { document.getElementById(id).value = ""; });
   const s = document.getElementById("uc-search"); if (s) s.value = "";
   ucSearch = "";
+  ucShowAll = false;
   loadUC();
 }
 
@@ -1975,18 +2010,18 @@ async function verifyAuditChain() {
   try {
     const r = await apiFetch("/api/audit/verify", { method: "POST" });
     if (r.valid) {
-      box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#4ade80;font-size:13px">
+      box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:var(--green-subtle);border:1px solid rgba(45,178,125,.35);color:var(--green);font-size:13px">
         ✅ Zincir geçerli — ${r.chained}/${r.total} kayıt zincirli, hiçbiri değiştirilmemiş/silinmemiş.
       </div>`;
     } else {
-      box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#f87171;font-size:13px">
+      box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:var(--red-subtle);border:1px solid rgba(229,72,77,.35);color:var(--red);font-size:13px">
         ⚠️ Zincirde ${r.problems.length} sorun bulundu (${r.chained}/${r.total} kayıt zincirli):<br>
         ${r.problems.map(p => esc(p)).join("<br>")}
       </div>`;
     }
     loadAuditLog();
   } catch (e) {
-    box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#f87171;font-size:13px">Doğrulama başarısız: ${esc(e.message || String(e))}</div>`;
+    box.innerHTML = `<div style="padding:10px 14px;border-radius:8px;background:var(--red-subtle);border:1px solid rgba(229,72,77,.35);color:var(--red);font-size:13px">Doğrulama başarısız: ${esc(e.message || String(e))}</div>`;
   }
 }
 
@@ -2355,6 +2390,18 @@ function makeColumnsResizable(table) {
       e.preventDefault();
       e.stopPropagation();
 
+      // Kolonların bir kısmı % bir kısmı px genişlikte (table-layout:fixed
+      // ile birlikte) - tek bir kolonu px'e sabitlemek diğer % kolonların
+      // tabloyu yeniden bölüşmesine yol açıyordu (alakasız kolonlar oynuyordu).
+      // Sürükleme başlarken TÜM kolonları o anki genişliğine dondurup
+      // tabloyu tam deterministik hale getiriyoruz.
+      ths.forEach((otherTh, j) => {
+        if (j === 0 || j === ths.length - 1) return;
+        const w = otherTh.offsetWidth;
+        otherTh.style.width = w + "px";
+        if (cols[j]) cols[j].style.width = w + "px";
+      });
+
       const startX = e.pageX;
       const startW = th.offsetWidth;
       handle.classList.add("dragging");
@@ -2409,8 +2456,10 @@ let huntRows    = [];
 let huntSearch  = "";
 let huntSortCol = "id";
 let huntSortDir = -1;
+let huntShowAll = false;
 
 function onHuntSearch(val) { huntSearch = val.toLowerCase(); renderHuntRows(); }
+function toggleHuntRange() { huntShowAll = !huntShowAll; renderHuntRows(); }
 
 function sortHunt(col) {
   if (huntSortCol === col) huntSortDir *= -1; else { huntSortCol = col; huntSortDir = -1; }
@@ -2427,7 +2476,7 @@ function huntActionBtns(r) {
     ? `<button class="btn-icon" title="Düzenle" onclick="openHuntEditModal(${r.id})">&#9998;</button>`
     : "";
   const report = (isAdmin || isMyTask) && r.status === "İnceleniyor"
-    ? `<button class="btn-icon" title="Rapor Yaz/Düzenle" onclick="openHuntReportModal(${r.id})" style="color:var(--accent-blue)">&#128221;</button>`
+    ? `<button class="btn-icon" title="Rapor Yaz/Düzenle" onclick="openHuntReportModal(${r.id})" style="color:var(--blue)">&#128221;</button>`
     : "";
   const del = isAdmin
     ? `<button class="btn-icon danger" title="Sil" onclick="deleteHunt(${r.id})">&#x1F5D1;</button>`
@@ -2442,7 +2491,7 @@ function huntActionBtns(r) {
   if (r.status === "İnceleniyor") {
     const canStart = (isAdmin || isMyTask) && !r.started_at;
     const startBtn = canStart
-      ? `<button class="btn-action-claim" onclick="startHunt(${r.id})" style="background:var(--accent-green,#22c55e);color:#fff">▶ Başla</button> `
+      ? `<button class="btn-action-claim" onclick="startHunt(${r.id})" style="background:var(--green);color:#fff">▶ Başla</button> `
       : "";
     return `${startBtn}${report} ${edit}${del}`;
   }
@@ -2469,7 +2518,9 @@ function renderHuntRows() {
   const HUNT_FIELDS = ["hunt_title","hunt_subject","requester","assigned_analyst","environment","notes"];
   const visible = huntRows
     .filter(r => !huntSearch || HUNT_FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(huntSearch)))
-    .filter(r => matchesColumnFilters("hunt", r));
+    .filter(r => matchesColumnFilters("hunt", r))
+    .filter(r => huntShowAll || withinLastMonths(r.created_at, 6));
+  updateRangeToggleUI("hunt", huntShowAll);
   const sorted = clientSort(visible, huntSortCol, huntSortDir);
   updateSortUI("hunt", huntSortCol, huntSortDir);
   const tbody = document.getElementById("hunt-tbody");
@@ -2498,6 +2549,7 @@ async function loadHunt() {
   const status = document.getElementById("hunt-filter-status")?.value;
   if (month)  p.set("month", month);
   if (status) p.set("status", status);
+  if (month || status) huntShowAll = true;
   try {
     huntRows = await apiFetch(`/api/hunt?${p}`);
     buildColumnFilterRow("hunt", huntRows);
@@ -2511,6 +2563,7 @@ function clearHuntFilters() {
   });
   const s = document.getElementById("hunt-search"); if (s) s.value = "";
   huntSearch = "";
+  huntShowAll = false;
   loadHunt();
 }
 
@@ -2755,9 +2808,12 @@ function renderHuntMitreEntries() {
   container.innerHTML = _huntMitreEntries.map((e, i) => {
     const editing = _huntMitreEntriesEdit.index === i;
     const body = editing
-      ? `<textarea class="form-input form-textarea" style="margin-top:6px"
-          placeholder="Bu teknikle ilgili bulgular, araçlar, gözlemler…"
-          oninput="updateHuntMitreMethod(${i},this.value)">${esc(e.method)}</textarea>
+      ? `<div class="form-group" style="margin-top:8px">
+          <label class="form-label">Yöntem Notu</label>
+          <textarea class="form-input form-textarea"
+            placeholder="Bu teknikle ilgili bulgular, araçlar, gözlemler…"
+            oninput="updateHuntMitreMethod(${i},this.value)">${esc(e.method)}</textarea>
+        </div>
         <div class="compose-row-actions">
           <button type="button" class="btn-ghost-sm" onclick="cancelHuntMitreMethod()">İptal</button>
           <button type="button" class="btn btn-primary" onclick="confirmHuntMitreMethod()">Kaydet</button>
@@ -2769,7 +2825,7 @@ function renderHuntMitreEntries() {
           </div>
         </div>`;
     return `
-    <div class="mitre-entry">
+    <div class="mitre-entry${editing ? " compose-row" : ""}">
       <div class="mitre-entry-header">
         <span class="mitre-tag">${esc(e.id)}</span>
         <span class="text-muted" style="font-size:11px;margin-left:4px">${esc(e.tactic)}</span>
@@ -2955,7 +3011,10 @@ function renderRecommendations() {
     index: i,
     confirmFn: "confirmRecommendation", cancelFn: "cancelRecommendation",
     editFn: "editRecommendation", removeFn: "removeRecommendation",
-    composeHtml: `<textarea class="form-input form-textarea" placeholder="Öneri maddesi…" oninput="_huntRecommendations[${i}]=this.value">${esc(v)}</textarea>`,
+    composeHtml: `<div class="form-group">
+      <label class="form-label">Öneri Metni</label>
+      <textarea class="form-input form-textarea" placeholder="Öneri maddesi…" oninput="_huntRecommendations[${i}]=this.value">${esc(v)}</textarea>
+    </div>`,
     settledHtml: v ? esc(v) : `<span class="settled-row-empty">Boş öneri</span>`,
   })).join("");
   autoGrowAll(list);
@@ -2992,7 +3051,10 @@ function renderVulnerabilities() {
     index: i,
     confirmFn: "confirmVulnerability", cancelFn: "cancelVulnerability",
     editFn: "editVulnerability", removeFn: "removeVulnerability",
-    composeHtml: `<textarea class="form-input form-textarea" placeholder="Güvenlik açığı…" oninput="_huntVulnerabilities[${i}]=this.value">${esc(v)}</textarea>`,
+    composeHtml: `<div class="form-group">
+      <label class="form-label">Zafiyet Metni</label>
+      <textarea class="form-input form-textarea" placeholder="Güvenlik açığı…" oninput="_huntVulnerabilities[${i}]=this.value">${esc(v)}</textarea>
+    </div>`,
     settledHtml: v ? esc(v) : `<span class="settled-row-empty">Boş madde</span>`,
   })).join("");
   autoGrowAll(list);
@@ -3328,8 +3390,8 @@ async function openHuntDetail(id) {
     recList  = recList.filter(v => v.trim());
     vulnList = vulnList.filter(v => v.trim());
 
-    const recHtml  = recList.length  ? recList.map((v, i)  => `<div style="padding:4px 0;border-bottom:1px solid var(--border-subtle, rgba(255,255,255,.06))"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
-    const vulnHtml = vulnList.length ? vulnList.map((v, i) => `<div style="padding:4px 0;border-bottom:1px solid var(--border-subtle, rgba(255,255,255,.06))"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
+    const recHtml  = recList.length  ? recList.map((v, i)  => `<div style="padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
+    const vulnHtml = vulnList.length ? vulnList.map((v, i) => `<div style="padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
 
     // Bulgular: yeni numaralı-liste formatı; findings_items boşsa (eski
     // rapor) tekil findings/findings_image alanlarına düşülür.
@@ -3461,6 +3523,7 @@ function pickSearch(type, id) {
 let incidentRows = [];
 let incidentSearch = "";
 let incidentSortCol = "created_at", incidentSortDir = -1;
+let incidentShowAll = false;
 
 const INCIDENT_COLUMNS = [
   { index: 1, key: "id",            label: "#",           filterType: "text" },
@@ -3483,6 +3546,7 @@ function sortIncident(col) {
 }
 
 function onIncidentSearch(val) { incidentSearch = val.toLowerCase(); renderIncidentRows(); }
+function toggleIncidentRange() { incidentShowAll = !incidentShowAll; renderIncidentRows(); }
 
 async function loadIncidents() {
   const p = new URLSearchParams();
@@ -3492,6 +3556,7 @@ async function loadIncidents() {
   if (month)  p.set("month", month);
   if (env)    p.set("environment", env);
   if (status) p.set("status", status);
+  if (month || env || status) incidentShowAll = true;
   try {
     incidentRows = await apiFetch(`/api/incident-reports?${p}`);
     incidentRows.forEach(r => {
@@ -3511,6 +3576,7 @@ function clearIncidentFilters() {
   });
   const s = document.getElementById("incident-search"); if (s) s.value = "";
   incidentSearch = "";
+  incidentShowAll = false;
   loadIncidents();
 }
 
@@ -3554,7 +3620,9 @@ function renderIncidentRows() {
   const FIELDS = ["title", "xsoar_case_id", "reporter", "environment"];
   const visible = incidentRows
     .filter(r => !incidentSearch || FIELDS.some(f => r[f] && String(r[f]).toLowerCase().includes(incidentSearch)))
-    .filter(r => matchesColumnFilters("incident", r));
+    .filter(r => matchesColumnFilters("incident", r))
+    .filter(r => incidentShowAll || withinLastMonths(r.created_at, 6));
+  updateRangeToggleUI("incident", incidentShowAll);
   const sorted = clientSort(visible, incidentSortCol, incidentSortDir);
   updateSortUI("incident", incidentSortCol, incidentSortDir);
   const tbody = document.getElementById("incident-tbody");
@@ -3596,14 +3664,18 @@ function renderIncidentSections() {
     confirmFn: "confirmIncidentSection", cancelFn: "cancelIncidentSection",
     editFn: "editIncidentSection", removeFn: "removeIncidentSection",
     composeHtml: `
-      <div class="mitre-entry-header">
+      <div class="form-group">
+        <label class="form-label">Bölüm Başlığı</label>
         <input type="text" class="form-input input-sm" style="max-width:240px;font-weight:500"
                placeholder="Bölüm başlığı…" value="${esc(s.heading)}"
                oninput="_incidentSections[${i}].heading=this.value"/>
       </div>
-      <textarea class="form-input form-textarea" style="margin-top:6px"
-        placeholder="Bölüm metni…"
-        oninput="_incidentSections[${i}].text=this.value">${esc(s.text)}</textarea>`,
+      <div class="form-group" style="margin-top:8px">
+        <label class="form-label">Bölüm Metni</label>
+        <textarea class="form-input form-textarea"
+          placeholder="Bölüm metni…"
+          oninput="_incidentSections[${i}].text=this.value">${esc(s.text)}</textarea>
+      </div>`,
     settledHtml: (s.heading || s.text)
       ? `${s.heading ? `<div class="settled-row-title">${esc(s.heading)}</div>` : ""}${s.text ? esc(s.text) : ""}`
       : `<span class="settled-row-empty">Boş bölüm</span>`,
@@ -3649,16 +3721,20 @@ function renderIncidentAssets() {
     confirmFn: "confirmIncidentAsset", cancelFn: "cancelIncidentAsset",
     editFn: "editIncidentAsset", removeFn: "removeIncidentAsset",
     composeHtml: `
-      <div class="mitre-entry-header">
+      <div class="form-group">
+        <label class="form-label">Varlık Adı</label>
         <input type="text" class="form-input input-sm" style="max-width:240px;font-weight:500"
                placeholder="Varlık adı…" value="${esc(a.name)}"
                oninput="_incidentAssets[${i}].name=this.value"/>
       </div>
-      <select class="form-input input-sm" style="margin-top:6px"
-        onchange="_incidentAssets[${i}].type=this.value">
-        <option value="">— Tür seçin —</option>
-        ${INCIDENT_ASSET_TYPES.map(t => `<option value="${esc(t)}" ${a.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}
-      </select>`,
+      <div class="form-group" style="margin-top:8px">
+        <label class="form-label">Tür</label>
+        <select class="form-input input-sm"
+          onchange="_incidentAssets[${i}].type=this.value">
+          <option value="">— Tür seçin —</option>
+          ${INCIDENT_ASSET_TYPES.map(t => `<option value="${esc(t)}" ${a.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}
+        </select>
+      </div>`,
     settledHtml: a.name
       ? `${esc(a.name)}${a.type ? ` — ${esc(a.type)}` : ""}`
       : `<span class="settled-row-empty">Boş varlık</span>`,
