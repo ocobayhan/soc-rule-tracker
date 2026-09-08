@@ -183,6 +183,13 @@ body {
   </div>
   {% endif %}
 
+  {% if assets %}
+  <div class="section">
+    <div class="section-title">Etkilenen Varlıklar</div>
+    <div class="text-block">{% for a in assets %}{{ a.name }}{% if a.type %} ({{ a.type }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+  </div>
+  {% endif %}
+
   {% if image_items %}
   <div class="section section-flow">
     <div class="section-title">Görseller</div>

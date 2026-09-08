@@ -1682,6 +1682,42 @@ olmayan kullanıcıda "Bana Bekleyen İşler" panelinin yarısı boş kalıyordu
   düzgün sığdığı görüldü. `node -c`/`py_compile`/Jinja2 kontrolleri
   geçti. Audit zinciri geçerli (271 kayıt, 271 zincirli).
 
+### Takip (2026-09-08) — Excel ve Incident PDF'ine Olay Raporu eklendi
+
+Bir Explore ajanı Excel export'unun ve PDF şablonlarının güncelliğini
+tarayınca en somut eksik ortaya çıktı: Olay Raporu, Excel'de sadece KPI
+Özeti'ndeki 2 toplam sayı olarak vardı — Tuning/UC/Hunt'ın hepsinin kayıt
+bazlı kendi sayfası olduğu halde Incident'ın hiç yoktu. Ayrıca Incident
+PDF'i "Etkilenen Varlıklar" alanını (uygulamada ve Excel KPI özetinde
+zaten var olan bir alan) hiç göstermiyordu — hem route hem şablon
+seviyesinde eksikti. (Hunt Excel/PDF'teki daha küçük eksiklikler —
+"Öneriler" kolonunun ham JSON çıkması, PDF'te Notlar/Rapor Güncelleme
+eksikliği — kullanıcı tarafından bu turda bilinçli olarak kapsam dışı
+bırakıldı.)
+
+- **Excel'e "Olay Raporları" sayfası eklendi** (Threat Hunt Talepleri'nden
+  hemen sonra, KPI Özeti'nden önce — 4 modülün per-record sayfaları bir
+  arada) — ID/Başlık/Case No/Ortam/Raporlayan/Durum/Etkilenen
+  Varlıklar/Talep Tarihi/İşlemi Yapan/İşlem Tarihi/İşlem Notu kolonları,
+  diğer sayfaların kullandığı aynı yardımcılarla (`gv`/`fmt_date`/
+  `display_name`/`write_headers`/`auto_width`) tutarlı.
+- **Incident PDF'ine "Etkilenen Varlıklar" bölümü eklendi** — "Olay
+  Detayları" ile "Görseller" arasına, uygulamanın kendi detay
+  modalındaki `isim (tür)` formatıyla birebir aynı.
+- **Doğrulandı** — statik kontrollerin ötesinde gerçek dosyalar üretilip
+  incelendi: geçici debug hesabıyla `/api/export`'u doğrudan indirip
+  openpyxl ile açıldı, yeni sayfanın doğru sırada ve (çoklu varlıklı bir
+  test kaydıyla) "PC-01 (Makine/Bilgisayar), user1 (Kullanıcı Hesabı)"
+  gibi doğru biçimlendirilmiş satırlar ürettiği doğrulandı; aynı test
+  kaydı için gerçek bir Incident PDF'i indirilip (bu makinede kurulu özel
+  WeasyPrint exe ile üretildi) PyMuPDF ile metni çıkarılarak "ETKİLENEN
+  VARLIKLAR" başlığının ve varlık listesinin Olay Detayları ile
+  Görseller arasında doğru konumda göründüğü teyit edildi. Test verisi
+  geri alındı, debug hesabı silindi. `py_compile`/Jinja2 kontrolleri
+  geçti. Audit zinciri geçerli (272 kayıt, 272 zincirli — artış PDF
+  export testinin kendisinin ürettiği gerçek, meşru bir `EXPORT_INCIDENT_
+  PDF` audit kaydından, audit_log'a hiç elle dokunulmadı).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

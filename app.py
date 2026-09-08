@@ -3190,6 +3190,40 @@ def export_data():
 
     auto_width(ws3)
 
+    # ── Sheet: Olay Raporları ────────────────────────────────────────────
+    # Incident Reports şimdiye kadar Excel'de sadece KPI Özeti'ndeki 2
+    # toplam sayı olarak vardı, tek tek kayıtlar hiç yoktu (2026-09-08) —
+    # diğer 3 modülle tutarlılık için eklendi.
+    ws_incident = wb.create_sheet("Olay Raporları")
+    incident_cols = ["ID", "Başlık", "Case No", "Ortam", "Raporlayan", "Durum",
+                      "Etkilenen Varlıklar", "Talep Tarihi",
+                      "İşlemi Yapan", "İşlem Tarihi", "İşlem Notu"]
+    write_headers(ws_incident, incident_cols)
+
+    incident_q = "SELECT * FROM incident_reports"
+    incident_q += " WHERE strftime('%Y-%m',created_at)=?" if exp_month else " WHERE 1=1"
+    incident_q += " ORDER BY id"
+    for r in db.execute(incident_q, (exp_month,) if exp_month else ()).fetchall():
+        try:
+            assets = _json.loads(r["affected_assets"] or "[]")
+            if not isinstance(assets, list):
+                assets = []
+        except Exception:
+            assets = []
+        assets_txt = ", ".join(
+            a.get("name", "") + (f" ({a['type']})" if a.get("type") else "")
+            for a in assets if isinstance(a, dict)
+        )
+        row = [r["id"], r["title"], r["xsoar_case_id"] or "", r["environment"],
+               display_name(r["reporter"]), r["status"], assets_txt,
+               fmt_date(r["created_at"]), display_name(gv(r, "validated_by")),
+               fmt_date(gv(r, "validated_at")), gv(r, "validation_note")]
+        ws_incident.append(row)
+        for ci in range(1, len(incident_cols) + 1):
+            ws_incident.cell(row=ws_incident.max_row, column=ci).alignment = CELL_ALIGN
+
+    auto_width(ws_incident)
+
     # ── Sheet 4 : KPI Özeti ────────────────────────────────────────────────
     ws4 = wb.create_sheet("KPI Özeti")
     write_headers(ws4, ["Metrik", "Değer"])
@@ -3620,6 +3654,12 @@ def incident_report_pdf(item_id):
             images = []
     except Exception:
         images = []
+    try:
+        assets = _j.loads(row["affected_assets"] or "[]")
+        if not isinstance(assets, list):
+            assets = []
+    except Exception:
+        assets = []
     # Galeri sırayı korur (webhook'un ekleniş sırası) — sıralanmaz; her
     # görselin altında kendi "order" etiketi (1, 1a...) yazar ki bölüm
     # metinlerindeki "Görsel N" atıfları PDF'te doğru görsele karşılık gelsin.
@@ -3635,6 +3675,7 @@ def incident_report_pdf(item_id):
         "incident_report_print.html",
         r=row,
         sections=sections,
+        assets=assets,
         image_items=image_items,
         logo_uri=_pdf_logo_uri(),
         font_regular_uri=_pdf_font_uri("Montserrat-Regular.ttf"),
