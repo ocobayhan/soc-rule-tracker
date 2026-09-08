@@ -434,6 +434,7 @@ async function loadKPI() {
   try {
     const d = await apiFetch(`/api/kpi${month ? "?month="+month : ""}`);
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? "—"; };
+    const setEmpty = (id, total) => { const el = document.getElementById(id); if (el) el.style.display = total === 0 ? "" : "none"; };
     set("kpi-tune-total",     d.tune_total);
     set("kpi-tune-open",      d.tune_open);
     set("kpi-tune-pending",   d.tune_pending);
@@ -444,12 +445,14 @@ async function loadKPI() {
     if (fill) fill.style.width = Math.min(rate, 100) + "%";
     set("kpi-tune-pendingval", d.tune_pending_validation);
     set("kpi-tune-rejected",   d.tune_rejected);
+    setEmpty("kpi-tune-empty", d.tune_total);
     set("kpi-uc-total",       d.uc_total);
     set("kpi-uc-open",        d.uc_open);
     set("kpi-uc-testing",     d.uc_testing);
     set("kpi-uc-prod",        d.uc_prod);
     set("kpi-uc-pendingval",  d.uc_pending_validation);
     set("kpi-uc-rejected",    d.uc_rejected);
+    setEmpty("kpi-uc-empty", d.uc_total);
     set("kpi-hunt-total",     d.hunt_total);
     set("kpi-hunt-open",      d.hunt_open);
     set("kpi-hunt-reviewing", d.hunt_reviewing);
@@ -461,6 +464,15 @@ async function loadKPI() {
     set("kpi-hunt-ucs",             d.hunt_ucs_from_hunt);
     set("kpi-hunt-planned-rate",    (d.hunt_planned_executed_rate ?? 0) + "%");
     set("kpi-hunt-total-hours",     d.hunt_total_hours);
+    set("kpi-hunt-hours-scope",     month ? "(bu ay)" : "(tüm zamanlar)");
+    setEmpty("kpi-hunt-empty", d.hunt_total);
+    set("kpi-incident-total",   d.incident_total);
+    set("kpi-incident-open",    d.incident_open);
+    set("kpi-incident-review",  d.incident_review);
+    set("kpi-incident-closed",  d.incident_closed);
+    set("kpi-incident-pending", d.incident_pending);
+    set("kpi-incident-assets",  d.incident_affected_assets_total);
+    setEmpty("kpi-incident-empty", d.incident_total);
   } catch (_) {}
 }
 
@@ -506,6 +518,20 @@ async function loadDashboardTables() {
         </tr>`).join("")
       : empty(4);
   } catch (_) {}
+
+  try {
+    const rows = await apiFetch("/api/incident-reports?");
+    const tb   = document.getElementById("dash-incident-tbody");
+    if (!tb) return;
+    tb.innerHTML = rows.length
+      ? rows.slice(0,6).map(r => `<tr>
+          <td>${badge(r.status,INCIDENT_CLS)}</td>
+          <td class="td-truncate" title="${esc(r.title)}">${esc(r.title)}</td>
+          <td class="text-muted" title="${esc(r.reporter)}">${esc(displayName(r.reporter))}</td>
+          <td class="text-muted">${fmtDate(r.created_at)}</td>
+        </tr>`).join("")
+      : empty(4);
+  } catch (_) {}
 }
 
 // ---- Bana bekleyen işler --------------------------------------------------
@@ -516,9 +542,12 @@ function renderMyWorkList(elId, items) {
   const el = document.getElementById(elId);
   if (!el) return;
   if (!items.length) { el.innerHTML = `<div class="mywork-empty">Bekleyen bir iş yok.</div>`; return; }
-  // Durum-badge class map'i çağrı anında kurulur — TUNE_CLS/UC_CLS/HUNT_CLS
-  // dosyada bu satırdan sonra tanımlı, modül yüklenirken erişilemezler (TDZ).
-  const clsMap = { tune: TUNE_CLS, usecase: UC_CLS, hunt: HUNT_CLS };
+  // Durum-badge class map'i çağrı anında kurulur — TUNE_CLS/UC_CLS/HUNT_CLS/
+  // INCIDENT_CLS dosyada bu satırdan sonra tanımlı, modül yüklenirken
+  // erişilemezler (TDZ). incident eksikse badge(status, undefined) JS
+  // hatası fırlatıp tüm paneli boş bırakırdı (2026-09-08, uygulamadan önce
+  // kod okuyarak bulundu).
+  const clsMap = { tune: TUNE_CLS, usecase: UC_CLS, hunt: HUNT_CLS, incident: INCIDENT_CLS };
   el.innerHTML = items.map(it => `
     <div class="mywork-item" onclick="goToItem('${it.type}', ${it.id})" title="Aç: #${it.id}">
       <span class="mywork-type" style="color:${WORK_TYPE_COLOR[it.type]}">${WORK_TYPE_LABEL[it.type]}</span>
@@ -534,9 +563,12 @@ async function loadMyWork() {
   try {
     const d = await apiFetch("/api/my-work");
     // Onay sütunu yalnızca onay yetkisi olanlar (Kıdemli Analist/Müdür) için
-    // anlamlı — değilse tümüyle gizle, yer kaplamasın.
+    // anlamlı — değilse tümüyle gizle, yer kaplamasın. Gizlenince "Üzerimdeki
+    // İşler" tek başına kalıp grid'in yarısını boş bırakmasın diye panel
+    // tam genişlik moduna geçer (2026-09-08).
     const approvalCol = document.getElementById("mywork-approval-col");
     if (approvalCol) approvalCol.style.display = IS_SENIOR ? "" : "none";
+    panel.classList.toggle("mywork-single-col", !IS_SENIOR);
     renderMyWorkList("mywork-approval", d.awaiting_approval || []);
     renderMyWorkList("mywork-assigned", d.assigned_to_me || []);
     const setC = (id, n) => { const e = document.getElementById(id); if (e) e.textContent = n; };

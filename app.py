@@ -999,6 +999,14 @@ def get_kpi():
     uc_rejection_rate   = rejection_rate(uc_rejected,   uc_total,   uc_pending_validation)
     hunt_rejection_rate = rejection_rate(hunt_rejected, hunt_total, hunt_pending_validation)
 
+    # Olay Raporu — Dashboard'da ilk kez gösteriliyor (2026-09-08). Diğer
+    # 3 modül gibi tek bir onay kapısı var (Onay Bekliyor), o yüzden
+    # rejection_rate/success_rate kavramı yok — sadece durum sayıları.
+    incident_open    = count("incident_reports", INCIDENT_STATUS_OPEN, "created_at")
+    incident_review  = count("incident_reports", STATUS_INCIDENT_REVIEW, "created_at")
+    incident_pending = count("incident_reports", STATUS_INCIDENT_PENDING, "created_at")
+    incident_closed  = count("incident_reports", INCIDENT_STATUS_CLOSED, "validated_at")
+
     data = {
         "tune_pending_validation": tune_pending_validation,
         "tune_open":          tune_open,
@@ -1029,11 +1037,18 @@ def get_kpi():
         "hunt_rejected":      hunt_rejected,
         "hunt_total":         hunt_total,
         "hunt_rejection_rate": hunt_rejection_rate,
+        "incident_open":      incident_open,
+        "incident_review":    incident_review,
+        "incident_pending":   incident_pending,
+        "incident_closed":    incident_closed,
     }
     # Hunt Programı metrikleri (hunt saati, planlanan/gerçekleşen oranı,
     # öneri sayısı, hunt'tan açılan UC sayısı) — /report ve Excel'le aynı
     # kaynağı paylaşır (2026-09-07), Dashboard'da ilk kez gösteriliyor.
     data.update(get_hunt_program_stats(month or None))
+    # incident_total + incident_affected_assets_total — zaten var olan
+    # fonksiyon, /report ve Excel'in kullandığı aynı kaynak (2026-09-08).
+    data.update(get_incident_stats(month or None))
     return jsonify(data)
 
 # Terminal (kapanmış) durumlar — "üzerimdeki bitmemiş işler" listesi bunları hariç tutar.
@@ -1044,6 +1059,11 @@ _HUNT_TERMINAL = ("Tamamlandı", "İptal", STATUS_REJECTED)
 _TUNE_GATE = (STATUS_PENDING_VALIDATION, "Tune Edildi")
 _UC_GATE   = (STATUS_PENDING_VALIDATION, "Test Ediliyor")
 _HUNT_GATE = (STATUS_PENDING_VALIDATION, STATUS_HUNT_RESULT_PENDING)
+# Incident'ın tek onay kapısı — Tune/UC/Hunt'ın aksine "atanan analist"
+# kolonu yok (İncelemede durumuna herhangi bir kullanıcı geçebilir), o
+# yüzden sadece awaiting_approval'a ekleniyor, assigned_to_me'ye değil
+# (2026-09-08).
+_INCIDENT_GATE = (STATUS_INCIDENT_PENDING,)
 
 @app.route("/api/my-work")
 @login_required
@@ -1093,6 +1113,9 @@ def get_my_work():
         awaiting += norm(db.execute(
             f"SELECT *, COALESCE(hunt_title, hunt_subject) AS display_title FROM threat_hunt_requests WHERE status IN ({ph(_HUNT_GATE)}) ORDER BY created_at DESC",
             _HUNT_GATE).fetchall(), "hunt", "display_title", "requester")
+        awaiting += norm(db.execute(
+            f"SELECT * FROM incident_reports WHERE status IN ({ph(_INCIDENT_GATE)}) ORDER BY created_at DESC",
+            _INCIDENT_GATE).fetchall(), "incident", "title", "reporter")
 
     return jsonify({"awaiting_approval": awaiting, "assigned_to_me": assigned})
 

@@ -143,6 +143,7 @@
           </div>
           <span class="kpi-rate-label">Başarı oranı: <strong id="kpi-tune-rate">—</strong></span>
         </div>
+        <div class="kpi-module-empty text-muted" id="kpi-tune-empty" style="display:none">Henüz kayıt yok.</div>
       </div>
 
       <!-- Use-Case -->
@@ -172,6 +173,7 @@
           Ön Onay Bekliyor: <strong id="kpi-uc-pendingval">—</strong> ·
           Reddedildi: <strong id="kpi-uc-rejected">—</strong>
         </div>
+        <div class="kpi-module-empty text-muted" id="kpi-uc-empty" style="display:none">Henüz kayıt yok.</div>
       </div>
 
       <!-- Threat Hunting -->
@@ -203,11 +205,44 @@
           Reddedildi: <strong id="kpi-hunt-rejected">—</strong>
         </div>
         <div class="kpi-module-extra">
+          <span class="text-muted" style="font-size:10px">(tüm zamanlar)</span>
           Güvenlik Önerisi: <strong id="kpi-hunt-recommendations">—</strong> ·
           Hunt'tan Açılan UC: <strong id="kpi-hunt-ucs">—</strong> ·
           Planlanan/Gerçekleşen: <strong id="kpi-hunt-planned-rate">—</strong> ·
           Toplam Süre: <strong id="kpi-hunt-total-hours">—</strong> saat
+          <span class="text-muted" id="kpi-hunt-hours-scope" style="font-size:10px"></span>
         </div>
+        <div class="kpi-module-empty text-muted" id="kpi-hunt-empty" style="display:none">Henüz kayıt yok.</div>
+      </div>
+
+      <!-- Olay Raporu -->
+      <div class="kpi-module">
+        <div class="kpi-module-hdr">
+          <div class="kpi-module-name">
+            <span class="kpi-module-dot" style="background:var(--red)"></span>
+            Olay Raporu
+          </div>
+          <span class="kpi-module-total"><span id="kpi-incident-total">—</span> toplam talep</span>
+        </div>
+        <div class="kpi-module-stats">
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" id="kpi-incident-open">—</div>
+            <div class="kpi-stat-lbl">Açıldı</div>
+          </div>
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" style="color:var(--accent)" id="kpi-incident-review">—</div>
+            <div class="kpi-stat-lbl">İncelemede</div>
+          </div>
+          <div class="kpi-stat">
+            <div class="kpi-stat-val" style="color:var(--green)" id="kpi-incident-closed">—</div>
+            <div class="kpi-stat-lbl">Kapandı</div>
+          </div>
+        </div>
+        <div class="kpi-module-extra">
+          Onay Bekliyor: <strong id="kpi-incident-pending">—</strong> ·
+          Etkilenen Varlık: <strong id="kpi-incident-assets">—</strong>
+        </div>
+        <div class="kpi-module-empty text-muted" id="kpi-incident-empty" style="display:none">Henüz kayıt yok.</div>
       </div>
 
     </div>
@@ -233,6 +268,11 @@
         <div class="section-title">Son Hunt Talepleri</div>
         <table class="table"><thead><tr><th>Durum</th><th>Konu</th><th>Analist</th><th>Tarih</th></tr></thead>
         <tbody id="dash-hunt-tbody"></tbody></table>
+      </div>
+      <div class="dash-section">
+        <div class="section-title">Son Olay Raporları</div>
+        <table class="table"><thead><tr><th>Durum</th><th>Başlık</th><th>Raporlayan</th><th>Tarih</th></tr></thead>
+        <tbody id="dash-incident-tbody"></tbody></table>
       </div>
     </div>
   </section>

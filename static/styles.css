@@ -284,10 +284,12 @@ input, select, textarea { font-family: inherit; }
 /* ============================================================ KPI MODULES */
 .kpi-modules {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
+@media (max-width: 1100px) { .kpi-modules { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px)  { .kpi-modules { grid-template-columns: 1fr; } }
 .kpi-module {
   background: var(--bg-secondary);
   border: 0.5px solid var(--border);
@@ -389,6 +391,9 @@ input, select, textarea { font-family: inherit; }
   margin-top: 6px;
 }
 .kpi-module-extra strong { color: var(--text-2); font-weight: 600; }
+/* Toplamı sıfır olan bir modülde tek satırlık bağlam notu (2026-09-08) —
+   kart aynı çerçeveyi/istatistikleri korur, sadece altına eklenir. */
+.kpi-module-empty { font-size: 11px; margin-top: 6px; font-style: italic; }
 
 /* ============================================================ FILTER BAR */
 .filter-bar {
@@ -927,10 +932,12 @@ input, select, textarea { font-family: inherit; }
 /* ============================================================ DASHBOARD */
 .dashboard-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px;
   margin-top: 4px;
 }
+@media (max-width: 1100px) { .dashboard-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px)  { .dashboard-row { grid-template-columns: 1fr; } }
 .dash-section { }
 .section-title { font-size: 12px; font-weight: 500; color: var(--text-2); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em; }
 
@@ -972,6 +979,9 @@ input, select, textarea { font-family: inherit; }
 }
 .mywork-meta { font-size: 11px; color: var(--text-3); white-space: nowrap; flex-shrink: 0; }
 @media (max-width: 900px) { .mywork { grid-template-columns: 1fr; } }
+/* Onay sütunu kıdemli olmayan kullanıcıda gizlenince (bkz. loadMyWork,
+   app.js) "Üzerimdeki İşler" tam genişlik kullansın, yarısı boş kalmasın. */
+.mywork-single-col { grid-template-columns: 1fr; }
 
 /* ---- Trend mini grafikleri ---- */
 .trend-section { margin-bottom: 18px; }

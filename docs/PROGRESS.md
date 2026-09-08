@@ -1629,6 +1629,59 @@ düzeltildi:
   zincirli — bu iş salt frontend/backend sorgu mantığı, audit_log'a
   hiç yazmıyor).
 
+### Takip (2026-09-08) — Dashboard'a Olay Raporu eklendi + sadeleştirme
+
+Bir Explore ajanının tam envanteriyle Dashboard'da şu gerçek durum tespit
+edildi: Olay Raporu modülü Dashboard'da (KPI kartı/onay listesi/son
+talepler/trend) hiç yoktu — diğer 3 modülün hepsinde var, kasıtlı
+olduğuna dair hiçbir not yoktu; Threat Hunting kartı 11 sayı gösterip
+tüm-zamanlar/bu-ay metriklerini ayrım olmadan karıştırıyordu; kıdemli
+olmayan kullanıcıda "Bana Bekleyen İşler" panelinin yarısı boş kalıyordu.
+
+- **Olay Raporu KPI kartı** (4. kart) eklendi: `get_kpi()`'a Tune/UC/Hunt
+  ile aynı `count()`/`count_all()` deseninde Açıldı/İncelemede/Onay
+  Bekliyor/Kapandı sayıları + zaten var olan `get_incident_stats()`
+  (toplam + etkilenen varlık toplamı) eklendi. `.kpi-modules` grid'i
+  3'ten 4 sütuna çıkarıldı (dar ekranlarda 2'ye, çok darda 1'e düşen
+  responsive kural eklendi — trend kartlarıyla aynı desen).
+- **"Onayımı Bekleyenler" paneline Incident eklendi** (senior-only, tek
+  onay kapısı — `_INCIDENT_GATE`). "Üzerimdeki İşler"e eklenmedi —
+  Incident'ın Tune/UC/Hunt'taki gibi kalıcı bir "atanan analist" kolonu
+  yok (RBAC'ta İncelemede'ye herhangi bir kullanıcı geçebiliyor), sahte
+  bir alan icat etmek yerine bu kısım kapsam dışı bırakıldı.
+  **Uygulamadan önce kod okuyarak bulunan kritik bir hata**:
+  `renderMyWorkList()`'in durum-rozeti class map'i (`clsMap`) sadece
+  tune/usecase/hunt içeriyordu, incident yoktu — bir Incident öğesi
+  listeye girer girmez `badge(status, undefined)` çağrısı JS hatası
+  fırlatıp PANELİN TAMAMINI boş bırakırdı. `incident: INCIDENT_CLS`
+  eklenerek düzeltildi, canlı testte bir olay raporu geçici olarak "Onay
+  Bekliyor"a alınıp panelin hatasız render ettiği doğrulandı.
+- **"Son Olay Raporları" mini-tablosu** eklendi (4. `dash-section`,
+  diğer 3'le birebir aynı desen). `.dashboard-row` de 4 sütuna çıkarıldı.
+- **Trend sparkline'larına Incident bilinçli olarak eklenmedi** —
+  `incident_reports`'ta `completed_at` kolonu yok, `validated_at` hem
+  "İncelemede'ye geri gönder" hem "Kapat" aksiyonlarında set edildiği
+  için "Kapanan" serisi için güvenilir değil; yanlış veri göstermektense
+  bu bölüm dışarıda bırakıldı.
+- **Sadeleştirme:** kıdemli olmayan kullanıcıda onay sütunu gizlenince
+  "Üzerimdeki İşler" artık tüm genişliği kullanıyor (yeni
+  `.mywork-single-col` sınıfı, `loadMyWork()`'te `IS_SENIOR`'a göre
+  takılıyor) — önceden yarısı boş kalıyordu. Threat Hunting kartındaki
+  tüm-zamanlar metrikleri artık "(tüm zamanlar)" ibaresiyle, "Toplam
+  Süre" bir ay seçiliyken "(bu ay)" ibaresiyle etiketleniyor. Toplamı
+  sıfır olan herhangi bir KPI kartının altına (istatistik kutuları
+  korunarak) küçük bir "Henüz kayıt yok" notu ekleniyor.
+- **Doğrulandı:** geçici debug hesaplarıyla (biri Müdür/senior, biri
+  Analist/non-senior) canlı tarayıcıda — 4 kartın da doğru sayılarla
+  geldiği, bir olay raporu geçici olarak "Onay Bekliyor"a alınınca
+  Onayımı Bekleyenler panelinin hatasız (konsol hatasız) render ettiği ve
+  `goToItem('incident',...)` ile doğru sekmeye/detaya gittiği, non-senior
+  hesapta tek sütun genişliğinin doğru hesaplandığı (computed
+  `grid-template-columns` tek değer döndü) doğrulandı; ekran görüntüsüyle
+  4 kartın/4 trend kartının/4 son-talep tablosunun 1300px genişlikte
+  düzgün sığdığı görüldü. `node -c`/`py_compile`/Jinja2 kontrolleri
+  geçti. Audit zinciri geçerli (271 kayıt, 271 zincirli).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
