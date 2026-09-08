@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v46
+   SOC Tracker — Frontend  v47
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -745,65 +745,109 @@ function openTuneDetail(id) {
   const r = tuneRows.find(x => x.id === id); if (!r) return;
   const fmt = v => v ? v.slice(0,10) : "";
   document.getElementById("tune-detail-title").textContent = r.rule_name;
-  document.getElementById("tune-detail-body").innerHTML = `<div class="detail-grid">
-    ${detailRow("Raporlayan",        displayName(r.reporter))}
-    ${r.xsoar_case_id ? `<div class="detail-row">
-        <span class="detail-label">${r.xsoar_case_missing === "Evet" ? "Case No (SOAR'da yok, manuel)" : "SOAR Case"}</span>
-        <span class="detail-value">${r.xsoar_url
-          ? `<a href="${esc(r.xsoar_url)}" target="_blank" rel="noopener">#${esc(r.xsoar_case_id)}</a>
-             <button class="btn-copy-inline" data-copy="${esc(r.xsoar_url)}" onclick="copyFromAttr(this)"
-                     title="URL'i kopyala — link tıklamayla SOAR giriş ekranına atarsa, yeni sekmeye yapıştırın">&#128203; Kopyala</button>`
-          : esc(r.xsoar_case_id)}</span>
-      </div>` : ""}
-    ${detailRow("Ortam",             r.environment)}
-    ${detailRow("Durum",             r.status)}
-    ${r.validated_by ? detailRow("Ön Onay Veren",   displayName(r.validated_by)) : ""}
-    ${r.validated_at ? detailRow("Ön Onay Tarihi",  fmt(r.validated_at)) : ""}
-    ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note)   : ""}
-    ${detailRow("Tetiklenme",        r.trigger_frequency)}
-    ${detailRow("Tune Nedeni",       r.tune_reason)}
-    ${detailImgRow("Kanıt Görseli",  [r.evidence_image])}
-    ${detailRow("Tune Eden",         r.tuning_analyst ? displayName(r.tuning_analyst) : "")}
-    ${detailRow("Nasıl Tune Edildi", r.how_tuned)}
-    ${detailImgRow("Çözüm Görseli",  [r.resolution_image])}
-    ${r.tuned_at     ? detailRow("Tune Tarihi",  fmt(r.tuned_at))     : ""}
-    ${r.approved_by  ? detailRow("Onaylayan",    displayName(r.approved_by)) : ""}
-    ${r.approved_at  ? detailRow("Onay Tarihi",  fmt(r.approved_at))  : ""}
-    ${r.approval_note ? detailRow("Onay Notu",   r.approval_note)     : ""}
-    ${r.qa_test_ok ? detailRow("Test Ortamında Sorunsuz", r.qa_test_ok) : ""}
-    ${r.qa_peer_reviewed ? detailRow("Peer Review", r.qa_peer_reviewed) : ""}
-    ${detailRow("Raporlandı",        fmt(r.created_at))}
-    ${detailRow("Tamamlandı",        fmt(r.completed_at))}
-  </div>`;
+  document.getElementById("tune-detail-status-badge").innerHTML = badge(r.status, TUNE_CLS);
+  const finalApproval = r.tuned_at || r.approved_by || r.qa_test_ok || r.qa_peer_reviewed;
+  document.getElementById("tune-detail-body").innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Genel Bilgiler</div>
+      <div class="detail-grid">
+        ${detailRow("Raporlayan",        displayName(r.reporter))}
+        ${r.xsoar_case_id ? `<div class="detail-row">
+            <span class="detail-label">${r.xsoar_case_missing === "Evet" ? "Case No (SOAR'da yok, manuel)" : "SOAR Case"}</span>
+            <span class="detail-value">${r.xsoar_url
+              ? `<a href="${esc(r.xsoar_url)}" target="_blank" rel="noopener">#${esc(r.xsoar_case_id)}</a>
+                 <button class="btn-copy-inline" data-copy="${esc(r.xsoar_url)}" onclick="copyFromAttr(this)"
+                         title="URL'i kopyala — link tıklamayla SOAR giriş ekranına atarsa, yeni sekmeye yapıştırın">&#128203; Kopyala</button>`
+              : esc(r.xsoar_case_id)}</span>
+          </div>` : ""}
+        ${detailRow("Ortam",             r.environment)}
+        ${detailRow("Durum",             r.status)}
+        ${detailRow("Raporlandı",        fmt(r.created_at))}
+        ${detailRow("Tamamlandı",        fmt(r.completed_at))}
+      </div>
+    </div>
+    ${r.validated_by ? `<div class="detail-section">
+      <div class="detail-section-title">Ön Onay</div>
+      <div class="detail-grid">
+        ${detailRow("Ön Onay Veren",   displayName(r.validated_by))}
+        ${detailRow("Ön Onay Tarihi",  fmt(r.validated_at))}
+        ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note) : ""}
+      </div>
+    </div>` : ""}
+    <div class="detail-section">
+      <div class="detail-section-title">Tune Detayları</div>
+      <div class="detail-grid">
+        ${detailRow("Tetiklenme",        r.trigger_frequency)}
+        ${detailRow("Tune Nedeni",       r.tune_reason)}
+        ${detailImgRow("Kanıt Görseli",  [r.evidence_image])}
+        ${detailRow("Tune Eden",         r.tuning_analyst ? displayName(r.tuning_analyst) : "")}
+        ${detailRow("Nasıl Tune Edildi", r.how_tuned)}
+        ${detailImgRow("Çözüm Görseli",  [r.resolution_image])}
+      </div>
+    </div>
+    ${finalApproval ? `<div class="detail-section">
+      <div class="detail-section-title">Son Onay</div>
+      <div class="detail-grid">
+        ${r.tuned_at ? detailRow("Tune Tarihi",  fmt(r.tuned_at)) : ""}
+        ${r.approved_by  ? detailRow("Onaylayan",    displayName(r.approved_by)) : ""}
+        ${r.approved_at  ? detailRow("Onay Tarihi",  fmt(r.approved_at))  : ""}
+        ${r.approval_note ? detailRow("Onay Notu",   r.approval_note)     : ""}
+        ${r.qa_test_ok ? detailRow("Test Ortamında Sorunsuz", r.qa_test_ok) : ""}
+        ${r.qa_peer_reviewed ? detailRow("Peer Review", r.qa_peer_reviewed) : ""}
+      </div>
+    </div>` : ""}`;
   document.getElementById("tune-detail-modal").style.display = "flex";
 }
+function closeTuneDetailModal() { document.getElementById("tune-detail-modal").style.display = "none"; }
 
 function openUCDetail(id) {
   const r = ucRows.find(x => x.id === id); if (!r) return;
   const fmt = v => v ? v.slice(0,10) : "";
   document.getElementById("uc-detail-title").textContent = r.usecase_description.slice(0, 60) + (r.usecase_description.length > 60 ? "…" : "");
-  document.getElementById("uc-detail-body").innerHTML = `<div class="detail-grid">
-    ${detailRow("Talep Eden",       displayName(r.requester))}
-    ${detailRow("Ortam",            parseEnvStr(r.environment).join(", ") || r.environment)}
-    ${detailRow("Durum",            r.status)}
-    ${r.validated_by ? detailRow("Ön Onay Veren",   displayName(r.validated_by)) : ""}
-    ${r.validated_at ? detailRow("Ön Onay Tarihi",  fmt(r.validated_at)) : ""}
-    ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note)   : ""}
-    ${detailRow("Use-Case",         r.usecase_description)}
-    ${detailRow("Analist",          r.rule_author ? displayName(r.rule_author) : "")}
-    ${detailRow("Yazılan Kural",    r.rule_name)}
-    ${detailRow("Notlar",           r.notes)}
-    ${r.test_started_at  ? detailRow("Test Başlama",     fmt(r.test_started_at))  : ""}
-    ${r.test_approved_by ? detailRow("Prod Onaylayan",   displayName(r.test_approved_by)) : ""}
-    ${r.test_approved_at ? detailRow("Prod Onay Tarihi", fmt(r.test_approved_at)) : ""}
-    ${r.test_notes       ? detailRow("Test Notları",     r.test_notes)            : ""}
-    ${r.qa_test_ok ? detailRow("Test Ortamında Sorunsuz", r.qa_test_ok) : ""}
-    ${r.qa_peer_reviewed ? detailRow("Peer Review", r.qa_peer_reviewed) : ""}
-    ${detailRow("Talep Tarihi",     fmt(r.created_at))}
-    ${detailRow("Tamamlandı",       fmt(r.completed_at))}
-  </div>`;
+  document.getElementById("uc-detail-status-badge").innerHTML = badge(r.status, UC_CLS);
+  const finalApproval = r.test_started_at || r.test_approved_by || r.qa_test_ok || r.qa_peer_reviewed;
+  document.getElementById("uc-detail-body").innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">Genel Bilgiler</div>
+      <div class="detail-grid">
+        ${detailRow("Talep Eden",       displayName(r.requester))}
+        ${detailRow("Ortam",            parseEnvStr(r.environment).join(", ") || r.environment)}
+        ${detailRow("Durum",            r.status)}
+        ${detailRow("Talep Tarihi",     fmt(r.created_at))}
+        ${detailRow("Tamamlandı",       fmt(r.completed_at))}
+      </div>
+    </div>
+    ${r.validated_by ? `<div class="detail-section">
+      <div class="detail-section-title">Ön Onay</div>
+      <div class="detail-grid">
+        ${detailRow("Ön Onay Veren",   displayName(r.validated_by))}
+        ${detailRow("Ön Onay Tarihi",  fmt(r.validated_at))}
+        ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note) : ""}
+      </div>
+    </div>` : ""}
+    <div class="detail-section">
+      <div class="detail-section-title">Kural Detayları</div>
+      <div class="detail-grid">
+        ${detailRow("Use-Case",         r.usecase_description)}
+        ${detailRow("Analist",          r.rule_author ? displayName(r.rule_author) : "")}
+        ${detailRow("Yazılan Kural",    r.rule_name)}
+        ${detailRow("Notlar",           r.notes)}
+      </div>
+    </div>
+    ${finalApproval ? `<div class="detail-section">
+      <div class="detail-section-title">Son Onay</div>
+      <div class="detail-grid">
+        ${r.test_started_at  ? detailRow("Test Başlama",     fmt(r.test_started_at))  : ""}
+        ${r.test_approved_by ? detailRow("Prod Onaylayan",   displayName(r.test_approved_by)) : ""}
+        ${r.test_approved_at ? detailRow("Prod Onay Tarihi", fmt(r.test_approved_at)) : ""}
+        ${r.test_notes       ? detailRow("Test Notları",     r.test_notes)            : ""}
+        ${r.qa_test_ok ? detailRow("Test Ortamında Sorunsuz", r.qa_test_ok) : ""}
+        ${r.qa_peer_reviewed ? detailRow("Peer Review", r.qa_peer_reviewed) : ""}
+      </div>
+    </div>` : ""}`;
   document.getElementById("uc-detail-modal").style.display = "flex";
 }
+function closeUCDetailModal() { document.getElementById("uc-detail-modal").style.display = "none"; }
 
 // ---------------------------------------------------------------------------
 // Cached rows for quick modal population
@@ -2323,7 +2367,8 @@ document.getElementById("new-env-input")?.addEventListener("keydown", e => { if 
 ["tune-modal","tune-edit-modal","tune-claim-modal","tune-close-modal","tune-approve-modal",
  "tune-detail-modal","uc-detail-modal",
  "uc-modal","uc-edit-modal","uc-claim-modal","uc-close-modal","uc-test-approve-modal",
- "hunt-modal","hunt-edit-modal","hunt-claim-modal","hunt-detail-modal"].forEach(id => {
+ "hunt-modal","hunt-edit-modal","hunt-claim-modal","hunt-detail-modal",
+ "incident-detail-modal"].forEach(id => {
   document.getElementById(id)?.addEventListener("click", e => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = "none";
   });
@@ -3356,6 +3401,7 @@ async function openHuntDetail(id) {
   try {
     const r = await apiFetch(`/api/hunt/${id}`);
     document.getElementById("hunt-detail-title").textContent = `Hunt #${r.id} — ${r.hunt_title || r.hunt_subject}`;
+    document.getElementById("hunt-detail-status-badge").innerHTML = badge(r.status, HUNT_CLS);
     const HUNT_RESULT_CLS = { "Tehdit Tespit Edildi": "status-done", "Tehdit Tespit Edilmedi": "status-reviewing", "Yetersiz Veri": "status-nottuned" };
     const reportBadge = r.report_status === "Tamamlandı"
       ? `<span class="badge status-done">${esc(r.report_status)}</span>`
@@ -3380,7 +3426,7 @@ async function openHuntDetail(id) {
 
     // MITRE detail section
     const mitreDetail = mitreEntries.filter(e => e.method).map(e =>
-      `<div style="margin-top:8px"><span class="mitre-tag">${esc(e.id)}</span> <span class="text-muted" style="font-size:11px">${esc(e.tactic)}</span><br/><span style="white-space:pre-wrap;font-size:13px">${esc(e.method)}</span></div>`
+      `<div class="detail-list-row"><span class="mitre-tag">${esc(e.id)}</span> <span class="text-muted" style="font-size:11px">${esc(e.tactic)}</span><div class="detail-value" style="margin-top:4px">${esc(e.method)}</div></div>`
     ).join("");
 
     // Parse recommendations and vulnerabilities
@@ -3390,8 +3436,8 @@ async function openHuntDetail(id) {
     recList  = recList.filter(v => v.trim());
     vulnList = vulnList.filter(v => v.trim());
 
-    const recHtml  = recList.length  ? recList.map((v, i)  => `<div style="padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
-    const vulnHtml = vulnList.length ? vulnList.map((v, i) => `<div style="padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-3);margin-right:6px">${i+1}.</span>${esc(v)}</div>`).join("") : "";
+    const recHtml  = recList.length  ? recList.map((v, i)  => `<div class="detail-list-row"><span class="detail-list-index">${i+1}.</span>${esc(v)}</div>`).join("") : "";
+    const vulnHtml = vulnList.length ? vulnList.map((v, i) => `<div class="detail-list-row"><span class="detail-list-index">${i+1}.</span>${esc(v)}</div>`).join("") : "";
 
     // Bulgular: yeni numaralı-liste formatı; findings_items boşsa (eski
     // rapor) tekil findings/findings_image alanlarına düşülür.
@@ -3399,48 +3445,61 @@ async function openHuntDetail(id) {
     try { findingItems = JSON.parse(r.findings_items || "[]"); if (!Array.isArray(findingItems)) findingItems = []; } catch {}
     findingItems = findingItems.filter(f => (f.text||"").trim() || f.image);
     const findingsHtml = findingItems.length
-      ? findingItems.map((f, i) => `<div style="margin-bottom:10px">
-          <div style="font-size:11px;color:var(--text-3);font-weight:600;margin-bottom:2px">${i+1}. Bulgu</div>
-          ${f.text ? `<div class="detail-value" style="white-space:pre-wrap">${esc(f.text)}</div>` : ""}
+      ? findingItems.map((f, i) => `<div class="detail-list-row">
+          <div class="detail-list-index" style="font-weight:600">${i+1}. Bulgu</div>
+          ${f.text ? `<div class="detail-value">${esc(f.text)}</div>` : ""}
           ${f.image ? detailImgRow("", [f.image]) : ""}
         </div>`).join("")
       : (r.findings ? `${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : "");
 
     let body = `
       <div class="detail-section">
-        ${detailRow("Durum", r.status)}
-        ${r.validated_by ? detailRow("Ön Onay Veren", displayName(r.validated_by)) : ""}
-        ${r.validated_at ? detailRow("Ön Onay Tarihi", fmtDate(r.validated_at)) : ""}
-        ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note) : ""}
-        ${r.result_approved_by ? detailRow("Sonucu Onaylayan", displayName(r.result_approved_by)) : ""}
-        ${r.result_approved_at ? detailRow("Sonuç Onay Tarihi", fmtDate(r.result_approved_at)) : ""}
-        ${r.result_approval_note ? detailRow("Sonuç Onay Notu", r.result_approval_note) : ""}
-        ${detailRow("Talep Eden", displayName(r.requester))}
-        ${detailRow("Atanan Analist", r.assigned_analyst ? displayName(r.assigned_analyst) : "")}
-        ${r.hunt_title ? detailRow("Hunt Konusu", r.hunt_subject) : ""}
-        ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${envBadges}</span></div>` : ""}
-        ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
-        ${r.started_at ? detailRow("Hunt Başlangıcı", fmtDate(r.started_at)) : ""}
-        ${detailRow("Tamamlanma Tarihi", fmtDate(r.completed_at))}
-        ${r.hunt_duration_hours != null ? detailRow("Hunt Süresi", r.hunt_duration_hours + " saat") : ""}
-        ${detailRow("Rapor Güncelleme", r.report_updated_at ? r.report_updated_at.slice(0,16) : "")}
-        ${r.notes ? detailRow("Notlar", r.notes) : ""}
+        <div class="detail-section-title">Genel Bilgiler</div>
+        <div class="detail-grid">
+          ${detailRow("Durum", r.status)}
+          ${detailRow("Talep Eden", displayName(r.requester))}
+          ${detailRow("Atanan Analist", r.assigned_analyst ? displayName(r.assigned_analyst) : "")}
+          ${r.hunt_title ? detailRow("Hunt Konusu", r.hunt_subject) : ""}
+          ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value detail-tag-row">${envBadges}</span></div>` : ""}
+          ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
+          ${r.started_at ? detailRow("Hunt Başlangıcı", fmtDate(r.started_at)) : ""}
+          ${detailRow("Tamamlanma Tarihi", fmtDate(r.completed_at))}
+          ${r.hunt_duration_hours != null ? detailRow("Hunt Süresi", r.hunt_duration_hours + " saat") : ""}
+          ${detailRow("Rapor Güncelleme", r.report_updated_at ? r.report_updated_at.slice(0,16) : "")}
+          ${r.notes ? detailRow("Notlar", r.notes) : ""}
+        </div>
       </div>
+      ${r.validated_by ? `<div class="detail-section">
+        <div class="detail-section-title">Ön Onay</div>
+        <div class="detail-grid">
+          ${detailRow("Ön Onay Veren", displayName(r.validated_by))}
+          ${r.validated_at ? detailRow("Ön Onay Tarihi", fmtDate(r.validated_at)) : ""}
+          ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note) : ""}
+        </div>
+      </div>` : ""}
+      ${r.result_approved_by ? `<div class="detail-section">
+        <div class="detail-section-title">Sonuç Onayı</div>
+        <div class="detail-grid">
+          ${detailRow("Sonucu Onaylayan", displayName(r.result_approved_by))}
+          ${r.result_approved_at ? detailRow("Sonuç Onay Tarihi", fmtDate(r.result_approved_at)) : ""}
+          ${r.result_approval_note ? detailRow("Sonuç Onay Notu", r.result_approval_note) : ""}
+        </div>
+      </div>` : ""}
       <div class="detail-section">
         <div class="detail-section-title">Rapor</div>
         <div class="detail-row"><span class="detail-label">Rapor Durumu</span><span class="detail-value">${reportBadge}</span></div>
         ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="badge ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
         ${r.linked_uc_id ? `<div class="detail-row"><span class="detail-label">Bağlı Use-Case</span><span class="detail-value"><span class="badge status-done" style="cursor:pointer" onclick="closeHuntDetailModal();openUCDetail(${r.linked_uc_id})">UC #${r.linked_uc_id}</span></span></div>` : ""}
         ${r.severity ? detailRow("Şiddet", r.severity) : ""}
-        ${mitreBadges ? `<div class="detail-row"><span class="detail-label">MITRE ATT&amp;CK</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${mitreBadges}</span></div>` : ""}
-        ${mitreDetail ? `<div style="padding:8px 0">${mitreDetail}</div>` : ""}
-        ${r.scope ? `<div class="detail-section-title" style="margin-top:12px">Hedef &amp; Kapsam</div>${detailRow("", r.scope)}${r.scope_image ? detailImgRow("Görsel", [r.scope_image]) : ""}` : ""}
-        ${iocBadges ? `<div class="detail-row"><span class="detail-label">IOC Listesi</span><span class="detail-value" style="display:flex;flex-wrap:wrap;gap:4px">${iocBadges}</span></div>` : ""}
+        ${mitreBadges ? `<div class="detail-row"><span class="detail-label">MITRE ATT&amp;CK</span><span class="detail-value detail-tag-row">${mitreBadges}</span></div>` : ""}
+        ${mitreDetail}
+        ${r.scope ? `<div class="detail-section-title">Hedef &amp; Kapsam</div>${detailRow("", r.scope)}${r.scope_image ? detailImgRow("Görsel", [r.scope_image]) : ""}` : ""}
+        ${iocBadges ? `<div class="detail-row"><span class="detail-label">IOC Listesi</span><span class="detail-value detail-tag-row">${iocBadges}</span></div>` : ""}
         ${r.affected_assets ? `${detailRow("Etkilenen Varlıklar", r.affected_assets)}${r.affected_assets_image ? detailImgRow("Görsel", [r.affected_assets_image]) : ""}` : ""}
-        ${findingsHtml ? `<div class="detail-section-title" style="margin-top:12px">Bulgular</div>${findingsHtml}` : ""}
-        ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title" style="margin-top:12px">Detection Önerisi</div>${detailRow("", r.detection_detail)}${r.detection_detail_image ? detailImgRow("Görsel", [r.detection_detail_image]) : ""}` : ""}
-        ${vulnHtml ? `<div class="detail-section-title" style="margin-top:12px">Keşfedilen Güvenlik Açıkları</div><div style="font-size:13px;line-height:1.6">${vulnHtml}</div>` : ""}
-        ${recHtml  ? `<div class="detail-section-title" style="margin-top:12px">Güvenlik Önerileri</div><div style="font-size:13px;line-height:1.6">${recHtml}</div>${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}
+        ${findingsHtml ? `<div class="detail-section-title">Bulgular</div>${findingsHtml}` : ""}
+        ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title">Detection Önerisi</div>${detailRow("", r.detection_detail)}${r.detection_detail_image ? detailImgRow("Görsel", [r.detection_detail_image]) : ""}` : ""}
+        ${vulnHtml ? `<div class="detail-section-title">Keşfedilen Güvenlik Açıkları</div>${vulnHtml}` : ""}
+        ${recHtml  ? `<div class="detail-section-title">Güvenlik Önerileri</div>${recHtml}${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}
       </div>`;
     document.getElementById("hunt-detail-body").innerHTML = body;
     const pdfLink = document.getElementById("hunt-detail-pdf-link");
@@ -3889,6 +3948,7 @@ async function openIncidentDetail(id) {
   if (!r) return;
 
   document.getElementById("incident-detail-title").textContent = r.title;
+  document.getElementById("incident-detail-status-badge").innerHTML = badge(r.status, INCIDENT_CLS);
   let sections = [], images = [];
   try { sections = JSON.parse(r.sections || "[]"); if (!Array.isArray(sections)) sections = []; } catch {}
   try { images   = JSON.parse(r.images   || "[]"); if (!Array.isArray(images))   images   = []; } catch {}
@@ -3896,12 +3956,12 @@ async function openIncidentDetail(id) {
   const sectionsHtml = sections.length ? sections.map(s => `
     <div style="margin-bottom:12px">
       ${s.heading ? `<div class="detail-section-title" style="margin-top:8px">${esc(s.heading)}</div>` : ""}
-      <div class="detail-value" style="white-space:pre-wrap">${esc(s.text)}</div>
+      <div class="detail-value">${esc(s.text)}</div>
     </div>`).join("") : `<div class="text-muted">Bölüm yok.</div>`;
 
   const imagesHtml = images.length ? `
-    <div class="detail-section-title" style="margin-top:12px">Görseller</div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
+    <div class="detail-section-title">Görseller</div>
+    <div class="detail-images">
       ${images.map((img, i) => {
         const url = `/static/uploads/${img.filename}`;
         const label = (img.order !== undefined && img.order !== null) ? img.order : i + 1;
@@ -3915,7 +3975,7 @@ async function openIncidentDetail(id) {
   let assets = [];
   try { assets = JSON.parse(r.affected_assets || "[]"); if (!Array.isArray(assets)) assets = []; } catch {}
   const assetsHtml = assets.length ? `
-    <div class="detail-section-title" style="margin-top:12px">Etkilenen Varlıklar</div>
+    <div class="detail-section-title">Etkilenen Varlıklar</div>
     <div class="detail-value">${assets.map(a => `${esc(a.name)}${a.type ? ` (${esc(a.type)})` : ""}`).join(", ")}</div>` : "";
 
   const body = `
@@ -3928,8 +3988,8 @@ async function openIncidentDetail(id) {
       ${r.validated_by ? detailRow("İşlemi Yapan", displayName(r.validated_by)) : ""}
       ${r.validated_at ? detailRow("İşlem Tarihi", fmtDate(r.validated_at)) : ""}
     </div>
-    ${r.validation_note ? `<div class="detail-section-title" style="margin-top:12px">Son İnceleme Notu</div><div class="detail-value">${esc(r.validation_note)}</div>` : ""}
-    <div class="detail-section-title" style="margin-top:12px">Bölümler</div>
+    ${r.validation_note ? `<div class="detail-section-title">Son İnceleme Notu</div><div class="detail-value">${esc(r.validation_note)}</div>` : ""}
+    <div class="detail-section-title">Bölümler</div>
     ${sectionsHtml}
     ${assetsHtml}
     ${imagesHtml}

@@ -1494,6 +1494,73 @@ token'ları, filtre mimarisi, compose-row CSS'i) uygulandı.
   bu daha büyük, ayrı bir taşıma kararı olduğu için bu turda kapsam dışı
   bırakıldı, kullanıcıya bildirildi.
 
+### Takip (2026-09-08) — Detay kutucukları (Tune/UC/Hunt/Incident) kapsamlı yeniden düzenleme
+
+Kullanıcı satıra tıklayınca açılan read-only "detay" modallarını —
+özellikle Use-Case ve Threat Hunt'takini — kapsamlı ele almamı istedi. Tek
+bir Explore ajanıyla 4 modülün detay fonksiyonları/CSS'i tam çıkarıldı:
+`openHuntDetail()`'de ~20 dağınık inline `style="..."` (aynı "etiket
+satırı" deseni 3 kez, "numaralı liste" deseni 2 kez kopyala-yapıştır),
+`.detail-section` sınıfının hiç CSS'i olmaması (satırlar arası boşluk
+sıfırdı), iki ayrı (biri ölü, terk edilmiş bir "slide-over panel"
+tasarımından kalma) `.detail-row`/`.detail-grid`/`.detail-title` tanımı,
+modal genişliğinin tutarsız olması (Tune/UC/Hunt 720px, Incident 860px),
+ve kapatma mantığının tutarsız olması (Incident kendi fonksiyonunu
+kullanırken diğer 3'ü HTML'e gömülü tekrarlı inline closure kullanıyordu,
+ayrıca Incident dış tıklamayla kapanma listesinde hiç yoktu — gerçek bir
+tutarsızlık). Kullanıcıya bir mockup (gruplu bölümler + başlıkta durum
+rozeti + temiz numaralı liste) gösterildi, onaylandı; Tune/UC/Hunt'a
+Olay Raporu gibi durum-bazlı aksiyon kısayolları eklenmesi ayrıca
+soruldu — istenmedi, kapsam sadece bilgi gösterimi ile sınırlı tutuldu.
+
+- **Paylaşılan CSS temizliği**: ölü `.detail-overlay`/`.detail-panel`/
+  `.detail-header`/`.detail-body`/`.detail-image`/`.detail-title` bloğu
+  silindi (`.detail-section-title` tek canlı tanımı olarak korundu).
+  `.detail-section { display:flex; flex-direction:column; gap:8px; }`
+  eklendi. `.detail-section-title:not(:first-child) { margin-top:16px; }`
+  ile bir bölümün ilk başlığı normal, ikinci+ başlıkları otomatik ayrışıyor
+  — `openHuntDetail`/`openIncidentDetail` içindeki 6+ elle yazılmış
+  `style="margin-top:12px/8px"` kaldırıldı. Yeni `.detail-tag-row`
+  (Ortam/MITRE/IOC etiket satırlarının 3 kez kopyalanan inline stilinin
+  yerine) ve `.detail-list-row`/`.detail-list-index` (Öneriler/Zafiyetler/
+  Bulgular numaralı listelerinin yerine) eklendi. 3 yerdeki gereksiz
+  `style="white-space:pre-wrap"` kaldırıldı (`.detail-value` zaten
+  sağlıyor). `.modal-detail` (720px) kaldırıldı, 4 detay modalı da artık
+  `.modal-wide` (860px) kullanıyor.
+- **Kapatma tutarlılığı**: `closeTuneDetailModal()`/`closeUCDetailModal()`
+  eklendi (Incident'ın deseniyle aynı), HTML'deki tekrarlı inline
+  closure'lar bunlara çevrildi; Hunt'ın zaten var olan
+  `closeHuntDetailModal()`'ı HTML'e de bağlandı. `incident-detail-modal`
+  dış-tıklamayla-kapanma listesine eklendi (gerçek bir tutarsızlık
+  düzeltmesi — diğer 3'ü zaten kapanıyordu).
+- **Tune & UC**: tek düz `.detail-grid` duvarı, 4 mantıksal bölüme
+  ayrıldı (Genel Bilgiler / Ön Onay [koşullu] / Tune-Kural Detayları /
+  Son Onay [koşullu]) — `detailRow()` helper'ı ve backend'e giden hiçbir
+  şey değişmedi, sadece hangi `.detail-grid`'e düştüğü değişti.
+- **Hunt**: aynı mantık (JSON parse/hazırlama) korunarak render madde 1'in
+  yeni sınıflarını kullanacak şekilde yeniden yazıldı; "Genel Bilgiler"
+  de artık Tune/UC gibi 2 kolonlu bir `.detail-grid`, "Ön Onay"/"Sonuç
+  Onayı" koşullu olarak ayrıldı; "Rapor" bölümü (karışık içerik tipleri
+  — etiketler/listeler/görseller grid'e uymadığı için) tek kolon akışta
+  kaldı, sadece yeni sınıflarla temizlendi.
+- **Incident**: en az dokunulan — sadece artık gereksiz inline
+  `margin-top`/`white-space:pre-wrap`'ler kaldırıldı, görsel galerisi
+  var olan `.detail-images` sınıfına bağlandı.
+- **4 modalın hepsine** başlığın yanına durum rozeti eklendi (mevcut
+  `TUNE_CLS`/`UC_CLS`/`HUNT_CLS`/`INCIDENT_CLS` haritaları ve zaten var
+  olan `badge()` helper'ıyla, yeni kod yok).
+- **Doğrulandı**: geçici debug hesabıyla gerçek tarayıcıda 4 modülün
+  hepsi — durum rozetlerinin doğru göründüğü, koşullu bölümlerin
+  (örn. onaylanmamış bir UC'de "Ön Onay" bölümünün hiç çıkmadığı, bir
+  Hunt'ta hem "Ön Onay" hem "Sonuç Onayı" bölümlerinin göründüğü) doğru
+  render edildiği, `.detail-section-title` boşluğunun ilk/sonraki
+  başlıkta doğru (4px/16px) hesaplandığı, Incident'ın dış tıklamayla artık
+  kapandığı, Tune/UC'nin yeni kapatma fonksiyonlarının çalıştığı
+  doğrulandı. `app.js` `v47`'ye, `styles.css` sürüm sorgu dizesi
+  `v11.19`'a yükseltildi. Bu iş salt frontend/görünüm olduğu için
+  audit_log'a hiç yazılmadı; zincir yine de kontrol edildi, geçerli
+  (271 kayıt, 271 zincirli).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

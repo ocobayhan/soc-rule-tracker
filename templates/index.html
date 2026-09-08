@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=11.18"/>
+  <link rel="stylesheet" href="/static/styles.css?v=11.19"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
 </head>
@@ -1201,28 +1201,34 @@
 
 <!-- ===== MODAL: Tuning Detay (read-only) ===== -->
 <div id="tune-detail-modal" class="modal-overlay" style="display:none">
-  <div class="modal modal-detail">
+  <div class="modal modal-wide">
     <div class="modal-header">
-      <h2 class="modal-title" id="tune-detail-title"></h2>
-      <button class="modal-close" onclick="document.getElementById('tune-detail-modal').style.display='none'">&#x2715;</button>
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <h2 class="modal-title" id="tune-detail-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"></h2>
+        <span id="tune-detail-status-badge" style="flex-shrink:0"></span>
+      </div>
+      <button class="modal-close" onclick="closeTuneDetailModal()">&#x2715;</button>
     </div>
     <div class="modal-body" id="tune-detail-body"></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="document.getElementById('tune-detail-modal').style.display='none'">Kapat</button>
+      <button class="btn btn-secondary" onclick="closeTuneDetailModal()">Kapat</button>
     </div>
   </div>
 </div>
 
 <!-- ===== MODAL: Use-Case Detay (read-only) ===== -->
 <div id="uc-detail-modal" class="modal-overlay" style="display:none">
-  <div class="modal modal-detail">
+  <div class="modal modal-wide">
     <div class="modal-header">
-      <h2 class="modal-title" id="uc-detail-title"></h2>
-      <button class="modal-close" onclick="document.getElementById('uc-detail-modal').style.display='none'">&#x2715;</button>
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <h2 class="modal-title" id="uc-detail-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"></h2>
+        <span id="uc-detail-status-badge" style="flex-shrink:0"></span>
+      </div>
+      <button class="modal-close" onclick="closeUCDetailModal()">&#x2715;</button>
     </div>
     <div class="modal-body" id="uc-detail-body"></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="document.getElementById('uc-detail-modal').style.display='none'">Kapat</button>
+      <button class="btn btn-secondary" onclick="closeUCDetailModal()">Kapat</button>
     </div>
   </div>
 </div>
@@ -1582,15 +1588,18 @@
 
 <!-- ===== MODAL: Hunt Detay (read-only) ===== -->
 <div id="hunt-detail-modal" class="modal-overlay" style="display:none">
-  <div class="modal modal-detail">
+  <div class="modal modal-wide">
     <div class="modal-header">
-      <h2 class="modal-title" id="hunt-detail-title"></h2>
-      <button class="modal-close" onclick="document.getElementById('hunt-detail-modal').style.display='none'">&#x2715;</button>
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <h2 class="modal-title" id="hunt-detail-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"></h2>
+        <span id="hunt-detail-status-badge" style="flex-shrink:0"></span>
+      </div>
+      <button class="modal-close" onclick="closeHuntDetailModal()">&#x2715;</button>
     </div>
     <div class="modal-body" id="hunt-detail-body"></div>
     <div class="modal-footer">
       <a id="hunt-detail-pdf-link" class="btn btn-primary" href="#" target="_blank" style="display:none">🖶 PDF İndir</a>
-      <button class="btn btn-secondary" onclick="document.getElementById('hunt-detail-modal').style.display='none'">Kapat</button>
+      <button class="btn btn-secondary" onclick="closeHuntDetailModal()">Kapat</button>
     </div>
   </div>
 </div>
@@ -1685,7 +1694,10 @@
 <div id="incident-detail-modal" class="modal-overlay" style="display:none">
   <div class="modal modal-wide">
     <div class="modal-header">
-      <h2 class="modal-title" id="incident-detail-title">Olay Raporu</h2>
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <h2 class="modal-title" id="incident-detail-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">Olay Raporu</h2>
+        <span id="incident-detail-status-badge" style="flex-shrink:0"></span>
+      </div>
       <button class="modal-close" onclick="closeIncidentDetailModal()">&#x2715;</button>
     </div>
     <div class="modal-body" id="incident-detail-body"></div>
@@ -1784,6 +1796,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=46"></script>
+<script src="/static/app.js?v=47"></script>
 </body>
 </html>

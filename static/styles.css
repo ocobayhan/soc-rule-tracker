@@ -877,37 +877,13 @@ input, select, textarea { font-family: inherit; }
 .settings-subpanel { display: none; }
 .settings-subpanel.active { display: block; }
 
-/* ============================================================ DETAIL VIEW */
-.detail-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex; align-items: flex-start; justify-content: flex-end;
-  z-index: 1000;
-  padding: 0;
-  backdrop-filter: blur(2px);
-}
-.detail-panel {
-  background: var(--bg-secondary);
-  border-left: 0.5px solid var(--border-md);
-  width: min(640px, 100%);
-  height: 100%;
-  overflow-y: auto;
-  display: flex; flex-direction: column;
-}
-.detail-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 0.5px solid var(--border);
-  position: sticky; top: 0;
-  background: var(--bg-secondary);
-  z-index: 1;
-}
-.detail-title { font-size: 15px; font-weight: 500; color: var(--text-1); line-height: 1.3; }
-.detail-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-.detail-row { display: flex; flex-direction: column; gap: 2px; }
-.detail-row dt { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
-.detail-row dd { font-size: 12px; color: var(--text-1); }
-.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* ============================================================ DETAIL MODAL — section title / tags
+   (Not: burada eskiden bir "slide-over panel" tasarımından kalma ölü
+   sınıflar vardı — .detail-overlay/.detail-panel/.detail-header/
+   .detail-body/.detail-image/.detail-title, ve .detail-row/.detail-grid'in
+   kullanılmayan bir dt/dd tabanlı eski sürümü. Hiçbiri app.js/index.html
+   tarafından hiç referans edilmiyordu, kaldırıldı — canlı .detail-row/
+   .detail-grid tanımları aşağıda "Detail panel inner layout" bölümünde.) */
 .detail-section-title {
   font-size: 11px; font-weight: 500; color: var(--text-3);
   text-transform: uppercase; letter-spacing: .06em;
@@ -915,7 +891,7 @@ input, select, textarea { font-family: inherit; }
   border-top: 0.5px solid var(--border);
   margin-top: 4px;
 }
-.detail-image { max-width: 100%; border-radius: var(--r); border: 0.5px solid var(--border); }
+.detail-section-title:not(:first-child) { margin-top: 16px; }
 .mitre-tag {
   display: inline-flex;
   background: var(--accent-subtle);
@@ -1136,11 +1112,12 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 .audit-edit   { background: var(--amber-subtle);  color: var(--amber); }
 .audit-delete { background: var(--red-subtle);    color: var(--red); }
 
-/* Detail modal variants */
-.modal-wide   { max-width: 860px; }
-.modal-detail { max-width: 720px; }
+/* Detail modal variants — 4 modül de tutarlılık için aynı genişliği
+   kullanıyor (2026-09-08 öncesi Tune/UC/Hunt 720px, Incident 860px idi). */
+.modal-wide { max-width: 860px; }
 
 /* Detail panel inner layout */
+.detail-section { display: flex; flex-direction: column; gap: 8px; }
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 /* min-width:0 olmadan flex kolonu, boşluksuz uzun bir token (hostname, hash,
    IOC vb.) geldiğinde küçülmeyi reddediyor ve .modal-body'nin overflow-x'i
@@ -1159,6 +1136,13 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
   max-width: 200px; max-height: 140px; border-radius: var(--r-sm);
   border: 0.5px solid var(--border); cursor: zoom-in; display: block;
 }
+/* Etiket/rozet satırları (Ortam, MITRE, IOC vb.) — daha önce 3+ yerde
+   aynı inline style tekrarlanıyordu (2026-09-08). */
+.detail-tag-row { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Numaralı, salt-okunur liste satırları (Hunt öneri/zafiyet listeleri). */
+.detail-list-row { padding: 6px 0; border-bottom: 0.5px solid var(--border); font-size: 12px; color: var(--text-1); }
+.detail-list-row:last-child { border-bottom: none; }
+.detail-list-index { color: var(--text-3); margin-right: 6px; }
 
 /* User role badge in settings list */
 .user-role-badge {
