@@ -11,6 +11,7 @@ görünümü elde edebilirsiniz — teknoloji yığınından bağımsız.
 | `soc-ui.css` | Tüm tasarım sistemi — renk/köşe/font token'ları (`:root` değişkenleri) + reset + component class'ları (buton, form, tablo, rozet, modal, KPI kartı, sidebar/nav vb.) |
 | `soc-ui.js` | Framework'ten bağımsız, saf DOM tabanlı davranış yardımcıları: sekme geçişi, modal aç/kapat, sürüklenebilir tablo kolonları, panoya kopyala, sidebar-taşmasına takılmayan açılır kutu konumlama |
 | `style-guide.html` | Hiçbir backend'e ihtiyaç duymayan, tarayıcıda doğrudan açılabilen canlı bileşen kataloğu — hem dokümantasyon hem kopyala-yapıştır kaynağı |
+| `soc-theme-composio.css` | Opsiyonel tema katmanı — `soc-ui.css`'ten SONRA yüklenir, hiçbir class/DOM değiştirmeden yalnızca `:root` token'larını (ve birkaç `--accent`'in metin olarak kullanıldığı seçiciyi) ezer. Geri almak tek `<link>` satırını silmek kadar basit. Detay: `docs/PROGRESS.md`daki "Composio tema katmanı" girdisi. |
 
 `style-guide.html`'i doğrudan çift tıklayıp tarayıcıda açabilirsiniz (build
 adımı yok, dış bağımlılık yok — tek font ihtiyacı Inter, o da sistemde

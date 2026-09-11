@@ -1,0 +1,185 @@
+/* ============================================================
+   SOC Tracker — Composio teması
+   ------------------------------------------------------------
+   Kullanım: soc-ui.css'ten SONRA yükleyin. Hiçbir class adı,
+   HTML yapısı veya JS seçicisi değişmez — yalnızca token
+   değerleri ezilir.
+
+     <link rel="stylesheet" href="/static/soc-ui.css">
+     <link rel="stylesheet" href="/static/soc-theme-composio.css">
+
+   Geri almak: tek satırı kaldırmak yeterli.
+   ============================================================ */
+
+:root {
+  /* Zeminler — Composio tek koyu kanvas + tek kart tonu */
+  --bg:           #0F0F0F;
+  --bg-sidebar:   #0F0F0F;
+  --bg-secondary: #181818;
+  --bg-tertiary:  #181818;
+  --bg-hover:     #222222;
+  --bg-active:    #2A2A2A;
+  --bg-1:         #181818;
+
+  /* Kenarlıklar — alfa yerine sabit gri, kartlarda net kenar */
+  --border:        #222222;
+  --border-md:     #333333;
+  --border-strong: #444444;
+
+  /* Metin */
+  --text-1: #FFFFFF;
+  --text-2: #A8A8A8;
+  --text-3: #666666;
+
+  /* Vurgu — elektrik mavisi. YALNIZCA dolgu olarak kullanılır
+     (buton zemini, aktif menü, odak kenarlığı). Koyu zeminde
+     metin rengi olarak kullanmayın: kontrast 1.6:1. */
+  --accent:        #0007CD;
+  --accent-hover:  #0005A3;
+  --accent-subtle: rgba(26,38,255,0.14);
+
+  /* Durum renkleri — koyu zeminde 4.5:1 üzeri */
+  --green:        #33D17A;
+  --green-subtle: rgba(51,209,122,0.12);
+  --amber:        #E8963C;
+  --amber-subtle: rgba(232,150,60,0.12);
+  --red:          #FF4D4D;
+  --red-subtle:   rgba(255,77,77,0.12);
+  --purple:        #A78BFA;
+  --purple-subtle: rgba(167,139,250,0.12);
+  --blue:         #60A5FA;
+  --blue-subtle:  rgba(96,165,250,0.12);
+  --teal:         #2DD4BF;
+  --teal-subtle:  rgba(45,212,191,0.12);
+
+  /* Tipografi + yarıçap */
+  --font: Inter, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --r-sm: 6px;
+  --r:    8px;
+  --r-lg: 16px;
+}
+
+/* ---- Logo kalkanı: inline SVG fill="#5E6AD2" (eski accent) — CSS,
+   presentation attribute'unu ezer, HTML'e dokunmadan yeni accent'e geçer.
+   İkinci path (check işareti) beyaz kalır, dokunulmuyor. ---- */
+.sidebar-logo-icon path:first-child,
+.login-logo-icon path:first-child {
+  fill: var(--accent);
+}
+
+/* ---- Mono yüzeyler: ID, case no, hash, hesap adı, sorgu ---- */
+.mono,
+.case-no,
+.hash,
+code,
+pre,
+input[type="text"].mono,
+.table td .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Bölüm başlığı / kicker: 11px büyük harf, gri ---- */
+.section-label,
+.form-label,
+.table th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.88px;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+/* ---- Kartlarda hover geri bildirimi ---- */
+.card,
+.kpi-card,
+.panel {
+  transition: border-color .15s ease;
+}
+.card:hover,
+.kpi-card:hover,
+.panel:hover {
+  border-color: var(--border-md);
+}
+
+/* ---- Birincil buton: beyaz metin + mavi dolgu ---- */
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #FFFFFF;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* ---- Odak: mavi kenarlık, glow yok ---- */
+.form-input:focus,
+.form-textarea:focus,
+select.form-input:focus {
+  border-color: var(--accent);
+  box-shadow: none;
+  outline: none;
+}
+
+/* ---- soc-ui.css'in birkaç yerde --accent'i METİN rengi olarak
+   kullandığı yüzeyler (tag, rozet, link hover, aktif alt-sekme) —
+   #0007CD kontrastı (1.6:1) buralar için yetersiz. HTML/class'a
+   dokunmadan bu yüzeyleri --blue (#60A5FA, koyu zeminde okunaklı)
+   ile yeniden renklendiriyoruz; --accent yalnızca dolgu/kenarlık
+   rollerinde (buton, odak, checkbox, aktif sekme alt çizgisi) kalıyor. */
+.tag,
+.mitre-tag,
+.role-analyst,
+.status-reviewing,
+.audit-login,
+.range-toggle-active {
+  background: var(--blue-subtle);
+  color: var(--blue);
+}
+.tag,
+.mitre-tag,
+.range-toggle-active {
+  border-color: rgba(96,165,250,0.25);
+}
+.cell-link:hover {
+  color: var(--blue);
+}
+.settings-subtab-btn.active {
+  color: var(--blue);
+  /* border-bottom-color kasıtlı olarak --accent'te bırakıldı — aktif
+     sekme göstergesi "aktif menü" dolgu istisnasına giriyor. */
+}
+
+/* ---- Dashboard spotlight (opsiyonel) ----
+   Ana ekranın üstüne radial glow eklemek için app kabuğuna
+   .has-spotlight sınıfı verin. */
+.has-spotlight { position: relative; }
+.has-spotlight::before {
+  content: "";
+  position: absolute;
+  top: -140px; left: 50%;
+  transform: translateX(-50%);
+  width: 900px; height: 420px;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center,
+    rgba(26,38,255,0.22) 0%,
+    rgba(26,38,255,0.06) 45%,
+    rgba(15,15,15,0) 70%);
+}
+
+/* ---- Yazdırma: raporlar beyaz kağıt ---- */
+@media print {
+  :root {
+    --bg: #FFFFFF;
+    --bg-secondary: #FFFFFF;
+    --bg-tertiary: #F7F7F7;
+    --border: #E4E4E4;
+    --border-md: #CFCFCF;
+    --text-1: #0F0F0F;
+    --text-2: #8A8A8A;
+    --text-3: #8A8A8A;
+    --red: #C62828;
+  }
+}

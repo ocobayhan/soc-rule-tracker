@@ -1753,6 +1753,69 @@ daraltılınca sadece ikonlar görünüp çalışma alanı genişlesin.
   hatasız. `node -c`/Jinja2 kontrolleri geçti. `app.js` `v48`'e,
   `styles.css` sürüm sorgu dizesi `v11.20`'ye yükseltildi.
 
+### Takip (2026-09-11) — Composio tema katmanı
+
+Kullanıcı, `tema/` klasöründe hazırlanmış (design skill ile üretilmiş
+mockup + marka analizi) yeni "Composio" görünümüne geçişi istedi. Kural:
+hiçbir class/id/DOM yapısı değişmeyecek, tüm değişiklik ayrı bir CSS
+katmanında kalacak — geri alması tek `<link>` satırını silmek kadar basit
+olacak.
+
+- `tema/soc-theme-composio.css` → `static/soc-theme-composio.css` (asıl
+  çalışan dosya) ve `design-system/soc-theme-composio.css` (taşınabilir
+  kit ile tutarlılık için, `soc-ui.css`'in yanına) kopyalandı. Bu dosya
+  yalnızca `:root` token'larını (`--bg`, `--text-1/2/3`, `--accent` vb.)
+  ve birkaç ek seçiciyi ezer; `static/styles.css`'e dokunulmadı.
+- `templates/index.html` ve `templates/login.html` `<head>`'ine, mevcut
+  `styles.css` satırından SONRA tema `<link>`'i (`?v=1` cache-bust) ve
+  Inter+JetBrains Mono Google Fonts linki eklendi. `index.html`'de zaten
+  var olan eski Inter-only font linki, yeni birleşik linkle değiştirildi
+  (aynı ağırlıklar + JetBrains Mono eklendi, tekrar link kalmadı).
+- `#tab-dashboard`'a `has-spotlight` sınıfı eklendi (tema dosyasındaki
+  `::before` radial-gradient glow'u tetikliyor).
+- **Kontrast düzeltmesi (asıl iş burasıydı):** İstem açıkça yasaklıyordu —
+  yeni marka mavisi `#0007CD` koyu zeminde METİN olarak kullanılırsa
+  kontrast 1.6:1'e düşüyor (WCAG AA eşiği 4.5:1). `static/styles.css`'i
+  tarayınca `--accent`'in salt DOLGU (buton/checkbox/odak kenarlığı)
+  dışında, doğrudan `color:` olarak da kullanıldığı 7 seçici bulundu:
+  `.tag`, `.mitre-tag`, `.role-analyst`, `.status-reviewing`,
+  `.audit-login`, `.range-toggle-active`, `.cell-link:hover` ve
+  `.settings-subtab-btn.active`'in metin rengi. Bunların hepsi
+  `styles.css`'e dokunmadan tema dosyasında `--blue` (#60A5FA — projede
+  zaten var olan, WCAG uyumlu ikincil mavi) ile yeniden renklendirildi;
+  `--accent` yalnızca buton dolgusu/aktif-sekme alt çizgisi/odak
+  kenarlığı/checkbox'ta (istemin izin verdiği roller) kaldı.
+- Sidebar/login logosundaki kalkan ikonu inline `fill="#5E6AD2"`
+  (eski accent) kullanıyordu — HTML'e dokunmadan, CSS'in presentation
+  attribute'unu ezme kuralından yararlanılıp `.sidebar-logo-icon
+  path:first-child` / `.login-logo-icon path:first-child` için
+  `fill: var(--accent)` eklendi; ikinci path (beyaz onay işareti)
+  dokunulmadan kaldı.
+- **Doğrulandı:** gerçek tarayıcıda admin ile giriş yapılıp dashboard,
+  kural tuning (liste + detay modalı), use-case (liste + yeni-talep
+  compose modalı, form odak durumu), threat hunting (liste + detay
+  modalı, kolon-görünürlük dropdown'u), olay raporları, ayarlar (Genel +
+  XSOAR Entegrasyonu alt-sekmeleri, kullanıcı rol rozetleri), audit log
+  (zincir doğrulama sonucu dahil) tek tek gezildi — konsolda hiç hata
+  yok. Yukarıdaki 8 seçicinin tema dosyasındaki override'ı CSSOM
+  üzerinden (`document.styleSheets`) doğrudan okunarak her birinin
+  gerçekten `--blue`'ya döndüğü, `.settings-subtab-btn.active` ve
+  `.role-analyst`'in computed `color` değerinin `rgb(96, 165, 250)`
+  olduğu doğrulandı. Tablet genişliğinde (768px) dashboard'daki
+  spotlight glow'un `.page-content`'in `overflow-x:hidden`'ına
+  takılıp yatay kaydırma çubuğu yaratmadığı doğrulandı.
+- `templates/report.html`, `incident_report_print.html`,
+  `hunt_report_print.html`'e dokunulmadı — PDF çıktıları isteğe uygun
+  şekilde ayrı, beyaz kağıt temalı kalmaya devam ediyor.
+- Kapsam dışı bırakılanlar (mockup'ta var, ayrı geliştirme gerektirir):
+  sidebar'ın ikon-moduna daraltılması (bu zaten önceki bir turda ayrı
+  yapıldı, ayrıca bkz. bir üstteki "Daraltılabilir sidebar" girdisi),
+  tablo sayfalama/kolon göster-gizle paneli, olay raporlarında
+  tablo/kart görünüm geçişi, aylık PDF rapor şablonunun yenilenmesi.
+- **Geri alma:** `templates/index.html` ve `templates/login.html`'deki
+  tek `soc-theme-composio.css` `<link>` satırı silinirse eski görünüm
+  aynen döner (token'lar dışında hiçbir class/DOM değişmediği için).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

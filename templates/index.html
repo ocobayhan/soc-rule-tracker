@@ -6,8 +6,10 @@
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
   <link rel="stylesheet" href="/static/styles.css?v=11.20"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='soc-theme-composio.css') }}?v=1"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"/>
 </head>
 <body>
 
@@ -80,7 +82,7 @@
 {% if not is_settings %}
 
   <!-- ===== DASHBOARD (non-settings only) ===== -->
-  <section id="tab-dashboard" class="tab-panel active">
+  <section id="tab-dashboard" class="tab-panel active has-spotlight">
     <div class="page-header">
       <h1 class="page-title">Dashboard</h1>
       <div class="filter-row">
