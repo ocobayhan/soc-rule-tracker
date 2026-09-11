@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v49
+   SOC Tracker — Frontend  v50
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -2474,7 +2474,7 @@ document.getElementById("new-env-input")?.addEventListener("keydown", e => { if 
 ["tune-modal","tune-edit-modal","tune-claim-modal","tune-close-modal","tune-approve-modal",
  "tune-detail-modal","uc-detail-modal",
  "uc-modal","uc-edit-modal","uc-claim-modal","uc-close-modal","uc-test-approve-modal",
- "hunt-modal","hunt-edit-modal","hunt-claim-modal","hunt-detail-modal",
+ "hunt-modal","hunt-edit-modal","hunt-claim-modal",
  "incident-detail-modal"].forEach(id => {
   document.getElementById(id)?.addEventListener("click", e => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = "none";
@@ -2712,6 +2712,11 @@ async function loadHunt() {
     huntRows = await apiFetch(`/api/hunt?${p}`);
     buildColumnFilterRow("hunt", huntRows);
     renderHuntRows();
+    // Tam sayfa detay açıkken bir aksiyon (onay/üstlenme/kapama vb.) bu
+    // fonksiyonu tetiklerse, kullanıcıyı artık güncel olan listeye geri
+    // döndürür — goToItem() zaten hemen ardından openHuntDetail()'i tekrar
+    // çağırdığı için o akışı bozmaz (bkz. backToHunts()).
+    backToHunts();
   } catch (e) { console.error(e); }
 }
 
@@ -2851,7 +2856,18 @@ function openHuntClaimModal(id) {
   document.getElementById("hunt-claim-modal").style.display = "flex";
 }
 function closeHuntClaimModal() { document.getElementById("hunt-claim-modal").style.display = "none"; }
-function closeHuntDetailModal() { document.getElementById("hunt-detail-modal").style.display = "none"; }
+
+/** Hunt listesi ⇄ tam sayfa detay geçişi — modal DEĞİL (mockup'ta da tam
+ * sayfa). backToHunts() liste tarafını tekrar render etmiyor, sadece geri
+ * gösteriyor; loadHunt() zaten kendi içinde en güncel veriyi çekip
+ * render ediyor (bkz. loadHunt() sonundaki otomatik geri dönüş). */
+function backToHunts() {
+  const list = document.getElementById("hunt-list-view");
+  const detail = document.getElementById("hunt-detail-view");
+  if (detail) { detail.style.display = "none"; detail.innerHTML = ""; }
+  if (list) list.style.display = "";
+  const pc = document.getElementById("page-content"); if (pc) pc.scrollTop = 0;
+}
 
 async function saveHuntClaim() {
   const id      = document.getElementById("claim-hunt-id").value;
@@ -3514,8 +3530,6 @@ async function saveHuntReport() {
 async function openHuntDetail(id) {
   try {
     const r = await apiFetch(`/api/hunt/${id}`);
-    document.getElementById("hunt-detail-title").textContent = `Hunt #${r.id} — ${r.hunt_title || r.hunt_subject}`;
-    document.getElementById("hunt-detail-status-badge").innerHTML = badge(r.status, HUNT_CLS);
     const HUNT_RESULT_CLS = { "Tehdit Tespit Edildi": "status-done", "Tehdit Tespit Edilmedi": "status-reviewing", "Yetersiz Veri": "status-nottuned" };
     const reportBadge = r.report_status === "Tamamlandı"
       ? `<span class="badge status-done">${esc(r.report_status)}</span>`
@@ -3566,64 +3580,136 @@ async function openHuntDetail(id) {
         </div>`).join("")
       : (r.findings ? `${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : "");
 
-    let body = `
-      <div class="detail-section">
-        <div class="detail-section-title">Genel Bilgiler</div>
-        <div class="detail-grid">
-          ${detailRow("Durum", r.status)}
-          ${detailRow("Talep Eden", displayName(r.requester))}
-          ${detailRow("Atanan Analist", r.assigned_analyst ? displayName(r.assigned_analyst) : "")}
-          ${r.hunt_title ? detailRow("Hunt Konusu", r.hunt_subject) : ""}
-          ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value detail-tag-row">${envBadges}</span></div>` : ""}
-          ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
-          ${r.started_at ? detailRow("Hunt Başlangıcı", fmtDate(r.started_at)) : ""}
-          ${detailRow("Tamamlanma Tarihi", fmtDate(r.completed_at))}
-          ${r.hunt_duration_hours != null ? detailRow("Hunt Süresi", r.hunt_duration_hours + " saat") : ""}
-          ${detailRow("Rapor Güncelleme", r.report_updated_at ? r.report_updated_at.slice(0,16) : "")}
-          ${r.notes ? detailRow("Notlar", r.notes) : ""}
+    // Jinja namespace deseninin JS karşılığı — boş bölüm hiç basılmayınca
+    // numaralar hep ardışık kalsın (bkz. hunt_report_print.html secnum()).
+    let _n = 0;
+    const secnum = () => String(++_n).padStart(2, "0");
+
+    const scopeCard = r.scope ? `
+      <div class="hp-card">
+        <div class="hp-card-hdr">
+          <span class="hp-card-label">${secnum()} · Hedef &amp; Kapsam</span>
+          ${envList.map(e => `<span class="hp-tag mono">${esc(e)}</span>`).join("")}
         </div>
-      </div>
-      ${r.validated_by ? `<div class="detail-section">
-        <div class="detail-section-title">Ön Onay</div>
-        <div class="detail-grid">
-          ${detailRow("Ön Onay Veren", displayName(r.validated_by))}
-          ${r.validated_at ? detailRow("Ön Onay Tarihi", fmtDate(r.validated_at)) : ""}
-          ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note) : ""}
+        <div class="hp-card-body">${esc(r.scope)}</div>
+        ${r.scope_image ? detailImgRow("Görsel", [r.scope_image]) : ""}
+      </div>` : "";
+
+    const mitreCard = mitreEntries.length ? `
+      <div class="hp-card">
+        <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · MITRE ATT&amp;CK</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:${mitreDetail ? "14px" : "0"}">
+          ${mitreEntries.map(e => `<span class="hp-tag mono">${esc(e.id)} · ${esc(e.name)}</span>`).join("")}
         </div>
-      </div>` : ""}
-      ${r.result_approved_by ? `<div class="detail-section">
-        <div class="detail-section-title">Sonuç Onayı</div>
-        <div class="detail-grid">
-          ${detailRow("Sonucu Onaylayan", displayName(r.result_approved_by))}
-          ${r.result_approved_at ? detailRow("Sonuç Onay Tarihi", fmtDate(r.result_approved_at)) : ""}
-          ${r.result_approval_note ? detailRow("Sonuç Onay Notu", r.result_approval_note) : ""}
+        ${mitreEntries.filter(e => e.method).map(e => `
+          <div class="hp-code-block"><strong class="mono">${esc(e.id)}</strong> <span class="text-muted">${esc(e.tactic)}</span><br>${esc(e.method)}</div>
+        `).join("")}
+      </div>` : "";
+
+    const hasFindingsBlock = r.has_findings === "Evet";
+    const findingsCard = (findingsHtml || hasFindingsBlock) ? `
+      <div class="hp-card">
+        <div class="hp-card-hdr">
+          <span class="hp-card-label">${secnum()} · Bulgular</span>
+          ${r.severity ? `<span class="badge status-retry">Şiddet: ${esc(r.severity)}</span>` : ""}
         </div>
-      </div>` : ""}
-      <div class="detail-section">
-        <div class="detail-section-title">Rapor</div>
-        <div class="detail-row"><span class="detail-label">Rapor Durumu</span><span class="detail-value">${reportBadge}</span></div>
-        ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="badge ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
-        ${r.linked_uc_id ? `<div class="detail-row"><span class="detail-label">Bağlı Use-Case</span><span class="detail-value"><span class="badge status-done" style="cursor:pointer" onclick="closeHuntDetailModal();openUCDetail(${r.linked_uc_id})">UC #${r.linked_uc_id}</span></span></div>` : ""}
-        ${r.severity ? detailRow("Şiddet", r.severity) : ""}
-        ${mitreBadges ? `<div class="detail-row"><span class="detail-label">MITRE ATT&amp;CK</span><span class="detail-value detail-tag-row">${mitreBadges}</span></div>` : ""}
-        ${mitreDetail}
-        ${r.scope ? `<div class="detail-section-title">Hedef &amp; Kapsam</div>${detailRow("", r.scope)}${r.scope_image ? detailImgRow("Görsel", [r.scope_image]) : ""}` : ""}
-        ${iocBadges ? `<div class="detail-row"><span class="detail-label">IOC Listesi</span><span class="detail-value detail-tag-row">${iocBadges}</span></div>` : ""}
-        ${r.affected_assets ? `${detailRow("Etkilenen Varlıklar", r.affected_assets)}${r.affected_assets_image ? detailImgRow("Görsel", [r.affected_assets_image]) : ""}` : ""}
-        ${findingsHtml ? `<div class="detail-section-title">Bulgular</div>${findingsHtml}` : ""}
-        ${r.detection_suggestion === "Evet" ? `<div class="detail-section-title">Detection Önerisi</div>${detailRow("", r.detection_detail)}${r.detection_detail_image ? detailImgRow("Görsel", [r.detection_detail_image]) : ""}` : ""}
-        ${vulnHtml ? `<div class="detail-section-title">Keşfedilen Güvenlik Açıkları</div>${vulnHtml}` : ""}
-        ${recHtml  ? `<div class="detail-section-title">Güvenlik Önerileri</div>${recHtml}${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}` : ""}
+        ${findingItems.length ? findingItems.map((f, i) => `
+          <div class="hp-list-row">
+            <span class="hp-list-idx mono">${String(i+1).padStart(2,"0")}</span>
+            <div style="min-width:0">
+              ${f.text ? `<div class="hp-card-body" style="color:var(--text-1);font-size:14px">${esc(f.text)}</div>` : ""}
+              ${f.image ? detailImgRow("", [f.image]) : ""}
+            </div>
+          </div>`).join("")
+          : (r.findings ? `${detailRow("", r.findings)}${r.findings_image ? detailImgRow("Görsel", [r.findings_image]) : ""}` : "")}
+        ${iocList.length ? `<div class="hp-row-label" style="margin:14px 0 8px;font-size:12px">IOC Listesi</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">${iocList.map(v => `<span class="hp-tag mono">${esc(v)}</span>`).join("")}</div>` : ""}
+        ${r.affected_assets ? `<div class="hp-row-label" style="margin-bottom:8px;font-size:12px">Etkilenen Varlıklar</div>
+          ${detailRow("", r.affected_assets)}${r.affected_assets_image ? detailImgRow("Görsel", [r.affected_assets_image]) : ""}` : ""}
+      </div>` : "";
+
+    const ucCard = r.linked_uc_id ? `
+      <div class="hp-uc-card" style="margin-top:14px;cursor:pointer" onclick="backToHunts();openUCDetail(${r.linked_uc_id})">
+        <span class="hp-uc-id mono">UC #${r.linked_uc_id}</span>
+        <span class="hp-uc-title">Bağlı Use-Case talebini aç</span>
+      </div>` : "";
+    const detectionCard = `
+      <div class="hp-card">
+        <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Detection Önerisi</span></div>
+        <div class="hp-row"><span class="hp-row-label">Öneriliyor mu?</span><span class="hp-row-val">${esc(r.detection_suggestion || "—")}</span></div>
+        ${r.detection_suggestion === "Evet" ? `
+          ${r.detection_detail ? `<div class="hp-card-body" style="margin-top:8px">${esc(r.detection_detail)}</div>` : ""}
+          ${r.detection_detail_image ? detailImgRow("Görsel", [r.detection_detail_image]) : ""}
+          ${ucCard}` : ""}
       </div>`;
-    document.getElementById("hunt-detail-body").innerHTML = body;
-    const pdfLink = document.getElementById("hunt-detail-pdf-link");
-    if (r.status === "Tamamlandı") {
-      pdfLink.href = `/hunt/${r.id}/report/pdf`;
-      pdfLink.style.display = "";
-    } else {
-      pdfLink.style.display = "none";
-    }
-    document.getElementById("hunt-detail-modal").style.display = "flex";
+
+    const vulnCard = vulnHtml ? `
+      <div class="hp-card">
+        <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Keşfedilen Güvenlik Açıkları</span></div>
+        ${vulnList.map((v, i) => `<div class="hp-list-row"><span class="hp-list-idx mono">${String(i+1).padStart(2,"0")}</span><span style="color:var(--text-1);font-size:14px">${esc(v)}</span></div>`).join("")}
+      </div>` : "";
+
+    const recCard = recHtml ? `
+      <div class="hp-card">
+        <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Güvenlik Önerileri</span></div>
+        ${recList.map((v, i) => `<div class="hp-list-row"><span class="hp-list-idx mono">${String(i+1).padStart(2,"0")}</span><span style="color:var(--text-1);font-size:14px">${esc(v)}</span></div>`).join("")}
+        ${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}
+      </div>` : "";
+
+    const approvalRows = `
+      ${r.validated_by ? detailRow("Ön Onayı Veren", displayName(r.validated_by)) : ""}
+      ${r.validated_at ? detailRow("Ön Onay Tarihi", fmtDate(r.validated_at)) : ""}
+      ${r.validation_note ? detailRow("Ön Onay Notu", r.validation_note) : ""}
+      ${r.result_approved_by ? detailRow("Sonucu Onaylayan", displayName(r.result_approved_by)) : ""}
+      ${r.result_approved_at ? detailRow("Sonuç Onay Tarihi", fmtDate(r.result_approved_at)) : ""}
+      ${r.result_approval_note ? detailRow("Sonuç Onay Notu", r.result_approval_note) : ""}`;
+
+    const body = `
+      <div class="detail-page">
+        <button class="detail-back" onclick="backToHunts()">&larr; Tüm hunt'lar</button>
+        <h1 class="page-title">${esc(r.hunt_title || r.hunt_subject)}</h1>
+        <p class="detail-page-id mono">HUNT #${r.id}</p>
+
+        <div class="detail-page-grid">
+          <div class="detail-page-main">
+            ${scopeCard}
+            ${mitreCard}
+            ${findingsCard}
+            ${detectionCard}
+            ${vulnCard}
+            ${recCard}
+          </div>
+          <div class="detail-page-side">
+            <div class="hp-card hp-card-side">
+              <div class="hp-card-label" style="margin-bottom:12px">Durum</div>
+              <div class="hp-status-badge">${badge(r.status, HUNT_CLS)}</div>
+              <div class="detail-grid">
+                ${detailRow("Talep Eden", displayName(r.requester))}
+                ${detailRow("Atanan Analist", r.assigned_analyst ? displayName(r.assigned_analyst) : "")}
+                ${r.hunt_title ? detailRow("Hunt Konusu", r.hunt_subject) : ""}
+                ${envBadges ? `<div class="detail-row"><span class="detail-label">Ortam</span><span class="detail-value detail-tag-row">${envBadges}</span></div>` : ""}
+                ${detailRow("Talep Tarihi", fmtDate(r.created_at))}
+                ${r.started_at ? detailRow("Hunt Başlangıcı", fmtDate(r.started_at)) : ""}
+                ${detailRow("Tamamlanma Tarihi", fmtDate(r.completed_at))}
+                ${r.hunt_duration_hours != null ? detailRow("Hunt Süresi", r.hunt_duration_hours + " saat") : ""}
+                ${r.hunt_result ? `<div class="detail-row"><span class="detail-label">Sonuç</span><span class="detail-value"><span class="badge ${HUNT_RESULT_CLS[r.hunt_result]||''}">${esc(r.hunt_result)}</span></span></div>` : ""}
+                <div class="detail-row"><span class="detail-label">Rapor Durumu</span><span class="detail-value">${reportBadge}</span></div>
+                ${r.notes ? detailRow("Notlar", r.notes) : ""}
+                ${approvalRows}
+              </div>
+            </div>
+            <div class="hp-card hp-card-side">
+              <div class="hp-card-label" style="margin-bottom:14px">Onay</div>
+              <div class="hp-actions">${huntActionBtns(r)}</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    const detailView = document.getElementById("hunt-detail-view");
+    detailView.innerHTML = body;
+    document.getElementById("hunt-list-view").style.display = "none";
+    detailView.style.display = "";
+    const pc = document.getElementById("page-content"); if (pc) pc.scrollTop = 0;
   } catch (e) { console.error(e); }
 }
 

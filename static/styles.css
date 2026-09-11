@@ -1240,3 +1240,68 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 .list-item-row textarea { flex: 1; }
 .list-item-row .btn-remove { flex-shrink: 0; padding: 4px 8px; font-size: 16px; line-height: 1; color: var(--text-3); background: transparent; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
 .list-item-row .btn-remove:hover { color: var(--red); border-color: var(--red); }
+
+/* ============================================================ MONO UTILITY */
+.mono { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace); }
+
+/* ============================================================ TAM SAYFA DETAY
+   (Threat Hunting / Olay Raporu — mockup'ta modal değil tam sayfa görünüm,
+   bkz. docs/PROGRESS.md "Mockup tam entegrasyonu, Faz 4/5") */
+.detail-page { max-width: 1400px; }
+.detail-back {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none; color: var(--text-2);
+  font-size: 14px; font-weight: 500; cursor: pointer;
+  padding: 0; margin-bottom: 14px;
+}
+.detail-back:hover { color: var(--text-1); }
+.detail-page-id { font-size: 13px; color: var(--text-3); margin: 8px 0 0; }
+.detail-page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+}
+.detail-page-main { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.detail-page-side { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+@media (min-width: 900px) { .detail-page-side { max-width: 340px; } }
+
+.hp-card { background: var(--bg-secondary); border: 0.5px solid var(--border-md); border-radius: var(--r-lg); padding: 28px; }
+.hp-card-side { padding: 24px; }
+.hp-card-hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+.hp-card-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-2); margin-right: auto; }
+.hp-card-body { font-size: 15px; line-height: 1.55; color: var(--text-2); }
+.hp-tag {
+  font-size: 11px;
+  color: var(--text-1); background: var(--bg-active); border-radius: var(--r-sm); padding: 4px 9px;
+}
+.hp-code-block {
+  background: var(--bg); border-radius: var(--r); padding: 16px 18px; margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.6; color: var(--text-2); white-space: pre-wrap; word-break: break-word;
+}
+.hp-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 5px 0; }
+.hp-row-label { color: var(--text-2); }
+.hp-row-val { color: var(--text-1); text-align: right; }
+.hp-list-row { display: flex; gap: 14px; padding: 12px 14px; background: var(--bg-active); border-radius: var(--r); margin-bottom: 10px; }
+.hp-list-row:last-child { margin-bottom: 0; }
+.hp-list-idx { font-size: 13px; color: var(--text-1); flex: none; }
+.hp-asset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 12px 16px; background: var(--bg-active); border-radius: var(--r); margin-bottom: 10px; }
+.hp-asset-row:last-child { margin-bottom: 0; }
+.hp-asset-type { font-size: 11px; color: var(--text-3); width: 64px; flex: none; }
+.hp-asset-val { font-size: 13px; color: var(--text-1); min-width: 0; }
+.hp-asset-note { font-size: 12px; color: var(--text-3); margin-left: auto; }
+.hp-uc-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--bg-active); border-radius: var(--r); }
+.hp-uc-id { font-size: 13px; color: var(--text-2); flex: none; }
+.hp-uc-title { font-size: 14px; color: var(--text-1); min-width: 0; }
+.hp-status-badge { margin-bottom: 20px; }
+.hp-evidence {
+  display: inline-flex; align-items: center; gap: 10px; margin-top: 10px;
+  padding: 8px 10px; background: var(--bg); border: 0.5px solid var(--border-md);
+  border-radius: var(--r); cursor: pointer;
+}
+.hp-evidence:hover { border-color: var(--accent); }
+.hp-evidence-thumb { width: 36px; height: 26px; border-radius: 3px; background: var(--bg-active); flex: none; object-fit: cover; }
+.hp-evidence-label { font-size: 12px; color: var(--text-3); }
+.hp-actions { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -2075,6 +2075,46 @@ haritası onaylandı (plan dosyası). Bu girdi sadece **Faz 1**'i kapsıyor.
   kartları/dash-section'lar hepsi doğru render oluyor, konsol hatasız,
   `getComputedStyle` ile radius/font değerleri doğrulandı.
 
+### Takip (2026-09-12) — Mockup tam entegrasyonu, Faz 4: Threat Hunting detayı (modal → tam sayfa)
+
+Kullanıcının en somut şikayeti buydu: "threat hunt'ların içeriğinde farklı
+ekran açılıyor". Mockup'ta Hunt satırına tıklayınca modal değil, listeyi
+YERİNDE değiştiren tam sayfa bir görünüm açılıyor (iki kolonlu, numaralı
+kartlar + kenar çubuğunda Durum/Onay). Bu mimari değişiklik yapıldı.
+
+- **HTML:** `#tab-threat-hunting` içi ikiye bölündü — mevcut liste içeriği
+  `#hunt-list-view`'a taşındı, yanına boş bir `#hunt-detail-view` eklendi.
+  Eski `#hunt-detail-modal` (`.modal-overlay`) TAMAMEN kaldırıldı.
+- **`openHuntDetail(id)` yeniden yazıldı** — TÜM mevcut veri-ayrıştırma
+  mantığı (MITRE/IOC/ortam/öneri/zafiyet/bulgu JSON parse'ları) BİREBİR
+  korundu, sadece son HTML derlemesi değişti: eski düz `.detail-section`
+  listesi yerine mockup'ın numaralı kart deseni (`secnum()` — Jinja
+  `namespace` sayaç desenin JS karşılığı, boş kart atlanınca numaralar
+  ardışık kalıyor) + iki kolonlu grid (`detail-page-grid`/`-main`/`-side`).
+  Kenar çubuğundaki "Onay" kartı **`huntActionBtns(r)`'ı olduğu gibi
+  yeniden kullanıyor** — Üstlen/Ön Onay/Rapor Yaz/Sonucu Onayla/PDF İndir/
+  Düzenle/Sil mantığının HİÇBİRİ tekrar yazılmadı, zaten var olan
+  fonksiyon çağrıldı.
+- **`backToHunts()`** eklendi (liste↔detay geçişi). `loadHunt()`'ın
+  sonuna otomatik `backToHunts()` çağrısı eklendi: bir aksiyon (onay/
+  üstlenme/kapama) detay görünümündeyken `loadHunt()`'ı tetiklerse
+  kullanıcı otomatik güncel listeye döner — `goToItem()` zaten hemen
+  ardından `openHuntDetail()`'i tekrar çağırdığı için dashboard/arama
+  akışını bozmuyor.
+- **Detection Önerisi kartı iyileştirildi:** eski kod `detection_
+  suggestion==="Hayır"` olduğunda bölümü TAMAMEN gizliyordu (hiç
+  "Hayır" cevabı gösterilmiyordu). PDF export'ta (Faz B) zaten düzeltilen
+  bu davranış, burada da eşitlendi — "Öneriliyor mu?" satırı artık her
+  zaman gösteriliyor.
+- **Doğrulandı:** gerçek tarayıcıda 1280×900'de, MITRE'siz basit bir
+  hunt (#9) ve MITRE+iki-aşamalı-onay+notlu zengin bir hunt (#4)
+  açılıp incelendi — numaralı kartlar, MITRE kod-bloğu, Durum kartındaki
+  TÜM alanlar (onay notları dahil), Onay kartındaki 3 gerçek aksiyon
+  butonu (PDF İndir/Düzenle/Sil, `huntActionBtns()`'tan doğru geldiği
+  `innerHTML` ile teyit edildi) doğru render oldu. "← Tüm hunt'lar"
+  ile listeye dönüş, liste durumunun (filtre/sıralama) bozulmadan
+  korunduğu doğrulandı. Konsol hatasız.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
