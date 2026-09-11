@@ -1915,6 +1915,59 @@ güncellendi.
   footer'ıyla birebir eşleşti. `verify_audit.py`: 287/287 zincirli,
   geçerli.
 
+### Takip (2026-09-11) — Aylık Rapor Composio tasarımına + Bütünlük hash'i
+
+Aynı plan/turun son fazı — **Faz D**. `templates/report.html`, Hunt/Olay
+Raporu'ndan farklı olarak bu ikisinden çok daha zengin, tarayıcıdan
+`window.print()` ile PDF'e giden bir sayfa (WeasyPrint'e hiç uğramıyor —
+bu akış değişmedi). Mockup'ın görsel dili (header/footer/eyebrow/H1/
+bilgi kartı stili/mono sayılar/hairline tablo) mevcut TÜM zengin içeriğe
+(11+4 KPI kutusu, 2 rate-card, Hunt Programı 5 kutusu, Olay Raporu 2
+kutusu, 3× özet çubuğu, 3× Chart.js donut, 3× kayıt tablosu) uygulandı —
+**hiçbir KPI/tablo/grafik kaldırılmadı**, mockup'ın kendisi bunların
+çoğunu hiç içermiyordu ama gerçek/işlevsel veri oldukları için taşındı.
+
+- **Renk:** eski accent `#5E6AD2`'nin dosyadaki 11 kullanımı (KPI kart
+  şeridi, shield logo, "İnceleniyor" donut/legend/özet-çubuğu rengi)
+  tek seferde `#0007CD`'ye çevrildi. Bu sayfa hep AÇIK zeminde
+  olduğundan (kağıt/print), koyu-zeminde-metin kontrast kısıtı (tema
+  katmanındaki gibi) burada geçerli değil — `--accent` metin olarak da
+  serbestçe kullanılabiliyor.
+- **KPI kartları:** mockup'ın sade kutu diline geçildi — üstteki 3px
+  renkli şerit kaldırıldı, rengin taşıyıcısı doğrudan değer metnine
+  taşındı (`.kpi-card.green .kpi-value{color:var(--green)}` vb.) ki
+  hızlı kırmızı/yeşil tarama işlevi kaybolmasın, sadece görsel olarak
+  sadeleşsin. Etiketler mockup gibi 9px uppercase gri oldu.
+- **Tablolar:** `.rpt-table th`'deki gri arka plan kaldırılıp sade
+  hairline alt-çizgiye geçildi (mockup deseni); ID ve tarih kolonlarına
+  `.mono` (JetBrains Mono) eklendi. `.pill` durum rozetleri ve
+  `.section-icon` modül renkleri KASITLI OLARAK değiştirilmedi — ikisi
+  de zaten sabit Tailwind-tonu hex değerleri kullanıyor, eski accent'e
+  bağlı değiller, yeni paletle çakışmıyorlar (gereksiz risk alınmadı).
+- **Header/footer:** Hunt/Olay Raporu'yla aynı `doc-header` + `cover`
+  (DIAS logosu + adı, ilk kez bu sayfaya eklendi — `/static/logo_dias.jpg`
+  düz HTTP yoluyla, WeasyPrint'in `file://` URI'siyle KARIŞTIRILMADI çünkü
+  bu sayfa istemci tarayıcısında render oluyor) + eyebrow + H1 deseni.
+  Sınıflandırma etiketi: `Aylık Rapor · {ay etiketi} · Gizli / Dahili`.
+  Footer'a mevcut "v{{app_version}} · Oluşturulma · Dönem · Gizlilik"
+  bilgisi solda aynen kalıp sağa **Bütünlük hash'i** eklendi. Google
+  Fonts Inter+JetBrains Mono linki eklendi (sayfa tarayıcıda render
+  olduğu için WeasyPrint'in font kısıtı burada yok).
+- **Bütünlük hash'i + audit:** `monthly_report()`'a `report_integrity_hash
+  ("monthly", month or "all", generated, <kpi+3 tablo JSON'u>)` eklendi;
+  yeni `write_audit("EXPORT_MONTHLY_REPORT", ...)` çağrısı — bu sayfa
+  daha önce HİÇ audit'lenmiyordu, artık her görüntülemede (ay filtresi
+  değişse de) bir audit girdisi düşüyor.
+- **Doğrulandı:** gerçek tarayıcıda `/report` açılıp (Tüm Zamanlar)
+  header/cover/eyebrow/H1, tüm KPI kutuları (renkli değerler), Hunt
+  Programı/Olay Raporu alt-blokları, 3 donut grafiği (Chart.js, konsol
+  hatasız), 3 özet çubuğu, 3 kayıt tablosu (mono ID/tarih), footer +
+  Bütünlük hash'i tek tek kontrol edildi. `GET /api/audit?category=
+  system` ile yeni `EXPORT_MONTHLY_REPORT`'un doğru kategoriye girdiği
+  ve audit detail hash'inin (`3edda88d94a136a7`) sayfa footer'ıyla
+  birebir eştiği doğrulandı. `verify_audit.py`: 288/288 zincirli,
+  geçerli. Bununla Composio PDF/rapor geçişi (Faz A-D) tamamlandı.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

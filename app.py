@@ -3518,6 +3518,17 @@ def monthly_report():
         except Exception:
             month_label = month
 
+    generated = date.today().strftime("%d.%m.%Y")
+    import json as _j
+    integrity_payload = _j.dumps(
+        {"kpi": kpi, "tune": tune_rows, "uc": uc_rows, "hunt": hunt_rows},
+        sort_keys=True, ensure_ascii=False, default=str,
+    )
+    integrity_hash = report_integrity_hash("monthly", month or "all", generated, integrity_payload)[:16]
+    classification_tag = f"Aylık Rapor · {month_label or 'Tüm Zamanlar'} · Gizli / Dahili"
+    write_audit("EXPORT_MONTHLY_REPORT", "monthly_report", None,
+                f"Dönem: {month_label or 'Tüm Zamanlar'} | Bütünlük: {integrity_hash}")
+
     return render_template(
         "report.html",
         month=month,
@@ -3526,7 +3537,9 @@ def monthly_report():
         tune_rows=tune_rows,
         uc_rows=uc_rows,
         hunt_rows=hunt_rows,
-        generated=date.today().strftime("%d.%m.%Y"),
+        generated=generated,
+        classification_tag=classification_tag,
+        integrity_hash=integrity_hash,
     )
 
 # ---------------------------------------------------------------------------

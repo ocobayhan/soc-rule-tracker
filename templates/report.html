@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>SOC Tracker — Aylık Rapor{% if month_label %} | {{ month_label }}{% endif %}</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 /* ─── Base ─────────────────────────────────────────────────────────── */
@@ -16,7 +19,7 @@
   --text-1: #111827;
   --text-2: #6B7280;
   --text-3: #9CA3AF;
-  --accent: #5E6AD2;
+  --accent: #0007CD;
   --green:  #2DB27D;
   --amber:  #F59E0B;
   --red:    #EF4444;
@@ -32,6 +35,7 @@ body {
   line-height: 1.5;
   padding: 0;
 }
+.mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace; }
 
 /* ─── Layout ────────────────────────────────────────────────────────── */
 .page-wrap {
@@ -40,24 +44,28 @@ body {
   padding: 32px 24px 60px;
 }
 
-/* ─── Header ────────────────────────────────────────────────────────── */
-.report-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 28px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid var(--accent);
+/* ─── Composio doc-header/cover (Hunt/Olay Raporu PDF'leriyle aynı desen) ── */
+.doc-header {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 10px; margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
 }
-.report-header-left { display: flex; align-items: center; gap: 12px; }
-.report-logo {
-  width: 32px; height: 32px;
-  flex-shrink: 0;
+.doc-header-logo { flex: none; display: block; }
+.doc-header-brand { font-size: 13px; font-weight: 600; letter-spacing: -0.1px; color: var(--text-1); }
+.doc-header-tag { font-size: 10px; color: var(--text-3); margin-left: auto; }
+.doc-header-org-logo { height: 22px; width: auto; flex: none; display: block; }
+.cover { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+.cover-logo { height: 42px; width: auto; flex: none; display: block; border-radius: 3px; }
+.cover-org { font-size: 12px; font-weight: 600; color: var(--text-1); line-height: 1.3; }
+.cover-org-sub { font-size: 10px; color: var(--text-3); }
+.eyebrow {
+  font-size: 9px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 8px;
 }
-.report-title { font-size: 20px; font-weight: 600; color: var(--text-1); }
-.report-period { font-size: 13px; color: var(--text-2); margin-top: 2px; }
-.report-meta { text-align: right; font-size: 11px; color: var(--text-3); }
-.report-meta strong { color: var(--text-2); }
+h1.doc-title {
+  font-size: 22px; font-weight: 500; line-height: 1.15; letter-spacing: -0.4px;
+  color: var(--text-1); margin: 0 0 26px;
+}
 
 /* ─── Toolbar (hidden on print) ──────────────────────────────────────── */
 .toolbar {
@@ -119,27 +127,23 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
-  position: relative;
-  overflow: hidden;
 }
-.kpi-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: var(--card-accent, #E5E7EB);
-  border-radius: 10px 10px 0 0;
+.kpi-label {
+  font-size: 9px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 6px;
 }
-.kpi-label { font-size: 11px; color: var(--text-2); font-weight: 500; margin-bottom: 6px; }
-.kpi-value { font-size: 28px; font-weight: 600; color: var(--text-1); line-height: 1; margin-bottom: 4px; }
+.kpi-value { font-size: 24px; font-weight: 500; color: var(--text-1); line-height: 1; margin-bottom: 4px; }
 .kpi-sub   { font-size: 11px; color: var(--text-3); }
-.kpi-card.green  { --card-accent: var(--green);  }
-.kpi-card.amber  { --card-accent: var(--amber);  }
-.kpi-card.blue   { --card-accent: var(--blue);   }
-.kpi-card.purple { --card-accent: var(--purple); }
-.kpi-card.red    { --card-accent: var(--red);    }
-.kpi-card.teal   { --card-accent: var(--teal);   }
-.kpi-card.accent { --card-accent: var(--accent); }
+/* Rengin taşıyıcısı artık kart üstündeki şerit değil (Composio'nun düz
+   kutu dili), doğrudan değer metni — hızlı tarama (kırmızı/yeşil) işlevi
+   korunuyor, sadece görsel olarak sadeleşti. */
+.kpi-card.green  .kpi-value { color: var(--green);  }
+.kpi-card.amber  .kpi-value { color: var(--amber);  }
+.kpi-card.blue   .kpi-value { color: var(--blue);   }
+.kpi-card.purple .kpi-value { color: var(--purple); }
+.kpi-card.red    .kpi-value { color: var(--red);    }
+.kpi-card.teal   .kpi-value { color: var(--teal);   }
+.kpi-card.accent .kpi-value { color: var(--accent); }
 
 /* ─── Chart + Table row ───────────────────────────────────────────────── */
 .two-col { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
@@ -174,11 +178,10 @@ body {
 .rpt-table { width: 100%; border-collapse: collapse; }
 .rpt-table th {
   text-align: left;
-  font-size: 10px; font-weight: 600; color: var(--text-2);
+  font-size: 9px; font-weight: 600; color: var(--text-3);
   padding: 8px 12px;
-  background: var(--bg);
   border-bottom: 1px solid var(--border);
-  text-transform: uppercase; letter-spacing: .05em;
+  text-transform: uppercase; letter-spacing: .06em;
   white-space: nowrap;
 }
 .rpt-table td {
@@ -187,6 +190,7 @@ body {
   border-bottom: 1px solid #F3F4F6;
   vertical-align: top;
 }
+.rpt-table td.mono, .rpt-table th.mono { font-size: 11px; }
 .rpt-table tr:last-child td { border-bottom: none; }
 .rpt-table tr:hover td { background: #FAFAFA; }
 .td-trunc { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -248,12 +252,13 @@ body {
 
 /* ─── Footer ─────────────────────────────────────────────────────────── */
 .report-footer {
-  text-align: center;
-  padding-top: 24px;
+  display: flex; align-items: center; gap: 12px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
-  font-size: 11px; color: var(--text-3);
+  font-size: 10px; color: var(--text-3);
   margin-top: 40px;
 }
+.report-footer-right { margin-left: auto; }
 
 /* ─── Empty ──────────────────────────────────────────────────────────── */
 .empty-row td { text-align: center; color: var(--text-3); padding: 20px; font-style: italic; }
@@ -289,25 +294,26 @@ body {
   </div>
 
   <!-- Header -->
-  <div class="report-header">
-    <div class="report-header-left">
-      <svg class="report-logo" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 2.2 4.5 5v6.1c0 5.1 3.3 9.1 7.5 10.7 4.2-1.6 7.5-5.6 7.5-10.7V5L12 2.2z" fill="#5E6AD2"/>
-        <path d="M8.7 12.3l2.1 2.1 4.5-4.5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <div>
-        <div class="report-title">SOC Tracker — Aylık Rapor</div>
-        <div class="report-period">
-          {% if month_label %}{{ month_label }}
-          {% else %}Tüm Zamanlar{% endif %}
-        </div>
-      </div>
-    </div>
-    <div class="report-meta">
-      Oluşturulma: <strong>{{ generated }}</strong><br>
-      Gizlilik: <strong>Dahili</strong>
+  <div class="doc-header">
+    <svg class="doc-header-logo" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.2 4.5 5v6.1c0 5.1 3.3 9.1 7.5 10.7 4.2-1.6 7.5-5.6 7.5-10.7V5L12 2.2z" fill="#0007CD"/>
+      <path d="M8.7 12.3l2.1 2.1 4.5-4.5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="doc-header-brand">SOC Tracker</span>
+    <span class="doc-header-tag mono">{{ classification_tag }}</span>
+    <img class="doc-header-org-logo" src="/static/logo_dias.jpg" alt="DIAS"/>
+  </div>
+
+  <div class="cover">
+    <img class="cover-logo" src="/static/logo_dias.jpg" alt="DIAS"/>
+    <div>
+      <div class="cover-org">DIAS</div>
+      <div class="cover-org-sub">Siber Güvenlik Operasyon Merkezi</div>
     </div>
   </div>
+
+  <div class="eyebrow">Aylık Rapor</div>
+  <h1 class="doc-title">{{ month_label or "Tüm Zamanlar" }} — SOC Faaliyet Özeti</h1>
 
   <!-- ══════════════════════════════════════ KPI ÖZET ═══════════════════ -->
   <div class="section">
@@ -454,7 +460,7 @@ body {
         {% for label, val, color in [
             ('Tune Başarılı', kpi.tune_success, '#2DB27D'),
             ('Tune Edildi', kpi.tune_edildi, '#8B5CF6'),
-            ('İnceleniyor', kpi.tune_reviewing, '#5E6AD2'),
+            ('İnceleniyor', kpi.tune_reviewing, '#0007CD'),
             ('Açık', kpi.tune_open, '#F59E0B'),
             ('Ön Onay Bekliyor', kpi.tune_pending_validation, '#3B82F6'),
             ('Yeniden Tune', kpi.tune_retry, '#EF4444'),
@@ -475,7 +481,7 @@ body {
         {% for label, val, color in [
             ("Prod'da Aktif", kpi.uc_prod, '#2DB27D'),
             ('Test Ediliyor', kpi.uc_testing, '#14B8A6'),
-            ('İnceleniyor', kpi.uc_reviewing, '#5E6AD2'),
+            ('İnceleniyor', kpi.uc_reviewing, '#0007CD'),
             ('Açık', kpi.uc_open, '#F59E0B'),
             ('Ön Onay Bekliyor', kpi.uc_pending_validation, '#3B82F6'),
             ('Yazılamaz', kpi.uc_cantwrite, '#9CA3AF'),
@@ -495,7 +501,7 @@ body {
         {% for label, val, color in [
             ('Tamamlandı', kpi.hunt_done, '#2DB27D'),
             ('Sonuç Onayı Bekliyor', kpi.hunt_result_pending, '#8B5CF6'),
-            ('İnceleniyor', kpi.hunt_reviewing, '#5E6AD2'),
+            ('İnceleniyor', kpi.hunt_reviewing, '#0007CD'),
             ('Açık', kpi.hunt_open, '#F59E0B'),
             ('Ön Onay Bekliyor', kpi.hunt_pending_validation, '#3B82F6'),
             ('İptal', kpi.hunt_cancelled, '#9CA3AF'),
@@ -524,7 +530,7 @@ body {
           {% for label, val, color in [
               ('Tune Başarılı', kpi.tune_success, '#2DB27D'),
               ('Tune Edildi', kpi.tune_edildi, '#8B5CF6'),
-              ('İnceleniyor', kpi.tune_reviewing, '#5E6AD2'),
+              ('İnceleniyor', kpi.tune_reviewing, '#0007CD'),
               ('Açık', kpi.tune_open, '#F59E0B'),
               ('Yeniden Tune', kpi.tune_retry, '#EF4444'),
               ('Edilmedi', kpi.tune_edilmedi, '#9CA3AF'),
@@ -555,12 +561,12 @@ body {
           } %}
           {% for r in tune_rows %}
           <tr>
-            <td class="text-muted">{{ r.id }}</td>
+            <td class="text-muted mono">{{ r.id }}</td>
             <td class="td-trunc" style="max-width:180px" title="{{ r.rule_name | e }}">{{ r.rule_name | e }}</td>
             <td class="text-muted">{{ r.environment | e }}</td>
             <td class="text-muted">{{ display_name(r.tuning_analyst) or '—' }}</td>
             <td><span class="pill {{ tune_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
-            <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
+            <td class="text-muted mono">{{ (r.created_at or '')[:10] }}</td>
           </tr>
           {% else %}
           <tr class="empty-row"><td colspan="6">Bu dönemde kayıt yok.</td></tr>
@@ -584,7 +590,7 @@ body {
           {% for label, val, color in [
               ("Prod'da Aktif", kpi.uc_prod, '#2DB27D'),
               ('Test Ediliyor', kpi.uc_testing, '#14B8A6'),
-              ('İnceleniyor', kpi.uc_reviewing, '#5E6AD2'),
+              ('İnceleniyor', kpi.uc_reviewing, '#0007CD'),
               ('Açık', kpi.uc_open, '#F59E0B'),
               ('Yazılamaz', kpi.uc_cantwrite, '#9CA3AF'),
           ] %}
@@ -614,12 +620,12 @@ body {
           } %}
           {% for r in uc_rows %}
           <tr>
-            <td class="text-muted">{{ r.id }}</td>
+            <td class="text-muted mono">{{ r.id }}</td>
             <td class="td-trunc" style="max-width:180px" title="{{ r.usecase_description | e }}">{{ r.usecase_description | e }}</td>
             <td class="text-muted">{{ r.environment | e }}</td>
             <td class="text-muted">{{ display_name(r.rule_author) or '—' }}</td>
             <td><span class="pill {{ uc_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
-            <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
+            <td class="text-muted mono">{{ (r.created_at or '')[:10] }}</td>
           </tr>
           {% else %}
           <tr class="empty-row"><td colspan="6">Bu dönemde kayıt yok.</td></tr>
@@ -642,7 +648,7 @@ body {
         <div class="chart-legend">
           {% for label, val, color in [
               ('Tamamlandı', kpi.hunt_done, '#2DB27D'),
-              ('İnceleniyor', kpi.hunt_reviewing, '#5E6AD2'),
+              ('İnceleniyor', kpi.hunt_reviewing, '#0007CD'),
               ('Açık', kpi.hunt_open, '#F59E0B'),
               ('İptal', kpi.hunt_cancelled, '#9CA3AF'),
           ] %}
@@ -671,12 +677,12 @@ body {
           } %}
           {% for r in hunt_rows %}
           <tr>
-            <td class="text-muted">{{ r.id }}</td>
+            <td class="text-muted mono">{{ r.id }}</td>
             <td class="td-trunc" style="max-width:200px" title="{{ r.hunt_subject | e }}">{{ r.hunt_subject | e }}</td>
             <td class="text-muted">{{ display_name(r.assigned_analyst) or '—' }}</td>
             <td class="text-muted">{{ r.hunt_result or '—' }}</td>
             <td><span class="pill {{ hunt_status_cls.get(r.status, 'pill-edilmedi') }}">{{ r.status | e }}</span></td>
-            <td class="text-muted">{{ (r.created_at or '')[:10] }}</td>
+            <td class="text-muted mono">{{ (r.created_at or '')[:10] }}</td>
           </tr>
           {% else %}
           <tr class="empty-row"><td colspan="6">Bu dönemde kayıt yok.</td></tr>
@@ -689,9 +695,12 @@ body {
 
   <!-- Footer -->
   <div class="report-footer">
-    SOC Tracker v{{ app_version }} &nbsp;·&nbsp; Oluşturulma: {{ generated }}
-    {% if month_label %} &nbsp;·&nbsp; Dönem: {{ month_label }}{% endif %}
-    &nbsp;·&nbsp; Gizlilik: Dahili
+    <span>
+      SOC Tracker v{{ app_version }} &nbsp;·&nbsp; Oluşturulma: {{ generated }}
+      {% if month_label %} &nbsp;·&nbsp; Dönem: {{ month_label }}{% endif %}
+      &nbsp;·&nbsp; Gizlilik: Dahili
+    </span>
+    <span class="report-footer-right mono">Bütünlük: {{ integrity_hash }}</span>
   </div>
 
 </div><!-- /page-wrap -->
@@ -735,19 +744,19 @@ function donut(id, labels, data, colors) {
 donut('tuneChart',
   ['Tune Başarılı', 'Tune Edildi', 'İnceleniyor', 'Açık', 'Ön Onay Bekliyor', 'Yeniden Tune', 'Edilmedi', 'Reddedildi'],
   [{{ kpi.tune_success }}, {{ kpi.tune_edildi }}, {{ kpi.tune_reviewing }}, {{ kpi.tune_open }}, {{ kpi.tune_pending_validation }}, {{ kpi.tune_retry }}, {{ kpi.tune_edilmedi }}, {{ kpi.tune_rejected }}],
-  ['#2DB27D', '#8B5CF6', '#5E6AD2', '#F59E0B', '#3B82F6', '#EF4444', '#9CA3AF', '#EC4899']
+  ['#2DB27D', '#8B5CF6', '#0007CD', '#F59E0B', '#3B82F6', '#EF4444', '#9CA3AF', '#EC4899']
 );
 
 donut('ucChart',
   ["Prod'da Aktif", 'Test Ediliyor', 'İnceleniyor', 'Açık', 'Ön Onay Bekliyor', 'Yazılamaz', 'Reddedildi'],
   [{{ kpi.uc_prod }}, {{ kpi.uc_testing }}, {{ kpi.uc_reviewing }}, {{ kpi.uc_open }}, {{ kpi.uc_pending_validation }}, {{ kpi.uc_cantwrite }}, {{ kpi.uc_rejected }}],
-  ['#2DB27D', '#14B8A6', '#5E6AD2', '#F59E0B', '#3B82F6', '#9CA3AF', '#EC4899']
+  ['#2DB27D', '#14B8A6', '#0007CD', '#F59E0B', '#3B82F6', '#9CA3AF', '#EC4899']
 );
 
 donut('huntChart',
   ['Tamamlandı', 'Sonuç Onayı Bekliyor', 'İnceleniyor', 'Açık', 'Ön Onay Bekliyor', 'İptal', 'Reddedildi'],
   [{{ kpi.hunt_done }}, {{ kpi.hunt_result_pending }}, {{ kpi.hunt_reviewing }}, {{ kpi.hunt_open }}, {{ kpi.hunt_pending_validation }}, {{ kpi.hunt_cancelled }}, {{ kpi.hunt_rejected }}],
-  ['#2DB27D', '#8B5CF6', '#5E6AD2', '#F59E0B', '#3B82F6', '#9CA3AF', '#EC4899']
+  ['#2DB27D', '#8B5CF6', '#0007CD', '#F59E0B', '#3B82F6', '#9CA3AF', '#EC4899']
 );
 </script>
 </body>
