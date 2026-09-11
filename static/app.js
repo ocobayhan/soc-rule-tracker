@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v48
+   SOC Tracker — Frontend  v49
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -1200,7 +1200,15 @@ const TUNE_COLUMNS = [
   { index: 11, key: "completed_at",    label: "Tamamlandı",   filterType: "text" },
 ];
 
+function setPageSubtitle(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
 function renderTuneRows() {
+  setPageSubtitle("tune-subtitle",
+    `${tuneRows.length} talep · ${tuneRows.filter(r => r.status === "Açık").length} açık · `
+    + `${tuneRows.filter(r => r.status === "Ön Onay Bekliyor").length} ön onay bekliyor`);
   const TUNE_FIELDS = ["rule_name","tune_reason","reporter","environment","tuning_analyst","how_tuned","xsoar_case_id"];
   const tuneOtherFilterActive = !!tuneSearch || Object.values(_colFilters.tune).some(Boolean);
   const visible = tuneRows
@@ -1703,6 +1711,9 @@ const UC_COLUMNS = [
 ];
 
 function renderUCRows() {
+  setPageSubtitle("uc-subtitle",
+    `${ucRows.length} talep · ${ucRows.filter(r => r.status === "Açık").length} açık · `
+    + `${ucRows.filter(r => r.status === "Prod'da Aktif").length} prod'da aktif`);
   const UC_FIELDS = ["usecase_description","requester","environment","rule_name","rule_author","notes"];
   const ucOtherFilterActive = !!ucSearch || Object.values(_colFilters.uc).some(Boolean);
   const visible = ucRows
@@ -2656,6 +2667,9 @@ const HUNT_COLUMNS = [
 ];
 
 function renderHuntRows() {
+  setPageSubtitle("hunt-subtitle",
+    `${huntRows.length} hunt · ${huntRows.filter(r => r.status === "İnceleniyor").length} devam ediyor · `
+    + `${huntRows.filter(r => r.status === "Tamamlandı").length} tamamlandı`);
   const HUNT_FIELDS = ["hunt_title","hunt_subject","requester","assigned_analyst","hunt_environment","notes"];
   const huntOtherFilterActive = !!huntSearch || Object.values(_colFilters.hunt).some(Boolean);
   const visible = huntRows
@@ -3777,6 +3791,9 @@ async function submitIncidentForApproval(id) {
 }
 
 function renderIncidentRows() {
+  setPageSubtitle("incident-subtitle",
+    `${incidentRows.length} olay raporu · ${incidentRows.filter(r => r.status === "Açıldı").length} açıldı · `
+    + `${incidentRows.filter(r => r.status === "Kapandı").length} kapandı`);
   const FIELDS = ["title", "xsoar_case_id", "reporter", "environment", "sections", "_affected_asset_types"];
   const incidentOtherFilterActive = !!incidentSearch || Object.values(_colFilters.incident).some(Boolean);
   const visible = incidentRows

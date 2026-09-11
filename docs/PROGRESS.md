@@ -2016,6 +2016,34 @@ haritası onaylandı (plan dosyası). Bu girdi sadece **Faz 1**'i kapsıyor.
   Ekran görüntüsüyle de (dar viewport'ta bile) genel görünümün
   bozulmadığı teyit edildi.
 
+### Takip (2026-09-12) — Mockup tam entegrasyonu, Faz 2: liste görünümleri
+
+- **Tablo kartı:** `.table-wrapper`'ın şu ana kadar HİÇ arka planı/
+  border'ı/radius'u yoktu (satırlar doğrudan sayfa zemininde, sadece alt
+  çizgilerle ayrılıyordu) — mockup'ın 16px radius'lu kart konteyneri
+  eklendi (`background/border/border-radius` + köşe-radius'un header
+  hücrelerine `inherit` ile taşınması). `.table th`/`.table td` padding
+  (7-9px→12-14px) ve font (10-12px→11-13px) mockup'ın "nefes alan"
+  satır yüksekliğine çekildi.
+- **Sayfa başlığı özet satırı:** mockup'taki "142 talep · 18 açık · 7 ön
+  onay bekliyor" deseni 4 modüle de eklendi — yeni `setPageSubtitle()`
+  yardımcısı, her modülün `render*Rows()`'unun başında zaten yüklü olan
+  `tuneRows`/`ucRows`/`huntRows`/`incidentRows` dizisinden (yeni bir
+  backend endpoint'e gerek kalmadan) sayıyor. Not: bu sayı, sunucu
+  tarafı ay/ortam/durum filtresi aktifken o filtrenin kapsamını
+  yansıtır (tüm-zamanlar sabit bir toplam değil) — kasıtlı, basit bir
+  seçim.
+- **Doğrulandı:** gerçek tarayıcıda 1280×800 viewport'ta Kural Tuning
+  (13 kolonlu, en yoğun tablo), Threat Hunting ve Olay Raporları
+  ekranları uçtan uca kontrol edildi — özet satırları gerçek veriyle
+  doğru sayıyor ("9 talep · 1 açık · 1 ön onay bekliyor" vb.), pill
+  rozetler/tablo kartı/filtre çubuğu mockup'a çok yakın görünüyor,
+  konsol hatasız. Kolon başlıklarının bazılarının (CASE NO/ORTAM gibi
+  dar kolonlarda) kısaldığı fark edildi — bu, mevcut sabit-piksel
+  `colgroup` genişliklerinden kaynaklanan önceden var olan bir durum
+  (yeni padding'le hafif belirginleşti), Faz 8 genel geçiş taramasında
+  ele alınacak, şimdilik işlevsellik bozulmadı.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

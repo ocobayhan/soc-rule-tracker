@@ -632,29 +632,39 @@ input, select, textarea { font-family: inherit; }
 .btn-icon:disabled:hover { background: none; border-color: var(--border); }
 
 /* ============================================================ TABLE */
-.table-wrapper { overflow-x: auto; min-width: 0; }
+.table-wrapper {
+  overflow-x: auto;
+  min-width: 0;
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--r-lg);
+}
+.table-wrapper .table { border-radius: inherit; }
+.table-wrapper .table th:first-child { border-top-left-radius: var(--r-lg); }
+.table-wrapper .table th:last-child { border-top-right-radius: var(--r-lg); }
+.table-wrapper .empty-state { padding: 24px; }
 .table {
   width: 100%;
   border-collapse: collapse;
 }
 .table th {
   text-align: left;
-  font-size: 10px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-2);
   background: var(--bg-tertiary);
-  padding: 7px 10px 8px;
+  padding: 12px 14px;
   border-bottom: 0.5px solid var(--border);
-  letter-spacing: .06em;
+  letter-spacing: .07em;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .table td {
-  padding: 9px 10px;
+  padding: 12px 14px;
   border-bottom: 0.5px solid var(--border);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-1);
   vertical-align: middle;
   transition: background 0.08s;
