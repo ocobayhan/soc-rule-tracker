@@ -345,37 +345,38 @@ input, select, textarea { font-family: inherit; }
   flex-shrink: 0;
 }
 .kpi-module-total {
-  font-size: 11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
   color: var(--text-3);
-  background: var(--bg);
-  padding: 2px 8px;
-  border-radius: 20px;
   white-space: nowrap;
 }
 .kpi-module-stats {
   display: flex;
-  gap: 6px;
+  gap: 22px;
+  margin: 4px 0 2px;
 }
 .kpi-stat {
-  flex: 1;
-  background: var(--bg);
-  border-radius: 6px;
-  padding: 9px 10px;
+  flex: none;
+  background: none;
+  border-radius: 0;
+  padding: 0;
   min-width: 0;
 }
 .kpi-stat-val {
-  font-size: 22px;
+  font-size: 30px;
   font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--text-1);
-  line-height: 1;
-  margin-bottom: 4px;
+  line-height: 1.1;
+  margin-bottom: 5px;
 }
 .kpi-stat-lbl {
   font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
   color: var(--text-3);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .kpi-module-rate {
   display: flex;
@@ -387,13 +388,13 @@ input, select, textarea { font-family: inherit; }
   flex: 1;
   height: 4px;
   background: var(--border);
-  border-radius: 4px;
+  border-radius: 9999px;
   overflow: hidden;
 }
 .kpi-rate-fill {
   height: 100%;
-  background: var(--green);
-  border-radius: 4px;
+  background: var(--accent);
+  border-radius: 9999px;
   transition: width .5s ease;
   min-width: 0;
 }
@@ -403,7 +404,7 @@ input, select, textarea { font-family: inherit; }
   white-space: nowrap;
   flex-shrink: 0;
 }
-.kpi-rate-label strong { color: var(--green); font-weight: 600; }
+.kpi-rate-label strong { color: var(--text-1); font-weight: 600; }
 
 /* Onay bekleyen/reddedilen özet satırı — hiçbir kayıt gizli kalmasın diye */
 .kpi-module-extra {
@@ -985,7 +986,18 @@ input, select, textarea { font-family: inherit; }
 }
 @media (max-width: 1100px) { .dashboard-row { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 620px)  { .dashboard-row { grid-template-columns: 1fr; } }
-.dash-section { }
+.dash-section {
+  background: var(--bg-secondary);
+  border: 0.5px solid var(--border-md);
+  border-radius: var(--r-lg);
+  padding: 20px 22px;
+  overflow: hidden;
+}
+.dash-section .table { margin: 0 -22px -20px; width: calc(100% + 44px); }
+.dash-section .table th:first-child, .dash-section .table td:first-child { padding-left: 22px; }
+.dash-section .table th:last-child, .dash-section .table td:last-child { padding-right: 22px; }
+.dash-section .table th { background: none; }
+.dash-section .table tr:last-child td { border-bottom: none; }
 .section-title { font-size: 12px; font-weight: 500; color: var(--text-2); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em; }
 
 /* ---- Bana bekleyen işler ---- */
@@ -998,8 +1010,8 @@ input, select, textarea { font-family: inherit; }
 .mywork-col {
   background: var(--bg-tertiary);
   border: 0.5px solid var(--border-md);
-  border-radius: var(--r);
-  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  padding: 20px 22px;
 }
 .mywork-hdr {
   font-size: 12px; font-weight: 500; color: var(--text-2);
@@ -1041,8 +1053,8 @@ input, select, textarea { font-family: inherit; }
 .trend-card {
   background: var(--bg-tertiary);
   border: 0.5px solid var(--border-md);
-  border-radius: var(--r);
-  padding: 10px 12px;
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 .trend-card:hover { border-color: var(--text-3); box-shadow: 0 4px 16px rgba(0,0,0,.15); transform: scale(1.08); }

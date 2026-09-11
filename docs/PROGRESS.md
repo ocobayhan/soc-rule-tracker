@@ -2044,6 +2044,37 @@ haritası onaylandı (plan dosyası). Bu girdi sadece **Faz 1**'i kapsıyor.
   (yeni padding'le hafif belirginleşti), Faz 8 genel geçiş taramasında
   ele alınacak, şimdilik işlevsellik bozulmadı.
 
+### Takip (2026-09-12) — Mockup tam entegrasyonu, Faz 3: Dashboard
+
+- **KPI kartları:** her istatistik kendi kutucuğunda (`background:var(
+  --bg)` iç kutu) gösteriliyordu — mockup'ta sayılar düz, kutu içinde
+  değil, sadece boşlukla ayrılmış. `.kpi-stat`'ın iç kutusu kaldırıldı,
+  `.kpi-stat-val` 22px→30px'e büyütüldü, etiketler uppercase/mono
+  hizasına çekildi. **3 istatistik de korundu** (mockup'ın 2 istatistik
+  örneğine indirilmedi — hiçbir veri kaybı olmasın diye). İlerleme
+  çubuğu rengi modül-özel yeşilden tek tip `--accent`'e çekildi
+  (mockup'ta tüm modüllerin çubuğu aynı marka rengini kullanıyor).
+- **Bulunan ikinci "kutu içinde kutu" regresyonu:** `.dash-section`
+  ("Son Tuning Talepleri" vb. 4 mini tablo) CSS'te **tamamen boştu**
+  (`{}`) — hiç kart/border/radius yoktu, tablolar çıplak sayfa
+  zemininde duruyordu. Kart stili (16px radius, kendi padding'i)
+  eklendi; `.table` içindeki header arka planı bu context'te kaldırıldı
+  ki kart zaten kendi arka planını versin.
+- `.mywork-col` ve `.trend-card` radius'u `var(--r)` (8px) → `var(
+  --r-lg)` (16px) — Dashboard'daki TÜM büyük kartlar artık aynı radius'ı
+  paylaşıyor.
+- **Kapsam dışı bırakılan (bilinçli):** mockup'ta 4 ayrı sparkline
+  yerine TEK birleşik bar-chart + tıklanınca büyüyen modal var — bu,
+  4 modülün farklı tarih alanlarını (created_at/completed_at) tek bir
+  grafikte anlamlı şekilde birleştirmeyi gerektiren ayrı bir veri
+  modelleme işi. Zaman baskısı altında bu turda ATLANDI, mevcut 4
+  sparkline kart (gerçek/işlevsel veri) sadece yeni radius'a taşındı.
+  Kullanıcıya ayrıca bildirilecek.
+- **Doğrulandı:** gerçek tarayıcıda 1280×900'de Dashboard uçtan uca
+  incelendi — KPI kartları/ilerleme çubukları/mywork panelleri/trend
+  kartları/dash-section'lar hepsi doğru render oluyor, konsol hatasız,
+  `getComputedStyle` ile radius/font değerleri doğrulandı.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
