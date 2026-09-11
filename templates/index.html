@@ -468,6 +468,7 @@
 
   <!-- ===== OLAY RAPORLARI (XSOAR Incident Report) ===== -->
   <section id="tab-incident" class="tab-panel">
+  <div id="incident-list-view">
     <div class="page-header">
       <div>
         <h1 class="page-title">Olay Raporları</h1>
@@ -527,6 +528,8 @@
       </table>
       <div id="incident-empty" class="empty-state" style="display:none">Henüz olay raporu yok.</div>
     </div>
+  </div>
+  <div id="incident-detail-view" style="display:none"></div>
   </section>
 
 {% if user_role == "admin" %}
@@ -1732,21 +1735,6 @@
   </div>
 </div>
 
-<!-- ===== MODAL: Olay Raporu Detay ===== -->
-<div id="incident-detail-modal" class="modal-overlay" style="display:none">
-  <div class="modal modal-wide">
-    <div class="modal-header">
-      <div style="display:flex;align-items:center;gap:8px;min-width:0">
-        <h2 class="modal-title" id="incident-detail-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">Olay Raporu</h2>
-        <span id="incident-detail-status-badge" style="flex-shrink:0"></span>
-      </div>
-      <button class="modal-close" onclick="closeIncidentDetailModal()">&#x2715;</button>
-    </div>
-    <div class="modal-body" id="incident-detail-body"></div>
-    <div class="modal-footer" id="incident-detail-footer"></div>
-  </div>
-</div>
-
 <!-- ===== MODAL: Hunt Sonuç Onayı ===== -->
 <div id="hunt-result-modal" class="modal-overlay" style="display:none">
   <div class="modal modal-sm">
@@ -1838,6 +1826,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=50"></script>
+<script src="/static/app.js?v=51"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v50
+   SOC Tracker — Frontend  v51
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -2474,8 +2474,7 @@ document.getElementById("new-env-input")?.addEventListener("keydown", e => { if 
 ["tune-modal","tune-edit-modal","tune-claim-modal","tune-close-modal","tune-approve-modal",
  "tune-detail-modal","uc-detail-modal",
  "uc-modal","uc-edit-modal","uc-claim-modal","uc-close-modal","uc-test-approve-modal",
- "hunt-modal","hunt-edit-modal","hunt-claim-modal",
- "incident-detail-modal"].forEach(id => {
+ "hunt-modal","hunt-edit-modal","hunt-claim-modal"].forEach(id => {
   document.getElementById(id)?.addEventListener("click", e => {
     if (e.target === e.currentTarget) e.currentTarget.style.display = "none";
   });
@@ -3826,6 +3825,7 @@ async function loadIncidents() {
     });
     buildColumnFilterRow("incident", incidentRows);
     renderIncidentRows();
+    backToIncidents();
   } catch (e) { console.error(e); }
 }
 
@@ -4147,81 +4147,118 @@ async function saveIncidentEdit() {
   } catch (e) { errEl.textContent = e.message; errEl.style.display = "block"; }
 }
 
+/** Olay Raporu listesi ⇄ tam sayfa detay geçişi — modal DEĞİL (mockup'ta
+ * da tam sayfa, bkz. backToHunts() ile aynı desen). */
+function backToIncidents() {
+  const list = document.getElementById("incident-list-view");
+  const detail = document.getElementById("incident-detail-view");
+  if (detail) { detail.style.display = "none"; detail.innerHTML = ""; }
+  if (list) list.style.display = "";
+  const pc = document.getElementById("page-content"); if (pc) pc.scrollTop = 0;
+}
+
 async function openIncidentDetail(id) {
   let r = incidentRows.find(x => x.id === id);
   if (!r) { try { incidentRows = await apiFetch("/api/incident-reports"); r = incidentRows.find(x => x.id === id); } catch { return; } }
   if (!r) return;
 
-  document.getElementById("incident-detail-title").textContent = r.title;
-  document.getElementById("incident-detail-status-badge").innerHTML = badge(r.status, INCIDENT_CLS);
   let sections = [], images = [];
   try { sections = JSON.parse(r.sections || "[]"); if (!Array.isArray(sections)) sections = []; } catch {}
   try { images   = JSON.parse(r.images   || "[]"); if (!Array.isArray(images))   images   = []; } catch {}
-
-  const sectionsHtml = sections.length ? sections.map(s => `
-    <div style="margin-bottom:12px">
-      ${s.heading ? `<div class="detail-section-title" style="margin-top:8px">${esc(s.heading)}</div>` : ""}
-      <div class="detail-value">${esc(s.text)}</div>
-    </div>`).join("") : `<div class="text-muted">Bölüm yok.</div>`;
-
-  const imagesHtml = images.length ? `
-    <div class="detail-section-title">Görseller</div>
-    <div class="detail-images">
-      ${images.map((img, i) => {
-        const url = `/static/uploads/${img.filename}`;
-        const label = (img.order !== undefined && img.order !== null) ? img.order : i + 1;
-        return `<div style="text-align:center">
-          <img class="detail-img" src="${url}" onclick="openLightbox('${url}')" title="Büyütmek için tıklayın"/>
-          <div style="font-size:10px;color:var(--text-3);margin-top:2px">Görsel ${label}</div>
-        </div>`;
-      }).join("")}
-    </div>` : "";
-
   let assets = [];
   try { assets = JSON.parse(r.affected_assets || "[]"); if (!Array.isArray(assets)) assets = []; } catch {}
-  const assetsHtml = assets.length ? `
-    <div class="detail-section-title">Etkilenen Varlıklar</div>
-    <div class="detail-value">${assets.map(a => `${esc(a.name)}${a.type ? ` (${esc(a.type)})` : ""}`).join(", ")}</div>` : "";
+
+  // Jinja namespace deseninin JS karşılığı (bkz. openHuntDetail/secnum) —
+  // boş bölüm hiç basılmayınca numaralar ardışık kalsın.
+  let _n = 0;
+  const secnum = () => String(++_n).padStart(2, "0");
+
+  const sectionsHtml = sections.length ? sections.map(s => `
+    <div class="hp-card">
+      <div class="hp-card-hdr"><span class="hp-card-label">${secnum()}${s.heading ? " · " + esc(s.heading) : ""}</span></div>
+      <div class="hp-card-body">${esc(s.text)}</div>
+    </div>`).join("") : "";
+
+  const assetsCard = assets.length ? `
+    <div class="hp-card">
+      <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Etkilenen Varlıklar</span></div>
+      ${assets.map(a => `
+        <div class="hp-asset-row">
+          ${a.type ? `<span class="hp-asset-type mono">${esc(a.type)}</span>` : ""}
+          <span class="hp-asset-val mono">${esc(a.name)}</span>
+        </div>`).join("")}
+    </div>` : "";
+
+  const imagesCard = images.length ? `
+    <div class="hp-card">
+      <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Görseller</span></div>
+      <div class="detail-images">
+        ${images.map((img, i) => {
+          const url = `/static/uploads/${img.filename}`;
+          const label = (img.order !== undefined && img.order !== null) ? img.order : i + 1;
+          return `<div style="text-align:center">
+            <img class="detail-img" src="${url}" onclick="openLightbox('${url}')" title="Büyütmek için tıklayın"/>
+            <div style="font-size:10px;color:var(--text-3);margin-top:2px">Görsel ${label}</div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>` : "";
+
+  // Onay kartı — durum bazlı aksiyonlar, eski modal footer'ıyla BİREBİR
+  // aynı mantık (bkz. docs/PROGRESS.md), sadece closeIncidentDetailModal()
+  // yerine backToIncidents() çağırıyor.
+  let actionsHtml = `<button class="btn-ghost-sm" onclick="backToIncidents()">Listeye Dön</button>`;
+  if (r.status === "Açıldı") {
+    actionsHtml += `<button class="btn btn-secondary" onclick="backToIncidents();openIncidentEditModal(${r.id})">Düzenle</button>
+      <button class="btn btn-primary" onclick="backToIncidents();startIncidentReview(${r.id})">İncelemeye Başla</button>`;
+  } else if (r.status === "İncelemede") {
+    actionsHtml += `<button class="btn btn-secondary" onclick="backToIncidents();openIncidentEditModal(${r.id})">Düzenle</button>
+      <button class="btn btn-primary" onclick="backToIncidents();submitIncidentForApproval(${r.id})">Onaya Gönder</button>`;
+  } else if (r.status === "Onay Bekliyor") {
+    actionsHtml += IS_SENIOR ? `<button class="btn btn-primary" onclick="backToIncidents();openValidateModal('incident', ${r.id})">Onayla / Reddet</button>` : "";
+  } else if (r.status === "Kapandı") {
+    actionsHtml += `<a class="btn btn-primary" href="/incident-reports/${r.id}/report/pdf" target="_blank">&#128424; PDF İndir</a>`;
+  }
 
   const body = `
-    <div class="detail-grid">
-      ${detailRow("Case No", r.xsoar_case_id ? "#" + r.xsoar_case_id : "")}
-      ${detailRow("Ortam", r.environment)}
-      ${detailRow("Raporlayan", displayName(r.reporter))}
-      ${detailRow("Durum", r.status)}
-      ${detailRow("Tarih", fmtDate(r.created_at))}
-      ${r.validated_by ? detailRow("İşlemi Yapan", displayName(r.validated_by)) : ""}
-      ${r.validated_at ? detailRow("İşlem Tarihi", fmtDate(r.validated_at)) : ""}
-    </div>
-    ${r.validation_note ? `<div class="detail-section-title">Son İnceleme Notu</div><div class="detail-value">${esc(r.validation_note)}</div>` : ""}
-    <div class="detail-section-title">Bölümler</div>
-    ${sectionsHtml}
-    ${assetsHtml}
-    ${imagesHtml}
-  `;
-  document.getElementById("incident-detail-body").innerHTML = body;
+    <div class="detail-page">
+      <button class="detail-back" onclick="backToIncidents()">&larr; Tüm olay raporları</button>
+      <h1 class="page-title">${esc(r.title)}</h1>
+      <p class="detail-page-id mono">OLAY #${r.id}${r.xsoar_case_id ? " · Case #" + esc(r.xsoar_case_id) : ""}</p>
 
-  const footer = document.getElementById("incident-detail-footer");
-  if (r.status === "Açıldı") {
-    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
-      <button class="btn btn-secondary" onclick="closeIncidentDetailModal();openIncidentEditModal(${r.id})">Düzenle</button>
-      <button class="btn btn-primary" onclick="closeIncidentDetailModal();startIncidentReview(${r.id})">İncelemeye Başla</button>`;
-  } else if (r.status === "İncelemede") {
-    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
-      <button class="btn btn-secondary" onclick="closeIncidentDetailModal();openIncidentEditModal(${r.id})">Düzenle</button>
-      <button class="btn btn-primary" onclick="closeIncidentDetailModal();submitIncidentForApproval(${r.id})">Onaya Gönder</button>`;
-  } else if (r.status === "Onay Bekliyor") {
-    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>` +
-      (IS_SENIOR ? `<button class="btn btn-primary" onclick="closeIncidentDetailModal();openValidateModal('incident', ${r.id})">Onayla / Reddet</button>` : "");
-  } else if (r.status === "Kapandı") {
-    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>
-      <a class="btn btn-primary" href="/incident-reports/${r.id}/report/pdf" target="_blank">&#128424; PDF İndir</a>`;
-  } else {
-    footer.innerHTML = `<button class="btn-ghost-sm" onclick="closeIncidentDetailModal()">Kapat</button>`;
-  }
-  document.getElementById("incident-detail-modal").style.display = "flex";
+      <div class="detail-page-grid">
+        <div class="detail-page-main">
+          ${sectionsHtml}
+          ${assetsCard}
+          ${imagesCard}
+        </div>
+        <div class="detail-page-side">
+          <div class="hp-card hp-card-side">
+            <div class="hp-card-label" style="margin-bottom:12px">Künye</div>
+            <div class="hp-status-badge">${badge(r.status, INCIDENT_CLS)}</div>
+            <div class="detail-grid">
+              ${detailRow("Case No", r.xsoar_case_id ? "#" + r.xsoar_case_id : "")}
+              ${detailRow("Ortam", r.environment)}
+              ${detailRow("Raporlayan", displayName(r.reporter))}
+              ${detailRow("Tarih", fmtDate(r.created_at))}
+              ${r.validated_by ? detailRow("İşlemi Yapan", displayName(r.validated_by)) : ""}
+              ${r.validated_at ? detailRow("İşlem Tarihi", fmtDate(r.validated_at)) : ""}
+              ${r.validation_note ? detailRow("Son İnceleme Notu", r.validation_note) : ""}
+            </div>
+          </div>
+          <div class="hp-card hp-card-side">
+            <div class="hp-card-label" style="margin-bottom:14px">Onay</div>
+            <div class="hp-actions">${actionsHtml}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  const detailView = document.getElementById("incident-detail-view");
+  detailView.innerHTML = body;
+  document.getElementById("incident-list-view").style.display = "none";
+  detailView.style.display = "";
+  const pc = document.getElementById("page-content"); if (pc) pc.scrollTop = 0;
 }
-function closeIncidentDetailModal() { document.getElementById("incident-detail-modal").style.display = "none"; }
 
 async function deleteIncident(id) {
   if (!confirm("Bu olay raporunu silmek istediğinize emin misiniz?")) return;

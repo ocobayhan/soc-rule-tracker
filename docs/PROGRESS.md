@@ -2115,6 +2115,29 @@ kartlar + kenar çubuğunda Durum/Onay). Bu mimari değişiklik yapıldı.
   ile listeye dönüş, liste durumunun (filtre/sıralama) bozulmadan
   korunduğu doğrulandı. Konsol hatasız.
 
+### Takip (2026-09-12) — Mockup tam entegrasyonu, Faz 5: Olay Raporu detayı (modal → tam sayfa)
+
+Faz 4 ile birebir aynı desen, Olay Raporu için. `#tab-incident` içi
+`#incident-list-view`/`#incident-detail-view`'a bölündü, eski
+`#incident-detail-modal` kaldırıldı, `openIncidentDetail(id)` yeniden
+yazıldı — `sections`/`images`/`affected_assets` JSON ayrıştırma mantığı
+BİREBİR korunup mockup'ın "BÖLÜM N" numaralı kart deseniyle (`secnum()`,
+Faz 4'teki ile aynı yardımcı) yeniden düzenlendi. Durum-bazlı aksiyon
+mantığı (Açıldı→Düzenle+İncelemeye Başla, İncelemede→Düzenle+Onaya
+Gönder, Onay Bekliyor→senior'a Onayla/Reddet, Kapandı→PDF İndir) eski
+modal footer'ından BİREBİR taşındı, sadece `closeIncidentDetailModal()`
+çağrıları `backToIncidents()`'e çevrildi. `loadIncidents()` sonuna da
+Faz 4'teki gibi otomatik `backToIncidents()` eklendi.
+
+- **Doğrulandı:** gerçek tarayıcıda Olay Raporu #7 (2 bölüm + 2 görsel,
+  Kapandı durumu) açılıp incelendi — "01 · Olay Özeti"/"02 · Zaman
+  Çizelgesi" gibi numaralı kartlar, Künye/Onay kenar çubuğu kartları
+  doğru render oldu, `actionsHtml` içeriği ("Listeye Dön" + "PDF İndir")
+  doğru koşuldan geldiği doğrulandı. "← Tüm olay raporları" ile listeye
+  dönüşte satır sayısının (1) korunduğu doğrulandı. Konsol hatasız.
+  Bununla Faz 4-5 (en somut şikayet — modal yerine tam sayfa) tamamlandı;
+  sırada Faz 6 (sidebar/kabuk) var.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
