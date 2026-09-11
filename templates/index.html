@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=12.4"/>
+  <link rel="stylesheet" href="/static/styles.css?v=12.5"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='soc-theme-composio.css') }}?v=1"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,16 +39,16 @@
     </button>
     {% endif %}
     <button class="nav-btn {% if is_settings %}{% else %}{% endif %}" data-tab="tuning" title="Kural Tuning">
-      <span>&#8801;</span> <span class="nav-label">Kural Tuning</span>
+      <span>&#8801;</span> <span class="nav-label">Kural Tuning</span> <span class="nav-count" id="nav-count-tuning"></span>
     </button>
     <button class="nav-btn" data-tab="usecase" title="Use-Case">
-      <span>&#9670;</span> <span class="nav-label">Use-Case</span>
+      <span>&#9670;</span> <span class="nav-label">Use-Case</span> <span class="nav-count" id="nav-count-usecase"></span>
     </button>
     <button class="nav-btn" data-tab="threat-hunting" title="Threat Hunting">
-      <span>&#9650;</span> <span class="nav-label">Threat Hunting</span>
+      <span>&#9650;</span> <span class="nav-label">Threat Hunting</span> <span class="nav-count" id="nav-count-threat-hunting"></span>
     </button>
     <button class="nav-btn" data-tab="incident" title="Olay Raporları">
-      <span>&#9873;</span> <span class="nav-label">Olay Raporları</span>
+      <span>&#9873;</span> <span class="nav-label">Olay Raporları</span> <span class="nav-count" id="nav-count-incident"></span>
     </button>
     {% if user_role == "admin" %}
     <button class="nav-btn" data-tab="auditlog" title="Audit Log">
@@ -1826,6 +1826,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=51"></script>
+<script src="/static/app.js?v=52"></script>
 </body>
 </html>

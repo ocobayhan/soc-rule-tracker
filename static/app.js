@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v51
+   SOC Tracker — Frontend  v52
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -460,6 +460,16 @@ async function loadKPI() {
     const d = await apiFetch(`/api/kpi${month ? "?month="+month : ""}`);
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? "—"; };
     const setEmpty = (id, total) => { const el = document.getElementById(id); if (el) el.style.display = total === 0 ? "" : "none"; };
+    // Sidebar modül sayaçları (mockup deseni) — sadece ay filtresi
+    // yokken güncellenir, Dashboard'daki ay seçimi bu sayıları
+    // yanıltıcı şekilde değiştirmesin diye (bunlar "toplam kayıt"
+    // anlamına geliyor, seçili aya özgü değil).
+    if (!month) {
+      set("nav-count-tuning", d.tune_total);
+      set("nav-count-usecase", d.uc_total);
+      set("nav-count-threat-hunting", d.hunt_total);
+      set("nav-count-incident", d.incident_total);
+    }
     set("kpi-tune-total",     d.tune_total);
     set("kpi-tune-open",      d.tune_open);
     set("kpi-tune-pending",   d.tune_pending);

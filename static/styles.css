@@ -237,6 +237,7 @@ input, select, textarea { font-family: inherit; }
 .sidebar-toggle-icon { display: inline-block; transition: transform 0.15s ease; }
 .sidebar.collapsed { width: 52px; }
 .sidebar.collapsed .nav-label,
+.sidebar.collapsed .nav-count,
 .sidebar.collapsed .sidebar-logo-text,
 .sidebar.collapsed .sidebar-search,
 .sidebar.collapsed .sidebar-label,

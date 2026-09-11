@@ -2138,6 +2138,31 @@ Faz 4'teki gibi otomatik `backToIncidents()` eklendi.
   Bununla Faz 4-5 (en somut şikayet — modal yerine tam sayfa) tamamlandı;
   sırada Faz 6 (sidebar/kabuk) var.
 
+### Takip (2026-09-12) — Mockup tam entegrasyonu, Faz 6: sidebar sayaçları
+
+- **Sidebar modül sayaçları:** mockup'ta her modülün yanında toplam
+  kayıt sayısı var (`18`, `9`, `5`, `11`). `.nav-count` CSS class'ı
+  koddan bulundu — daha önce eklenmiş ama HİÇBİR YERDE kullanılmıyordu
+  (ölü stil). 4 modül nav butonuna `<span class="nav-count" id="nav-
+  count-X">` eklendi, `loadKPI()`'a (zaten `/api/kpi`'den `*_total`
+  alanlarını çeken fonksiyon) 4 satırlık bir güncelleme eklendi — yeni
+  endpoint gerekmedi. **Kasıtlı detay:** bu güncelleme sadece Dashboard'da
+  ay filtresi YOKKEN çalışıyor (`if (!month)`), aksi halde kullanıcı
+  Dashboard'da bir ay seçtiğinde sidebar sayıları o aya düşüp "toplam
+  kayıt" anlamını yanıltıcı hale getirirdi. Sidebar daraltıldığında
+  (`toggleSidebar()`) sayaç da etikelerle birlikte gizleniyor.
+- **Kapsam dışı bırakılan (bilinçli):** mockup'taki global "SOC Tracker
+  / {Aktif Sekme}" breadcrumb üst çubuğu + her sekmede aynı kalan
+  "Aylık PDF/Excel/+Yeni Talep" butonları eklenmedi — mevcut mimari
+  (her sekmenin kendi `.page-header`'ında kendi ilgili butonları)
+  zaten doğru davranıyor, global bara taşımak Dashboard/Audit/Ayarlar
+  gibi "+Yeni Talep" kavramının anlamsız olduğu sekmelerde kafa
+  karıştırırdı. Zaman/kapsam baskısı altında bu, düşük katma değerli
+  bir kozmetik değişiklik olarak ATLANDI.
+- **Doğrulandı:** gerçek tarayıcıda sayaçlar gerçek verilerle (9/4/9/1)
+  doğru gösterdi, sidebar daraltılınca sayaçların da gizlendiği
+  `getComputedStyle` ile teyit edildi, konsol hatasız.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
