@@ -2184,6 +2184,38 @@ eklendi.
   `verify_audit.py`'nin raporladığı zincir-ucu hash'iyle eştiği
   (`15c8462bf7e13ab5…`) doğrulandı. Konsol hatasız.
 
+### Takip (2026-09-12) — Mockup tam entegrasyonu, Faz 8: genel geçiş taraması
+
+Faz 1'de kurulan ortak bileşen katmanı (kart 16px, pill rozet 9999px,
+40px buton/input) sayesinde bu son fazda **neredeyse hiç ek değişiklik
+gerekmedi** — Ayarlar (Ortamlar/Kullanıcılar kartları, pill rol
+rozetleri, alt-sekme çubuğu), Tune/UC detay modalleri (aynı `.modal`/
+`.badge`/`.detail-*` class'larını paylaşıyorlar) gerçek tarayıcıda tek
+tek kontrol edildi ve zaten mockup'ın diline uygun görünüyorlar —
+Faz 1'in "önce ortak sözlüğü tanımla, sonra her ekrana uygula" stratejisi
+doğrulandı.
+
+**Bu turda mockup'a göre bilinçli olarak farklı/eksik bırakılanlar
+(kullanıcıya ayrıca bildirilecek):**
+- Dashboard'daki 4 ayrı sparkline yerine mockup'ın tek birleşik bar-chart
+  + tıklanınca büyüyen modal deseni (Faz 3'te not edildi).
+- Global "SOC Tracker / {Sekme}" breadcrumb üst çubuğu + tüm sekmelerde
+  sabit kalan Aylık PDF/Excel/+Yeni Talep butonları (Faz 6'da not edildi)
+  — mevcut per-tab header mimarisi kasıtlı olarak korundu.
+- Audit Log'daki varsayılan-yeşil "otomatik doğrulandı" banner'ı (Faz
+  7'de not edildi) — performans nedeniyle "isteğe bağlı doğrulama"
+  davranışı korundu, sadece Hash kolonu eklendi.
+- Kolon başlıklarının bazı dar `colgroup` genişliklerinde kısalması
+  (Faz 2'de not edildi) — önceden var olan bir durum, bu turda
+  belirginleşti ama düzeltilmedi (küçük, kozmetik).
+- Tune/Use-Case detayı bilinçli olarak modal kaldı (mockup'ın kendisi
+  de bunları modal tutuyor — sadece Hunt/Olay Raporu tam sayfaya
+  taşındı).
+
+Composio mockup entegrasyonu (Faz 1-8) burada tamamlandı. Sekiz fazın
+hepsi ayrı commit'lerle (a3ef366, c9a38e4, 5787880, b0ae2f7, f416b2c,
+efe3c08, cb17b33 + bu girdi) canlıda test edilip pushlandı.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
