@@ -3712,6 +3712,12 @@ def incident_report_pdf(item_id):
     def _fmt(v):
         return v[:10] if v else ""
 
+    generated = datetime.now().strftime("%d.%m.%Y %H:%M")
+    incident_year = (row["created_at"] or "")[:4] or datetime.now().strftime("%Y")
+    classification_tag = f"OLAY-{incident_year}-{item_id:03d} · Gizli / Dahili"
+    integrity_payload = _j.dumps(dict(row), sort_keys=True, ensure_ascii=False, default=str)
+    integrity_hash = report_integrity_hash("incident", item_id, generated, integrity_payload)[:16]
+
     html = render_template(
         "incident_report_print.html",
         r=row,
@@ -3719,19 +3725,25 @@ def incident_report_pdf(item_id):
         assets=assets,
         image_items=image_items,
         logo_uri=_pdf_logo_uri(),
-        font_regular_uri=_pdf_font_uri("Montserrat-Regular.ttf"),
-        font_medium_uri=_pdf_font_uri("Montserrat-Medium.ttf"),
-        font_semibold_uri=_pdf_font_uri("Montserrat-SemiBold.ttf"),
-        font_bold_uri=_pdf_font_uri("Montserrat-Bold.ttf"),
+        classification_tag=classification_tag,
+        integrity_hash=integrity_hash,
+        reporter_tier=user_tier(row["reporter"]),
+        approver_tier=user_tier(row["validated_by"]),
+        font_regular_uri=_pdf_font_uri("Inter-Regular.ttf"),
+        font_medium_uri=_pdf_font_uri("Inter-Medium.ttf"),
+        font_semibold_uri=_pdf_font_uri("Inter-SemiBold.ttf"),
+        mono_regular_uri=_pdf_font_uri("JetBrainsMono-Regular.ttf"),
+        mono_medium_uri=_pdf_font_uri("JetBrainsMono-Medium.ttf"),
         fmt=_fmt,
-        generated=datetime.now().strftime("%d.%m.%Y %H:%M"),
+        generated=generated,
     )
 
     try:
         pdf_bytes = _render_pdf_bytes(html)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
-    write_audit("EXPORT_INCIDENT_PDF", "incident", item_id, f"Başlık: {row['title']}")
+    write_audit("EXPORT_INCIDENT_PDF", "incident", item_id,
+                f"Başlık: {row['title']} | Bütünlük: {integrity_hash}")
     return send_file(
         BytesIO(pdf_bytes),
         mimetype="application/pdf",

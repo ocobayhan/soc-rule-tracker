@@ -1879,6 +1879,42 @@ girdileriyle gelecek.
   `verify_audit.py`: 286/286 zincirli, geçerli (iki gerçek test
   indirmesi audit'e yazıldığı için kayıt sayısı arttı, zincir bozulmadı).
 
+### Takip (2026-09-11) — Olay Raporu PDF'i Composio tasarımına + Bütünlük hash'i
+
+Bir önceki Hunt PDF girdisinin devamı — aynı plan/tur, **Faz C**.
+`templates/incident_report_print.html` aynı paylaşılan görsel dile
+(header/footer/eyebrow/H1/bilgi tablosu/imza bloğu, `docs/PROGRESS.md`daki
+Hunt girdisine bakınız) taşındı, `incident_report_pdf()` route'u
+`classification_tag` (`OLAY-{yıl}-{id:03d} · Gizli / Dahili`),
+`integrity_hash` ve `reporter_tier`/`approver_tier` (`user_tier()`) ile
+güncellendi.
+
+- **Bilgi tablosu**, Hunt'tan farklı olarak Incident'ın tek-aşamalı onay
+  akışına uygun TEK tabloda toplandı (Hunt'taki gibi ayrı bir "Onay
+  Süreci" bölümüne gerek yok — mockup'ın deseniyle birebir): 1. satır
+  Case No (mono) / Ortam / Raporlayan / Durum (rozet), 2. satır
+  Onaylayan / Onay Tarihi / Talep Tarihi / **Son Güncelleme**
+  (`r.updated_at` — mevcut şemada zaten var olan ama print şablonunda
+  hiç gösterilmeyen gerçek bir alan, tabloyu 8 hücreye tamamlamak için
+  eklendi; uydurma veri değil). Onay Notu varsa 3. bir satır (colspan 4)
+  olarak altına ekleniyor.
+- `sections`/`assets`/`image_items` mantığı aynen korunup Jinja
+  `namespace` sayaçlı numaralı bölümlere (`01 · Olay Detayları`,
+  `02 · Etkilenen Varlıklar`, `03 · Görseller`) taşındı — boş bölüm
+  atlanınca numaralar hep ardışık kalıyor (test edildi: varlık yoksa
+  Olay Detayları'ndan direkt Görseller'e 01→02 geçiyor, boşluk yok).
+- İmza bloğu: Hazırlayan = raporlayan (+ varsa tier), Onaylayan =
+  `validated_by` (+ varsa tier). `reporter` bir insan değilse (ör.
+  "XSOAR Entegrasyonu" webhook kaydı) `user_tier()` `None` dönüyor ve
+  " · tier" eki hiç basılmıyor — test edilip doğrulandı, hatasız.
+- **Doğrulandı:** gerçek WeasyPrint ile Olay Raporu #7 (2 bölüm metni,
+  2 gömülü görsel, XSOAR raporlayan + admin/Müdür onaylayan) PDF'e
+  çevrilip `pymupdf` ile incelendi — bilgi tablosu, numaralı bölümler,
+  görsel galerisi, imza bloğu, Bütünlük hash'i doğru. Audit Log'daki
+  `EXPORT_INCIDENT_PDF` detail hash'i (`7c54a21ac5b2c165`) PDF
+  footer'ıyla birebir eşleşti. `verify_audit.py`: 287/287 zincirli,
+  geçerli.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

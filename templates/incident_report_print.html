@@ -6,60 +6,90 @@
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg: #FFFFFF;
-  --surface: #F7F8FA;
-  --border: #E5E7EB;
-  --text-1: #111827;
-  --text-2: #6B7280;
-  --text-3: #9CA3AF;
-  --accent: #1A1A1A;
-  --green:  #2DB27D;
-  --amber:  #F59E0B;
-  --red:    #EF4444;
-  --purple: #8B5CF6;
+  --text-1:  #0F0F0F;
+  --text-2:  #5A5A5A;
+  --text-3:  #8A8A8A;
+  --border:  #E4E4E4;
+  --border-soft: #F0F0F0;
+  --accent:  #0007CD;
+  --green:   #2DB27D;
+  --surface: #F7F7F7;
 }
-@font-face { font-family: "Montserrat"; src: url("{{ font_regular_uri }}");  font-weight: 400; }
-@font-face { font-family: "Montserrat"; src: url("{{ font_medium_uri }}");   font-weight: 500; }
-@font-face { font-family: "Montserrat"; src: url("{{ font_semibold_uri }}"); font-weight: 600; }
-@font-face { font-family: "Montserrat"; src: url("{{ font_bold_uri }}");     font-weight: 700; }
+/* Inter + JetBrains Mono (SIL OFL) — Composio görsel diline geçiş
+   (bkz. docs/PROGRESS.md "Composio tema katmanı"). WeasyPrint internete
+   çıkamayabildiği için Google Fonts CDN yerine yerel dosyalar. */
+@font-face { font-family: "Inter"; src: url("{{ font_regular_uri }}");  font-weight: 400; }
+@font-face { font-family: "Inter"; src: url("{{ font_medium_uri }}");   font-weight: 500; }
+@font-face { font-family: "Inter"; src: url("{{ font_semibold_uri }}"); font-weight: 600; }
+@font-face { font-family: "JetBrains Mono"; src: url("{{ mono_regular_uri }}"); font-weight: 400; }
+@font-face { font-family: "JetBrains Mono"; src: url("{{ mono_medium_uri }}");  font-weight: 500; }
 html { font-size: 12px; }
 body {
-  font-family: "Montserrat", "DejaVu Sans", Arial, sans-serif;
+  font-family: "Inter", "DejaVu Sans", Arial, sans-serif;
   color: var(--text-1);
   line-height: 1.5;
 }
+.mono { font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; }
 @page {
   margin: 18mm 14mm;
   @bottom-center {
     content: "Sayfa " counter(page) " / " counter(pages);
     font-size: 9px;
-    color: #9CA3AF;
+    color: var(--text-3);
   }
 }
 
-.header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 22px;
-  padding-bottom: 14px;
-  border-bottom: 2px solid var(--accent);
+/* ── Header / Footer ─────────────────────────────────────────────── */
+.doc-header {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 10px; margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
 }
-.header-left { display: flex; align-items: center; gap: 14px; }
-.header-logo { height: 42px; width: auto; border-radius: 4px; }
-.header-title { font-size: 17px; font-weight: 700; color: var(--text-1); }
-.header-subject { font-size: 13px; color: var(--text-2); margin-top: 2px; }
-.header-meta { text-align: right; font-size: 10px; color: var(--text-3); }
-.header-meta strong { color: var(--text-2); }
-
-.badge {
-  display: inline-block;
-  font-size: 10px; font-weight: 600;
-  padding: 3px 10px; border-radius: 10px;
-  margin-left: 6px;
+.doc-header-logo { flex: none; display: block; }
+.doc-header-brand { font-size: 12px; font-weight: 600; letter-spacing: -0.1px; color: var(--text-1); }
+.doc-header-tag { font-size: 9px; color: var(--text-3); margin-left: auto; }
+.doc-header-org-logo { height: 20px; width: auto; flex: none; display: block; }
+.doc-footer {
+  display: flex; align-items: center; gap: 12px;
+  padding-top: 10px; margin-top: 30px;
+  border-top: 1px solid var(--border);
+  font-size: 9px; color: var(--text-3);
 }
-.badge-done { background: rgba(45,178,125,0.14); color: var(--green); }
+.doc-footer-right { margin-left: auto; }
 
+/* ── Cover block ──────────────────────────────────────────────────── */
+.cover { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.cover-logo { height: 40px; width: auto; flex: none; display: block; }
+.cover-org { font-size: 11px; font-weight: 600; color: var(--text-1); line-height: 1.3; }
+.cover-org-sub { font-size: 9px; color: var(--text-3); }
+.eyebrow {
+  font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 8px;
+}
+h1.doc-title {
+  font-size: 20px; font-weight: 500; line-height: 1.15; letter-spacing: -0.4px;
+  color: var(--text-1); margin: 0 0 20px;
+}
+
+/* ── Info tablosu ─────────────────────────────────────────────────── */
+table.info-table { width: 100%; border-collapse: collapse; margin-bottom: 22px; break-inside: avoid; }
+table.info-table td {
+  width: 25%; padding: 9px 8px 9px 0; vertical-align: top;
+  border-top: 1px solid var(--border);
+}
+table.info-table tr:last-child td { border-bottom: 1px solid var(--border); }
+.info-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 3px;
+}
+.info-value { font-size: 10px; color: var(--text-1); }
+.badge-status {
+  display: inline-block; font-size: 9px; font-weight: 600;
+  padding: 2px 9px; border-radius: 10px;
+  background: rgba(45,178,125,0.14); color: var(--green);
+}
+
+/* ── Bölüm ────────────────────────────────────────────────────────── */
 .section { margin-bottom: 22px; break-inside: avoid; }
 /* Olay Detayları/Görseller gibi bölümler bir listeden/döngüden geliyor ve
    sayfa boyunu aşabilir — bunlarda break-inside:avoid tüm bölümü tek
@@ -70,23 +100,17 @@ body {
    bölünebiliyorlar, tek bir öğenin ortasında değil. */
 .section-flow { break-inside: auto; }
 .section-title {
-  font-size: 12px; font-weight: 700; color: var(--accent);
-  text-transform: uppercase; letter-spacing: 0.03em;
-  margin-bottom: 8px; padding-bottom: 5px;
-  border-bottom: 1px solid var(--border);
+  font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--accent); margin: 0 0 10px;
   break-after: avoid;
 }
-.sub-title {
-  font-size: 12px; font-weight: 600; color: var(--text-1);
-  margin-bottom: 4px;
-}
-.row { display: flex; padding: 4px 0; font-size: 11px; }
-.row-label { width: 160px; flex-shrink: 0; color: var(--text-2); font-weight: 500; }
+.sub-title { font-size: 11px; font-weight: 600; color: var(--text-1); margin-bottom: 4px; }
+.row { display: flex; padding: 4px 0; font-size: 10.5px; }
+.row-label { width: 150px; flex-shrink: 0; color: var(--text-3); font-weight: 500; }
 .row-value { color: var(--text-1); white-space: pre-wrap; }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
 
 .text-block {
-  font-size: 11px; white-space: pre-wrap;
+  font-size: 10.5px; white-space: pre-wrap; line-height: 1.6;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 6px; padding: 10px 12px; margin-top: 4px;
 }
@@ -96,15 +120,9 @@ body {
 /* Hunt raporundaki 420×280 üst sınırıyla aynı desen — küçük görsel doğal
    boyutunda kalır, büyük görsel orantılı küçülür. */
 .report-img {
-  display: block;
-  max-width: 420px;
-  max-height: 280px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  margin-top: 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  display: block; max-width: 420px; max-height: 280px;
+  width: auto; height: auto; object-fit: contain;
+  margin-top: 6px; border: 1px solid var(--border); border-radius: 4px;
 }
 /* flex/grid konteynerleri WeasyPrint'te sayfalar arası bölünemiyor — tüm
    galeri tek parça sayılıp sığmayınca komple bir sonraki sayfaya atılıyor,
@@ -112,68 +130,99 @@ body {
    block, normal satır-içi akış gibi davranıp doğal sayfalanabiliyor. */
 .image-grid { display: block; font-size: 0; }
 .image-item {
-  display: inline-block;
-  vertical-align: top;
-  text-align: center;
-  width: 420px;
-  margin: 0 16px 16px 0;
-  font-size: 12px;
-  break-inside: avoid;
+  display: inline-block; vertical-align: top; text-align: center;
+  width: 420px; margin: 0 16px 16px 0; font-size: 12px; break-inside: avoid;
 }
-.image-caption { font-size: 10.5px; font-weight: 600; color: var(--text-2); margin-top: 4px; }
+.image-caption { font-size: 9px; font-weight: 600; color: var(--text-3); margin-top: 4px; }
 
-.footer {
-  margin-top: 30px; padding-top: 10px; border-top: 1px solid var(--border);
-  font-size: 9px; color: var(--text-3);
+/* ── İmza bloğu ───────────────────────────────────────────────────── */
+.signoff { break-inside: avoid; display: flex; gap: 40px; padding-top: 18px; margin-top: 6px; border-top: 1px solid var(--border); }
+.signoff-col { flex: 1; }
+.signoff-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 22px;
 }
+.signoff-value { border-top: 1px solid #CFCFCF; padding-top: 8px; font-size: 10px; color: var(--text-1); }
 </style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="header-left">
-      {% if logo_uri %}<img class="header-logo" src="{{ logo_uri }}">{% endif %}
-      <div>
-        <div class="header-title">{{ r.title }}</div>
-        <div class="header-subject">Olay Raporu — #{{ r.id }}</div>
-      </div>
-    </div>
-    <div class="header-meta">
-      <div><strong>Durum:</strong> <span class="badge badge-done">{{ r.status }}</span></div>
-      <div style="margin-top:4px">Oluşturulma: {{ generated }}</div>
+{% set ns = namespace(n=0) %}
+{% macro secnum() %}{% set ns.n = ns.n + 1 %}{{ "%02d"|format(ns.n) }}{% endmacro %}
+
+  <div class="doc-header">
+    <svg class="doc-header-logo" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.2 4.5 5v6.1c0 5.1 3.3 9.1 7.5 10.7 4.2-1.6 7.5-5.6 7.5-10.7V5L12 2.2z" fill="#0007CD"/>
+      <path d="M8.7 12.3l2.1 2.1 4.5-4.5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="doc-header-brand">SOC Tracker</span>
+    <span class="doc-header-tag mono">{{ classification_tag }}</span>
+    {% if logo_uri %}<img class="doc-header-org-logo" src="{{ logo_uri }}"/>{% endif %}
+  </div>
+
+  <div class="cover">
+    {% if logo_uri %}<img class="cover-logo" src="{{ logo_uri }}"/>{% endif %}
+    <div>
+      <div class="cover-org">DIAS</div>
+      <div class="cover-org-sub">Siber Güvenlik Operasyon Merkezi</div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-title">Rapor Bilgileri</div>
-    <div class="grid-2">
-      <div>
-        <div class="row"><span class="row-label">Case No</span><span class="row-value">{{ "#" + r.xsoar_case_id if r.xsoar_case_id else "—" }}</span></div>
-        <div class="row"><span class="row-label">Ortam</span><span class="row-value">{{ r.environment or "—" }}</span></div>
-      </div>
-      <div>
-        <div class="row"><span class="row-label">Raporlayan</span><span class="row-value">{{ display_name(r.reporter) }}</span></div>
-        <div class="row"><span class="row-label">Tarih</span><span class="row-value">{{ fmt(r.created_at) }}</span></div>
-      </div>
-    </div>
-  </div>
+  <div class="eyebrow">Olay Raporu</div>
+  <h1 class="doc-title">{{ r.title }}</h1>
 
-  <div class="section">
-    <div class="section-title">Onay Bilgileri</div>
-    <div class="grid-2">
-      <div>
-        <div class="row"><span class="row-label">Onaylayan</span><span class="row-value">{{ display_name(r.validated_by) or "—" }}</span></div>
-        <div class="row"><span class="row-label">Onay Tarihi</span><span class="row-value">{{ fmt(r.validated_at) if r.validated_at else "—" }}</span></div>
-      </div>
-      <div>
-        {% if r.validation_note %}<div class="row"><span class="row-label">Onay Notu</span><span class="row-value">{{ r.validation_note }}</span></div>{% endif %}
-      </div>
-    </div>
-  </div>
+  <table class="info-table">
+    <tbody>
+      <tr>
+        <td>
+          <div class="info-label">Case No</div>
+          <div class="info-value mono">{{ "#" + r.xsoar_case_id if r.xsoar_case_id else "—" }}</div>
+        </td>
+        <td>
+          <div class="info-label">Ortam</div>
+          <div class="info-value">{{ r.environment or "—" }}</div>
+        </td>
+        <td>
+          <div class="info-label">Raporlayan</div>
+          <div class="info-value">{{ display_name(r.reporter) }}</div>
+        </td>
+        <td>
+          <div class="info-label">Durum</div>
+          <div class="info-value"><span class="badge-status">{{ r.status }}</span></div>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <div class="info-label">Onaylayan</div>
+          <div class="info-value">{{ display_name(r.validated_by) or "—" }}</div>
+        </td>
+        <td>
+          <div class="info-label">Onay Tarihi</div>
+          <div class="info-value mono">{{ fmt(r.validated_at) if r.validated_at else "—" }}</div>
+        </td>
+        <td>
+          <div class="info-label">Talep Tarihi</div>
+          <div class="info-value mono">{{ fmt(r.created_at) }}</div>
+        </td>
+        <td>
+          <div class="info-label">Son Güncelleme</div>
+          <div class="info-value mono">{{ fmt(r.updated_at) if r.updated_at else "—" }}</div>
+        </td>
+      </tr>
+      {% if r.validation_note %}
+      <tr>
+        <td colspan="4">
+          <div class="info-label">Onay Notu</div>
+          <div class="info-value">{{ r.validation_note }}</div>
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
 
   {% if sections %}
   <div class="section section-flow">
-    <div class="section-title">Olay Detayları</div>
+    <div class="section-title">{{ secnum() }} · Olay Detayları</div>
     {% for s in sections %}
     <div class="report-body-block">
       {% if s.heading %}<div class="sub-title">{{ s.heading }}</div>{% endif %}
@@ -185,14 +234,14 @@ body {
 
   {% if assets %}
   <div class="section">
-    <div class="section-title">Etkilenen Varlıklar</div>
+    <div class="section-title">{{ secnum() }} · Etkilenen Varlıklar</div>
     <div class="text-block">{% for a in assets %}{{ a.name }}{% if a.type %} ({{ a.type }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</div>
   </div>
   {% endif %}
 
   {% if image_items %}
   <div class="section section-flow">
-    <div class="section-title">Görseller</div>
+    <div class="section-title">{{ secnum() }} · Görseller</div>
     <div class="image-grid">
       {% for img in image_items %}
       {% if img.uri %}
@@ -206,8 +255,20 @@ body {
   </div>
   {% endif %}
 
-  <div class="footer">
-    SOC Tracker — Bu rapor {{ generated }} tarihinde otomatik üretilmiştir. Olay Raporu #{{ r.id }}.
+  <div class="signoff">
+    <div class="signoff-col">
+      <div class="signoff-label">Hazırlayan</div>
+      <div class="signoff-value">{{ display_name(r.reporter) }}{% if reporter_tier %} · {{ reporter_tier }}{% endif %}</div>
+    </div>
+    <div class="signoff-col">
+      <div class="signoff-label">Onaylayan</div>
+      <div class="signoff-value">{{ display_name(r.validated_by) or "—" }}{% if approver_tier %} · {{ approver_tier }}{% endif %}</div>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    <span>Oluşturma: {{ generated }}</span>
+    <span class="doc-footer-right mono">Bütünlük: {{ integrity_hash }}</span>
   </div>
 
 </body>
