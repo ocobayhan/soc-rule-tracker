@@ -6,183 +6,231 @@
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg: #FFFFFF;
-  --surface: #F7F8FA;
-  --border: #E5E7EB;
-  --text-1: #111827;
-  --text-2: #6B7280;
-  --text-3: #9CA3AF;
-  --accent: #1A1A1A;
-  --green:  #2DB27D;
-  --amber:  #F59E0B;
-  --red:    #EF4444;
-  --purple: #8B5CF6;
+  --text-1:  #0F0F0F;
+  --text-2:  #5A5A5A;
+  --text-3:  #8A8A8A;
+  --border:  #E4E4E4;
+  --border-soft: #F0F0F0;
+  --accent:  #0007CD;
+  --red:     #C62828;
+  --surface: #F7F7F7;
 }
-/* Montserrat (SIL Open Font License, static/fonts/OFL.txt) — Gotham lisanslı
-   değil, gömülemez; Gotham'a görsel olarak en yakın ücretsiz font seçildi.
-   DejaVu Sans, font dosyası herhangi bir sebeple yüklenemezse (ve Türkçe
-   karakter desteği için) yedek olarak kalıyor. */
-@font-face { font-family: "Montserrat"; src: url("{{ font_regular_uri }}");  font-weight: 400; }
-@font-face { font-family: "Montserrat"; src: url("{{ font_medium_uri }}");   font-weight: 500; }
-@font-face { font-family: "Montserrat"; src: url("{{ font_semibold_uri }}"); font-weight: 600; }
-@font-face { font-family: "Montserrat"; src: url("{{ font_bold_uri }}");     font-weight: 700; }
+/* Inter + JetBrains Mono (SIL OFL) — Composio görsel diline geçiş
+   (bkz. docs/PROGRESS.md "Composio tema katmanı"). WeasyPrint internete
+   çıkamayabildiği için Google Fonts CDN yerine yerel dosyalar. */
+@font-face { font-family: "Inter"; src: url("{{ font_regular_uri }}");  font-weight: 400; }
+@font-face { font-family: "Inter"; src: url("{{ font_medium_uri }}");   font-weight: 500; }
+@font-face { font-family: "Inter"; src: url("{{ font_semibold_uri }}"); font-weight: 600; }
+@font-face { font-family: "JetBrains Mono"; src: url("{{ mono_regular_uri }}"); font-weight: 400; }
+@font-face { font-family: "JetBrains Mono"; src: url("{{ mono_medium_uri }}");  font-weight: 500; }
 html { font-size: 12px; }
 body {
-  font-family: "Montserrat", "DejaVu Sans", Arial, sans-serif;
+  font-family: "Inter", "DejaVu Sans", Arial, sans-serif;
   color: var(--text-1);
   line-height: 1.5;
 }
+.mono { font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; }
 @page {
   margin: 18mm 14mm;
   @bottom-center {
     content: "Sayfa " counter(page) " / " counter(pages);
     font-size: 9px;
-    color: #9CA3AF;
+    color: var(--text-3);
   }
 }
 
-.header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 22px;
-  padding-bottom: 14px;
-  border-bottom: 2px solid var(--accent);
+/* ── Header / Footer ─────────────────────────────────────────────── */
+.doc-header {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 10px; margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
 }
-.header-left { display: flex; align-items: center; gap: 14px; }
-.header-logo { height: 42px; width: auto; border-radius: 4px; }
-.header-title { font-size: 17px; font-weight: 700; color: var(--text-1); }
-.header-subject { font-size: 13px; color: var(--text-2); margin-top: 2px; }
-.header-meta { text-align: right; font-size: 10px; color: var(--text-3); }
-.header-meta strong { color: var(--text-2); }
-
-.badge {
-  display: inline-block;
-  font-size: 10px; font-weight: 600;
-  padding: 3px 10px; border-radius: 10px;
-  margin-left: 6px;
+.doc-header-logo { flex: none; display: block; }
+.doc-header-brand { font-size: 12px; font-weight: 600; letter-spacing: -0.1px; color: var(--text-1); }
+.doc-header-tag { font-size: 9px; color: var(--text-3); margin-left: auto; }
+.doc-header-org-logo { height: 20px; width: auto; flex: none; display: block; }
+.doc-footer {
+  display: flex; align-items: center; gap: 12px;
+  padding-top: 10px; margin-top: 30px;
+  border-top: 1px solid var(--border);
+  font-size: 9px; color: var(--text-3);
 }
-.badge-done   { background: rgba(45,178,125,0.14); color: var(--green); }
-.badge-cancel { background: rgba(85,85,85,0.15);   color: var(--text-2); }
+.doc-footer-right { margin-left: auto; }
 
+/* ── Cover block ──────────────────────────────────────────────────── */
+.cover { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.cover-logo { height: 40px; width: auto; flex: none; display: block; }
+.cover-org { font-size: 11px; font-weight: 600; color: var(--text-1); line-height: 1.3; }
+.cover-org-sub { font-size: 9px; color: var(--text-3); }
+.eyebrow {
+  font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 8px;
+}
+h1.doc-title {
+  font-size: 20px; font-weight: 500; line-height: 1.15; letter-spacing: -0.4px;
+  color: var(--text-1); margin: 0 0 20px;
+}
+
+/* ── Info tablosu ─────────────────────────────────────────────────── */
+table.info-table { width: 100%; border-collapse: collapse; margin-bottom: 22px; break-inside: avoid; }
+table.info-table td {
+  width: 25%; padding: 9px 8px 9px 0; vertical-align: top;
+  border-top: 1px solid var(--border);
+}
+table.info-table tr:last-child td { border-bottom: 1px solid var(--border); }
+.info-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 3px;
+}
+.info-value { font-size: 10px; color: var(--text-1); }
+.info-value.severe { color: var(--red); font-weight: 500; }
+
+/* ── Bölüm ────────────────────────────────────────────────────────── */
 .section { margin-bottom: 22px; break-inside: avoid; }
-/* Bulgular/MITRE/Öneriler/Zafiyetler gibi bölümler bir listeden/döngüden
-   geliyor ve sayfa boyunu aşabilir — bunlarda break-inside:avoid tüm
-   bölümü tek parça tutmaya çalışıp sığmayınca hepsini bir sonraki sayfaya
-   atıyor, önceki sayfada büyük bir boşluk bırakıyordu. .section-flow bu
-   bölümlerde avoid'ı kaldırıp doğal sayfalamaya bırakır; iç öğeler
-   (.finding-block, tablo satırları, liste öğeleri) kendi
-   break-inside:avoid'ını koruyor, sadece bölüm ortasında bölünebiliyorlar,
-   tek bir öğenin ortasında değil. */
 .section-flow { break-inside: auto; }
 .section-title {
-  font-size: 12px; font-weight: 700; color: var(--accent);
-  text-transform: uppercase; letter-spacing: 0.03em;
-  margin-bottom: 8px; padding-bottom: 5px;
-  border-bottom: 1px solid var(--border);
+  font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--accent); margin: 0 0 10px;
   break-after: avoid;
 }
-.row { display: flex; padding: 4px 0; font-size: 11px; }
-.row-label { width: 160px; flex-shrink: 0; color: var(--text-2); font-weight: 500; }
+.row { display: flex; padding: 4px 0; font-size: 10.5px; }
+.row-label { width: 150px; flex-shrink: 0; color: var(--text-3); font-weight: 500; }
 .row-value { color: var(--text-1); white-space: pre-wrap; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
 
 .text-block {
-  font-size: 11px; white-space: pre-wrap;
+  font-size: 10.5px; white-space: pre-wrap; line-height: 1.6;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 6px; padding: 10px 12px; margin-top: 4px;
 }
 .tag {
-  display: inline-block; font-size: 10px;
-  background: rgba(26,26,26,0.08); color: var(--accent);
+  display: inline-block; font-size: 9px;
+  background: rgba(0,7,205,0.07); color: var(--accent);
   border-radius: 8px; padding: 2px 8px; margin: 2px 4px 2px 0;
 }
-/* Rapordaki TÜM görseller (kapsam/bulgu/detection/öneri) aynı sınırı
-   paylaşır — biri postacı pulu kadar küçük, diğeri neredeyse sayfa
-   genişliğinde görünmesin diye. En-boy oranı bozulmadan (object-fit:contain)
-   en çok 420×280px içine sığar; küçük görseller olduğu gibi kalır. */
 .report-img {
-  display: block;
-  max-width: 420px;
-  max-height: 280px;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  margin-top: 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  display: block; max-width: 420px; max-height: 280px;
+  width: auto; height: auto; object-fit: contain;
+  margin-top: 6px; border: 1px solid var(--border); border-radius: 4px;
 }
 .finding-block { margin-bottom: 12px; break-inside: avoid; }
 .finding-block:last-child { margin-bottom: 0; }
-.finding-num { font-size: 10.5px; font-weight: 700; color: var(--text-2); margin-bottom: 3px; }
+.finding-num { font-size: 9px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
 
-table.mitre-table { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-top: 4px; }
-table.mitre-table th, table.mitre-table td {
-  border: 1px solid var(--border); padding: 5px 8px; text-align: left; vertical-align: top;
+table.mitre-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; }
+table.mitre-table th {
+  text-align: left; font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-3); padding: 0 8px 8px 0; border-bottom: 1px solid var(--border);
 }
-table.mitre-table th { background: var(--surface); color: var(--text-2); font-weight: 600; }
+table.mitre-table td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
 table.mitre-table tr { break-inside: avoid; }
 
-ol.list-block { margin-left: 18px; font-size: 11px; }
+ol.list-block { margin: 0 0 0 18px; padding: 0; font-size: 10.5px; line-height: 1.6; color: var(--text-1); }
 ol.list-block li { padding: 2px 0; break-inside: avoid; }
 
-.footer {
-  margin-top: 30px; padding-top: 10px; border-top: 1px solid var(--border);
-  font-size: 9px; color: var(--text-3);
+.uc-card {
+  break-inside: avoid; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 16px; margin-top: 4px; display: flex; gap: 12px;
 }
+.uc-card-id { font-size: 9px; color: var(--accent); flex: none; }
+.uc-card-text { font-size: 10.5px; line-height: 1.5; color: var(--text-1); min-width: 0; }
+
+/* ── İmza bloğu ───────────────────────────────────────────────────── */
+.signoff { break-inside: avoid; display: flex; gap: 40px; padding-top: 18px; margin-top: 6px; border-top: 1px solid var(--border); }
+.signoff-col { flex: 1; }
+.signoff-label {
+  font-size: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 22px;
+}
+.signoff-value { border-top: 1px solid #CFCFCF; padding-top: 8px; font-size: 10px; color: var(--text-1); }
 </style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="header-left">
-      {% if logo_uri %}<img class="header-logo" src="{{ logo_uri }}">{% endif %}
-      <div>
-        <div class="header-title">{{ r.hunt_title or r.hunt_subject }}</div>
-        <div class="header-subject">Threat Hunt Raporu — #{{ r.id }}</div>
-      </div>
-    </div>
-    <div class="header-meta">
-      <div><strong>Durum:</strong>
-        <span class="badge {{ 'badge-cancel' if r.status == 'İptal' else 'badge-done' }}">{{ r.status }}</span>
-      </div>
-      <div style="margin-top:4px">Oluşturulma: {{ generated }}</div>
+{% set ns = namespace(n=0) %}
+{% macro secnum() %}{% set ns.n = ns.n + 1 %}{{ "%02d"|format(ns.n) }}{% endmacro %}
+
+  <div class="doc-header">
+    <svg class="doc-header-logo" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.2 4.5 5v6.1c0 5.1 3.3 9.1 7.5 10.7 4.2-1.6 7.5-5.6 7.5-10.7V5L12 2.2z" fill="#0007CD"/>
+      <path d="M8.7 12.3l2.1 2.1 4.5-4.5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="doc-header-brand">SOC Tracker</span>
+    <span class="doc-header-tag mono">{{ classification_tag }}</span>
+    {% if logo_uri %}<img class="doc-header-org-logo" src="{{ logo_uri }}"/>{% endif %}
+  </div>
+
+  <div class="cover">
+    {% if logo_uri %}<img class="cover-logo" src="{{ logo_uri }}"/>{% endif %}
+    <div>
+      <div class="cover-org">DIAS</div>
+      <div class="cover-org-sub">Siber Güvenlik Operasyon Merkezi</div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-title">Talep Bilgileri</div>
-    <div class="grid-2">
-      <div>
-        <div class="row"><span class="row-label">Talep Eden</span><span class="row-value">{{ display_name(r.requester) }}</span></div>
-        <div class="row"><span class="row-label">Atanan Analist</span><span class="row-value">{{ display_name(r.assigned_analyst) or "—" }}</span></div>
-        <div class="row"><span class="row-label">Ortamlar</span><span class="row-value">{% for e in env_list %}<span class="tag">{{ e }}</span>{% else %}—{% endfor %}</span></div>
-      </div>
-      <div>
-        <div class="row"><span class="row-label">Talep Tarihi</span><span class="row-value">{{ fmt(r.created_at) }}</span></div>
-        <div class="row"><span class="row-label">Hunt Başlangıcı</span><span class="row-value">{{ fmt(r.started_at) if r.started_at else "—" }}</span></div>
-        <div class="row"><span class="row-label">Tamamlanma Tarihi</span><span class="row-value">{{ fmt(r.completed_at) if r.completed_at else "—" }}</span></div>
-        {% if r.hunt_duration_hours is not none %}
-        <div class="row"><span class="row-label">Hunt Süresi</span><span class="row-value">{{ r.hunt_duration_hours }} saat</span></div>
-        {% endif %}
-      </div>
-    </div>
-    {% if r.hunt_title %}
-    <div class="row" style="margin-top:4px"><span class="row-label">Hunt Konusu</span><span class="row-value">{{ r.hunt_subject }}</span></div>
-    {% endif %}
-  </div>
+  <div class="eyebrow">Threat Hunting Raporu</div>
+  <h1 class="doc-title">{{ r.hunt_title or r.hunt_subject }}</h1>
+
+  <table class="info-table">
+    <tbody>
+      <tr>
+        <td>
+          <div class="info-label">Talep Eden</div>
+          <div class="info-value">{{ display_name(r.requester) }}</div>
+        </td>
+        <td>
+          <div class="info-label">Atanan Analist</div>
+          <div class="info-value">{{ display_name(r.assigned_analyst) or "—" }}</div>
+        </td>
+        <td>
+          <div class="info-label">Ortamlar</div>
+          <div class="info-value">{% for e in env_list %}<span class="tag mono">{{ e }}</span>{% else %}—{% endfor %}</div>
+        </td>
+        <td>
+          <div class="info-label">Hunt Süresi</div>
+          <div class="info-value mono">{{ r.hunt_duration_hours ~ " saat" if r.hunt_duration_hours is not none else "—" }}</div>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <div class="info-label">Talep Tarihi</div>
+          <div class="info-value mono">{{ fmt(r.created_at) }}</div>
+        </td>
+        <td>
+          <div class="info-label">Hunt Başlangıcı</div>
+          <div class="info-value mono">{{ fmt(r.started_at) if r.started_at else "—" }}</div>
+        </td>
+        <td>
+          <div class="info-label">Tamamlanma Tarihi</div>
+          <div class="info-value mono">{{ fmt(r.completed_at) if r.completed_at else "—" }}</div>
+        </td>
+        <td>
+          <div class="info-label">Hunt Sonucu</div>
+          <div class="info-value">{{ r.hunt_result or "—" }}</div>
+        </td>
+      </tr>
+      {% if r.hunt_title %}
+      <tr>
+        <td colspan="4">
+          <div class="info-label">Hunt Konusu</div>
+          <div class="info-value">{{ r.hunt_subject }}</div>
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
 
   <div class="section">
-    <div class="section-title">Onay Bilgileri</div>
+    <div class="section-title">{{ secnum() }} · Onay Süreci</div>
     <div class="grid-2">
       <div>
         <div class="row"><span class="row-label">Ön Onayı Veren</span><span class="row-value">{{ display_name(r.validated_by) or "—" }}</span></div>
-        <div class="row"><span class="row-label">Ön Onay Tarihi</span><span class="row-value">{{ fmt(r.validated_at) if r.validated_at else "—" }}</span></div>
+        <div class="row"><span class="row-label">Ön Onay Tarihi</span><span class="row-value mono">{{ fmt(r.validated_at) if r.validated_at else "—" }}</span></div>
         {% if r.validation_note %}<div class="row"><span class="row-label">Ön Onay Notu</span><span class="row-value">{{ r.validation_note }}</span></div>{% endif %}
       </div>
       <div>
         <div class="row"><span class="row-label">Sonucu Onaylayan</span><span class="row-value">{{ display_name(r.result_approved_by) or "—" }}</span></div>
-        <div class="row"><span class="row-label">Sonuç Onay Tarihi</span><span class="row-value">{{ fmt(r.result_approved_at) if r.result_approved_at else "—" }}</span></div>
+        <div class="row"><span class="row-label">Sonuç Onay Tarihi</span><span class="row-value mono">{{ fmt(r.result_approved_at) if r.result_approved_at else "—" }}</span></div>
         {% if r.result_approval_note %}<div class="row"><span class="row-label">Sonuç Onay Notu</span><span class="row-value">{{ r.result_approval_note }}</span></div>{% endif %}
       </div>
     </div>
@@ -190,7 +238,7 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
 
   {% if r.scope %}
   <div class="section">
-    <div class="section-title">Hedef &amp; Kapsam</div>
+    <div class="section-title">{{ secnum() }} · Hedef &amp; Kapsam</div>
     <div class="text-block">{{ r.scope }}</div>
     {% if scope_image_uri %}<img class="report-img" src="{{ scope_image_uri }}"/>{% endif %}
   </div>
@@ -198,15 +246,15 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
 
   {% if mitre_entries %}
   <div class="section section-flow">
-    <div class="section-title">MITRE ATT&amp;CK Teknikleri</div>
+    <div class="section-title">{{ secnum() }} · MITRE ATT&amp;CK</div>
     <table class="mitre-table">
-      <thead><tr><th style="width:70px">ID</th><th style="width:130px">Teknik</th><th style="width:110px">Taktik</th><th>Yöntem Notu</th></tr></thead>
+      <thead><tr><th style="width:70px">ID</th><th style="width:150px">Teknik</th><th style="width:120px">Taktik</th><th>Yöntem Notu</th></tr></thead>
       <tbody>
         {% for e in mitre_entries %}
         <tr>
-          <td>{{ e.id }}</td>
+          <td class="mono">{{ e.id }}</td>
           <td>{{ e.name }}</td>
-          <td>{{ e.tactic }}</td>
+          <td class="mono" style="color:var(--text-2)">{{ e.tactic }}</td>
           <td>{{ e.method or "—" }}</td>
         </tr>
         {% endfor %}
@@ -216,11 +264,11 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
   {% endif %}
 
   <div class="section section-flow">
-    <div class="section-title">Bulgular</div>
+    <div class="section-title">{{ secnum() }} · Bulgular</div>
     {% if finding_items %}
       {% for f in finding_items %}
       <div class="finding-block">
-        <div class="finding-num">{{ loop.index }}. Bulgu</div>
+        <div class="finding-num mono">{{ "%02d"|format(loop.index) }}</div>
         {% if f.text %}<div class="text-block">{{ f.text }}</div>{% endif %}
         {% if f.image_uri %}<img class="report-img" src="{{ f.image_uri }}"/>{% endif %}
       </div>
@@ -233,9 +281,9 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
       <div class="row-value" style="color:var(--text-3)">Bulgu saptanmadı.</div>
     {% endif %}
     {% if r.has_findings == "Evet" %}
-      <div class="row" style="margin-top:6px"><span class="row-label">Şiddet</span><span class="row-value">{{ r.severity or "—" }}</span></div>
+      <div class="row" style="margin-top:6px"><span class="row-label">Şiddet</span><span class="row-value{{ ' severe' if r.severity in ('Yüksek','Kritik') else '' }}">{{ r.severity or "—" }}</span></div>
       {% if ioc_list %}
-      <div class="row"><span class="row-label">IOC Listesi</span><span class="row-value">{% for ioc in ioc_list %}<span class="tag">{{ ioc }}</span>{% endfor %}</span></div>
+      <div class="row"><span class="row-label">IOC Listesi</span><span class="row-value">{% for ioc in ioc_list %}<span class="tag mono">{{ ioc }}</span>{% endfor %}</span></div>
       {% endif %}
       {% if r.affected_assets %}
       <div class="row"><span class="row-label">Etkilenen Varlıklar</span><span class="row-value">{{ r.affected_assets }}</span></div>
@@ -245,18 +293,32 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
   </div>
 
   <div class="section">
-    <div class="section-title">Detection Önerisi</div>
+    <div class="section-title">{{ secnum() }} · Detection Önerisi</div>
     <div class="row"><span class="row-label">Öneriliyor mu?</span><span class="row-value">{{ r.detection_suggestion }}</span></div>
     {% if r.detection_suggestion == "Evet" %}
       {% if r.detection_detail %}<div class="text-block">{{ r.detection_detail }}</div>{% endif %}
       {% if detection_detail_image_uri %}<img class="report-img" src="{{ detection_detail_image_uri }}"/>{% endif %}
-      {% if linked_uc_id %}<div class="row" style="margin-top:6px"><span class="row-label">İlişkili Use-Case</span><span class="row-value">#{{ linked_uc_id }}</span></div>{% endif %}
+      {% if linked_uc %}
+      <div class="uc-card">
+        <span class="uc-card-id mono">UC-{{ linked_uc.id }}</span>
+        <span class="uc-card-text">{{ linked_uc.usecase_description }} — {{ linked_uc.status }}</span>
+      </div>
+      {% endif %}
     {% endif %}
   </div>
 
+  {% if vulnerabilities %}
+  <div class="section section-flow">
+    <div class="section-title">{{ secnum() }} · Keşfedilen Güvenlik Açıkları</div>
+    <ol class="list-block">
+      {% for v in vulnerabilities %}<li>{{ v }}</li>{% endfor %}
+    </ol>
+  </div>
+  {% endif %}
+
   {% if recommendations %}
   <div class="section section-flow">
-    <div class="section-title">Öneriler</div>
+    <div class="section-title">{{ secnum() }} · Güvenlik Önerileri</div>
     <ol class="list-block">
       {% for rec in recommendations %}<li>{{ rec }}</li>{% endfor %}
     </ol>
@@ -264,22 +326,20 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
   </div>
   {% endif %}
 
-  {% if vulnerabilities %}
-  <div class="section section-flow">
-    <div class="section-title">Keşfedilen Zafiyetler</div>
-    <ol class="list-block">
-      {% for v in vulnerabilities %}<li>{{ v }}</li>{% endfor %}
-    </ol>
-  </div>
-  {% endif %}
-
-  <div class="section">
-    <div class="section-title">Sonuç</div>
-    <div class="row"><span class="row-label">Hunt Sonucu</span><span class="row-value">{{ r.hunt_result or "—" }}</span></div>
+  <div class="signoff">
+    <div class="signoff-col">
+      <div class="signoff-label">Hazırlayan</div>
+      <div class="signoff-value">{{ display_name(r.requester) }}{% if requester_tier %} · {{ requester_tier }}{% endif %}</div>
+    </div>
+    <div class="signoff-col">
+      <div class="signoff-label">Onaylayan</div>
+      <div class="signoff-value">{{ display_name(r.result_approved_by) or "—" }}{% if approver_tier %} · {{ approver_tier }}{% endif %}</div>
+    </div>
   </div>
 
-  <div class="footer">
-    SOC Tracker — Bu rapor {{ generated }} tarihinde otomatik üretilmiştir. Hunt #{{ r.id }}.
+  <div class="doc-footer">
+    <span>Oluşturma: {{ generated }}</span>
+    <span class="doc-footer-right mono">Bütünlük: {{ integrity_hash }}</span>
   </div>
 
 </body>

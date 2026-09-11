@@ -1816,6 +1816,69 @@ olacak.
   tek `soc-theme-composio.css` `<link>` satırı silinirse eski görünüm
   aynen döner (token'lar dışında hiçbir class/DOM değişmediği için).
 
+### Takip (2026-09-11) — Hunt Raporu PDF'i Composio tasarımına + Bütünlük hash'i
+
+Kullanıcı Composio tema katmanından sonra `tema/` klasöründeki PDF
+mockup'larını (`Hunt Raporu PDF.dc.html` vb., design skill ile üretilmiş)
+beğenip PDF raporlarının da bu görsel dile taşınmasını istedi. Plan Mode
+ile netleştirildi: kapsam Hunt+Olay Raporu+Aylık Rapor'un ÜÇÜ de, ve
+mockup'taki "Bütünlük: <hash>" satırı gerçek bir özellik olarak
+uygulanacak (bkz. plan dosyası). Bu girdi sadece **Faz A (backend) + Faz B
+(Hunt şablonu)**'yi kapsıyor — Incident ve Aylık Rapor ayrı takip
+girdileriyle gelecek.
+
+- **Faz A — `report_integrity_hash()`** (app.py, `write_audit`'in yanına):
+  `write_audit`'teki `audit_hash` ile AYNI gizli anahtarı
+  (`AUDIT_CHAIN_SECRET`, `verify_audit.py`'den import edildi) kullanan ama
+  zincire hiç eklenmeyen, tek bir raporun üretildiği anı imzalayan bir
+  SHA-256 parmak izi. Girdi: rapor tipi + kayıt id + `generated` zaman
+  damgası + raporun kaynak verisinin `json.dumps(sort_keys=True)` ile
+  deterministik hâli. İlk 16 hex karakteri hem PDF footer'ına hem de
+  `write_audit`'in `detail` alanına yazılıyor ki ikisi karşılaştırılıp
+  raporun üretildiği andan beri değişmediği teyit edilebilsin. Yeni
+  `EXPORT_MONTHLY_REPORT` aksiyonu `_ACTIVITY["system"]` listesine ve
+  `app.js`'teki `ACTION_LABELS`/`ACTION_CLS` map'lerine eklendi (henüz
+  hiçbir route bunu yazmıyor — Faz D'de gelecek).
+- **Font:** Composio'nun Inter+JetBrains Mono'su tarayıcı sayfalarında
+  (index/login) zaten Google Fonts CDN'den geliyordu, ama Hunt/Olay
+  Raporu PDF'leri WeasyPrint ile SUNUCU tarafında üretiliyor — internete
+  çıkamayabileceği için (mevcut Montserrat gibi) yerel `.ttf` dosyası
+  gerekiyor. Kullanıcı onayıyla resmi kaynaklardan (rsms/inter ve
+  JetBrains/JetBrainsMono GitHub release'leri, ikisi de SIL OFL lisanslı)
+  Inter (Regular/Medium/SemiBold) ve JetBrains Mono (Regular/Medium)
+  statik `.ttf`'leri indirilip `static/fonts/`'a Montserrat'la aynı
+  desende eklendi (+ lisans dosyaları).
+- **Faz B — `templates/hunt_report_print.html`** tamamen yeniden
+  tasarlandı: header'da gerçek shield logosu (index.html'deki
+  `.sidebar-logo-icon` ile birebir — mockup'ın iki tutarsız placeholder'ı
+  yerine) + sınıflandırma etiketi (`HUNT-{yıl}-{id:03d} · Gizli /
+  Dahili`, `hunt_report_pdf()`'te hesaplanıp template'e geçiliyor) + DIAS
+  logosu; DIAS/eyebrow/H1 gövde girişi; mockup'taki 4-kolonlu bilgi
+  tablosu deseni (Talep Eden/Analist/Ortamlar/Süre + Talep/Başlangıç/
+  Tamamlanma/Sonuç); Jinja `namespace` ile otomatik numaralanan bölümler
+  (`01 · Onay Süreci` [yeni, ayrı bölüm — mockup'ın tek-aşamalı örneğinde
+  yoktu ama Hunt'ın gerçek iki-aşamalı onayı (Ön Onay + Sonuç Onayı) için
+  gerekliydi, hiçbir alan/koşul kaybolmadan taşındı] → Hedef & Kapsam →
+  MITRE → Bulgular → Detection Önerisi [artık `linked_uc`'nin gerçek
+  açıklaması+durumuyla mockup'taki UC-kart deseninde] → Zafiyetler →
+  Öneriler → boş olsalar bölüm hiç basılmıyor, numaralar hep ardışık
+  kalıyor); imza bloğu (Hazırlayan/Onaylayan, yeni `user_tier()` yardımcı
+  fonksiyonuyla `display_name()`'in yanına "· Kıdemli Analist" gibi tier
+  ekleniyor); footer'da `Oluşturma` + `Bütünlük` hash. **Hiçbir mevcut
+  alan/görsel/koşul kaldırılmadı** — sadece yeni görsel dille yeniden
+  düzenlendi.
+- **Doğrulandı:** gerçek WeasyPrint (`WEASYPRINT_EXE`) ile, gerçek
+  veritabanı kayıtlarıyla (Hunt #7 — MITRE'siz/tek aşamalı örnek, Hunt #4
+  — MITRE'li/notlu iki aşamalı onay örneği) PDF üretilip `pymupdf` ile
+  sayfa görüntülerine çevrilerek incelendi: tüm bölümler, koşullu
+  alanlar, MITRE tablosu, gömülü test görseli, imza bloğu (doğru
+  tier'larla: "lowtier · Analist", "admin · Müdür"), sınıflandırma
+  etiketi ve Bütünlük hash'i doğru render oluyor. Audit Log'da
+  `EXPORT_HUNT_PDF` detail'indeki hash'in PDF footer'ındakiyle BİREBİR
+  eştiği doğrulandı (`946d1e46908d458f`, `aa411fc39fe2dbf3`).
+  `verify_audit.py`: 286/286 zincirli, geçerli (iki gerçek test
+  indirmesi audit'e yazıldığı için kayıt sayısı arttı, zincir bozulmadı).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

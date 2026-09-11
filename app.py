@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import os
 import uuid
@@ -10,7 +11,7 @@ from flask import (Flask, g, jsonify, redirect, render_template, request,
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-from verify_audit import audit_hash, AUDIT_GENESIS, verify_chain
+from verify_audit import audit_hash, AUDIT_GENESIS, verify_chain, AUDIT_CHAIN_SECRET
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "soc-rule-tracker-dev-key-change-in-prod")
@@ -54,7 +55,7 @@ AUDIT_CATEGORIES = {
     "edit":           ["EDIT_TUNE", "EDIT_UC", "EDIT_HUNT", "EDIT_USER", "EDIT_INCIDENT",
                         "ADD_INCIDENT_IMAGE_XSOAR"],
     "delete":         ["DELETE_TUNE", "DELETE_UC", "DELETE_HUNT", "DELETE_USER", "DELETE_INCIDENT"],
-    "system":         ["EXPORT_HUNT_PDF", "EXPORT_INCIDENT_PDF", "VERIFY_AUDIT_CHAIN", "EDIT_SETTING", "EXPORT_AUDIT_LOG"],
+    "system":         ["EXPORT_HUNT_PDF", "EXPORT_INCIDENT_PDF", "EXPORT_MONTHLY_REPORT", "VERIFY_AUDIT_CHAIN", "EDIT_SETTING", "EXPORT_AUDIT_LOG"],
 }
 
 # Onay seviyesi (tier) — role'den (admin/analyst/settings) bağımsız ikinci bir
@@ -137,6 +138,17 @@ def display_name(username):
         rows = get_db().execute("SELECT username, full_name FROM users").fetchall()
         g._display_names = {r["username"]: r["full_name"] for r in rows if r["full_name"]}
     return g._display_names.get(username) or username
+
+def user_tier(username):
+    """Kullanıcının onay seviyesini (tier) döndürür — PDF imza bloğu gibi
+    salt-gösterim amaçlı yerlerde kullanılır. display_name()'le aynı
+    g-önbellek deseni (bir request içinde tek sorgu)."""
+    if not username:
+        return None
+    if "_user_tiers" not in g:
+        rows = get_db().execute("SELECT username, tier FROM users").fetchall()
+        g._user_tiers = {r["username"]: r["tier"] for r in rows if r["tier"]}
+    return g._user_tiers.get(username)
 
 @app.context_processor
 def inject_display_name():
@@ -698,6 +710,21 @@ def write_audit(action, record_type=None, record_id=None, detail=""):
         db.commit()
     except Exception as e:
         app.logger.warning("Audit write failed: %s", e)
+
+def report_integrity_hash(report_type, record_id, generated_at, payload_json):
+    """Tek bir raporun (PDF/aylık) üretildiği anı imzalayan parmak izi.
+
+    write_audit'teki audit_hash ile AYNI gizli anahtarı (AUDIT_CHAIN_SECRET)
+    kullanır ama zincire eklenmez — sadece bu rapora özel, tekrar
+    üretilebilir bir özet. `payload_json`, o raporun kaynak verisinin
+    `json.dumps(..., sort_keys=True)` ile deterministik hale getirilmiş
+    hâlidir. Çağıran, dönen hash'in ilk 16 hex karakterini hem rapor
+    footer'ına hem de write_audit detail'ine yazar ki ikisi karşılaştırılıp
+    raporun üretildiği andan beri değişmediği teyit edilebilsin (bkz.
+    docs/audit_logging.md)."""
+    blob = "|".join([AUDIT_CHAIN_SECRET, "REPORT", report_type,
+                      str(record_id or ""), generated_at, payload_json])
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -3590,37 +3617,51 @@ def hunt_report_pdf(item_id):
     def _fmt(v):
         return v[:10] if v else ""
 
-    linked_uc = db.execute("SELECT id FROM usecase_requests WHERE source_hunt_id=?", (item_id,)).fetchone()
+    linked_uc = db.execute(
+        "SELECT id, usecase_description, status FROM usecase_requests WHERE source_hunt_id=?", (item_id,)
+    ).fetchone()
+
+    generated = datetime.now().strftime("%d.%m.%Y %H:%M")
+    hunt_year = (row["created_at"] or "")[:4] or datetime.now().strftime("%Y")
+    classification_tag = f"HUNT-{hunt_year}-{item_id:03d} · Gizli / Dahili"
+    integrity_payload = _j.dumps(dict(row), sort_keys=True, ensure_ascii=False, default=str)
+    integrity_hash = report_integrity_hash("hunt", item_id, generated, integrity_payload)[:16]
 
     html = render_template(
         "hunt_report_print.html",
         r=row,
         logo_uri=_pdf_logo_uri(),
+        classification_tag=classification_tag,
+        integrity_hash=integrity_hash,
         mitre_entries=mitre_entries,
         ioc_list=ioc_list,
         env_list=env_list,
         recommendations=recommendations,
         vulnerabilities=vulnerabilities,
         finding_items=finding_items,
-        linked_uc_id=linked_uc["id"] if linked_uc else None,
+        linked_uc=linked_uc,
+        requester_tier=user_tier(row["requester"]),
+        approver_tier=user_tier(row["result_approved_by"]),
         scope_image_uri=_hunt_pdf_image_uri(row["scope_image"]),
         findings_image_uri=_hunt_pdf_image_uri(row["findings_image"]),
         affected_assets_image_uri=_hunt_pdf_image_uri(row["affected_assets_image"]),
         detection_detail_image_uri=_hunt_pdf_image_uri(row["detection_detail_image"]),
         recommendations_image_uri=_hunt_pdf_image_uri(row["recommendations_image"]),
-        font_regular_uri=_pdf_font_uri("Montserrat-Regular.ttf"),
-        font_medium_uri=_pdf_font_uri("Montserrat-Medium.ttf"),
-        font_semibold_uri=_pdf_font_uri("Montserrat-SemiBold.ttf"),
-        font_bold_uri=_pdf_font_uri("Montserrat-Bold.ttf"),
+        font_regular_uri=_pdf_font_uri("Inter-Regular.ttf"),
+        font_medium_uri=_pdf_font_uri("Inter-Medium.ttf"),
+        font_semibold_uri=_pdf_font_uri("Inter-SemiBold.ttf"),
+        mono_regular_uri=_pdf_font_uri("JetBrainsMono-Regular.ttf"),
+        mono_medium_uri=_pdf_font_uri("JetBrainsMono-Medium.ttf"),
         fmt=_fmt,
-        generated=datetime.now().strftime("%d.%m.%Y %H:%M"),
+        generated=generated,
     )
 
     try:
         pdf_bytes = _render_pdf_bytes(html)
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 500
-    write_audit("EXPORT_HUNT_PDF", "hunt", item_id, f"Başlık: {row['hunt_title'] or row['hunt_subject']}")
+    write_audit("EXPORT_HUNT_PDF", "hunt", item_id,
+                f"Başlık: {row['hunt_title'] or row['hunt_subject']} | Bütünlük: {integrity_hash}")
     return send_file(
         BytesIO(pdf_bytes),
         mimetype="application/pdf",
