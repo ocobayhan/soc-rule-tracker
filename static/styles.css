@@ -35,9 +35,9 @@
   --teal-subtle:  rgba(45,212,191,0.12);
 
   --font: Inter, system-ui, -apple-system, sans-serif;
-  --r-sm: 5px;
-  --r:    7px;
-  --r-lg: 10px;
+  --r-sm: 8px;
+  --r:    8px;
+  --r-lg: 16px;
 }
 
 /* ============================================================ RESET */
@@ -132,12 +132,13 @@ input, select, textarea { font-family: inherit; }
 .sidebar-search { padding: 0 12px 10px; }
 .sidebar-search-input {
   width: 100%;
+  height: 40px;
   background: var(--bg-tertiary);
   border: 0.5px solid var(--border-md);
   border-radius: var(--r-sm);
   color: var(--text-1);
-  font-size: 12px;
-  padding: 6px 9px;
+  font-size: 14px;
+  padding: 0 14px;
   outline: none;
 }
 .sidebar-search-input:focus { border-color: var(--accent); }
@@ -291,11 +292,13 @@ input, select, textarea { font-family: inherit; }
 /* ============================================================ PAGE HEADER */
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 24px;
+  margin-bottom: 24px;
 }
-.page-title { font-size: 16px; font-weight: 500; color: var(--text-1); }
+.page-title { font-size: 32px; font-weight: 500; letter-spacing: -0.02em; color: var(--text-1); line-height: 1.15; }
+.page-subtitle { font-size: 14px; color: var(--text-2); margin-top: 8px; }
 
 /* ============================================================ TAB PANELS */
 .tab-panel { display: none; }
@@ -427,18 +430,26 @@ input, select, textarea { font-family: inherit; }
 .search-wrap {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  height: 40px;
   background: var(--bg-secondary);
-  border: 0.5px solid var(--border);
+  border: 0.5px solid var(--border-md);
   border-radius: var(--r-sm);
-  padding: 5px 10px;
+  padding: 0 12px;
   flex: 1;
   max-width: 280px;
 }
 .search-icon { font-size: 14px; color: var(--text-3); }
-.search-input {
-  background: none; border: none; outline: none;
-  color: var(--text-1); font-size: 12px; flex: 1;
+/* .form-input'un kutu stilini (bg/border/height/padding/radius) burada
+   iptal ediyoruz — bu input zaten .search-wrap'in kendi kutusu içinde,
+   iki iç içe kutu görünmesin diye (2026-09-12, Composio geçişi). */
+.form-input.search-input {
+  height: auto;
+  background: none; border: none;
+  border-radius: 0;
+  padding: 0;
+  outline: none;
+  color: var(--text-1); font-size: 14px; flex: 1;
 }
 .search-input::placeholder { color: var(--text-3); }
 
@@ -481,12 +492,13 @@ input, select, textarea { font-family: inherit; }
 /* ============================================================ FORMS */
 .form-input {
   width: 100%;
+  height: 40px;
   background: var(--bg-secondary);
   border: 0.5px solid var(--border-md);
   border-radius: var(--r-sm);
-  padding: 7px 10px;
+  padding: 0 14px;
   color: var(--text-1);
-  font-size: 12px;
+  font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
   appearance: none;
@@ -499,7 +511,7 @@ input, select, textarea { font-family: inherit; }
    height'i içeriğe göre ayarlıyor; resize:vertical ile birlikte kullanmak
    kırık davranış üretir (kullanıcının elle sürüklediği boyut bir sonraki
    tuşta sıfırlanır), o yüzden resize kapalı, üst sınırdan sonra kaydırma var. */
-.form-textarea { resize: none; min-height: 40px; max-height: 280px; overflow-y: auto; line-height: 1.5; }
+.form-textarea { height: auto; resize: none; min-height: 40px; max-height: 280px; padding: 10px 14px; overflow-y: auto; line-height: 1.5; }
 .input-sm { max-width: 160px; }
 .form-group { display: flex; flex-direction: column; gap: 4px; }
 .form-label { font-size: 11px; color: var(--text-2); font-weight: 500; letter-spacing: .02em; }
@@ -519,10 +531,11 @@ input, select, textarea { font-family: inherit; }
 
 /* ============================================================ BUTTONS */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  padding: 6px 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 40px;
+  padding: 0 18px;
   border-radius: var(--r-sm);
-  font-size: 12px; font-weight: 500;
+  font-size: 14px; font-weight: 500;
   border: none; cursor: pointer;
   transition: background 0.12s, opacity 0.12s, transform 0.06s;
   white-space: nowrap;
@@ -557,9 +570,10 @@ input, select, textarea { font-family: inherit; }
   background: none;
   color: var(--text-2);
   border: 0.5px solid var(--border-md);
-  padding: 5px 10px;
+  height: 40px;
+  padding: 0 14px;
   border-radius: var(--r-sm);
-  font-size: 12px; cursor: pointer;
+  font-size: 14px; font-weight: 500; cursor: pointer;
 }
 .btn-ghost-sm:hover { background: var(--bg-hover); color: var(--text-1); }
 /* Varsayılan tarih filtresi aktifken (son 6 ay) ve "Tümünü Göster"e
@@ -599,11 +613,13 @@ input, select, textarea { font-family: inherit; }
 }
 .btn-action-close:hover { background: rgba(45,178,125,0.2); }
 .btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
   background: none;
   border: 0.5px solid var(--border);
   transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.06s;
   border-radius: var(--r-sm);
-  padding: 4px 7px;
+  padding: 0;
   font-size: 12px; color: var(--text-2); cursor: pointer;
 }
 .btn-icon:hover  { background: var(--bg-hover); color: var(--text-1); border-color: var(--border-md); }
@@ -681,9 +697,10 @@ input, select, textarea { font-family: inherit; }
 .badge {
   display: inline-flex;
   align-items: center;
-  font-size: 11px; font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 4px 10px;
+  border-radius: 9999px;
   white-space: nowrap;
 }
 

@@ -55,7 +55,7 @@
   /* Tipografi + yarıçap */
   --font: Inter, system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
-  --r-sm: 6px;
+  --r-sm: 8px;
   --r:    8px;
   --r-lg: 16px;
 }

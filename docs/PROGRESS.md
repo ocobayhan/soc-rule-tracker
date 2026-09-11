@@ -1968,6 +1968,54 @@ kutusu, 3× özet çubuğu, 3× Chart.js donut, 3× kayıt tablosu) uygulandı �
   birebir eştiği doğrulandı. `verify_audit.py`: 288/288 zincirli,
   geçerli. Bununla Composio PDF/rapor geçişi (Faz A-D) tamamlandı.
 
+### Takip (2026-09-12) — Mockup tam entegrasyonu, Faz 1: ortak bileşen katmanı
+
+Kullanıcı önceki iki turun (tema + PDF) yetersiz kaldığını, asıl mockup'ın
+(`tema/SOC Tracker.dc.html` — design skill ile üretilmiş, tam interaktif
+prototip) uygulamanın neredeyse HER ekranını farklı tasarladığını
+belirtti ("birebir kopya olsun"). Mockup'ı (1855 satır) baştan sona
+okuyup 7 sekmenin + Hunt/Incident detay görünümlerinin tamamını
+katalogladım; en büyük fark **Hunt/Olay Raporu'na tıklayınca modal değil
+tam sayfa bir görünüm açılması**. Plan Mode ile 8 fazlık bir yol
+haritası onaylandı (plan dosyası). Bu girdi sadece **Faz 1**'i kapsıyor.
+
+- **Ortak radius/pill sistemi:** mockup neredeyse her ekranda aynı 3
+  bileşeni tekrar kullanıyor — 16px radius'lu kart, tam-yuvarlak
+  (`9999px`) pill rozet, 40px yükseklikli buton/input. `static/
+  soc-theme-composio.css`'teki `--r-sm/--r/--r-lg` token'ları (bu dosya
+  zaten TÜM token'ları ezdiği için `styles.css`'teki eşdeğer değişiklik
+  etkisiz kalıyordu — önce fark edilmedi, sonra doğru dosyada düzeltildi)
+  `8px/8px/16px`'e çekildi; bu tek değişiklik `.kpi-module`, `.modal`,
+  `.login-card`, `.settings-panel`, `.mywork-col`, `.trend-card` gibi
+  `var(--r)`/`var(--r-lg)` kullanan HER kartı otomatik günceledi.
+- `.badge` (tüm durum rozetlerinin TEK ortak class'ı — `badge()` JS
+  yardımcısı) `border-radius:10px` → `9999px` pill'e, padding/font-weight
+  mockup'a çekildi — 4 modülün TÜM durum rozetlerini tek satırda güncelledi.
+- `.page-title` 16px→32px/500 (mockup'ın her liste sayfası H1'i), yeni
+  `.page-subtitle` class'ı eklendi (içerik Faz 2'de dolacak — sayı
+  özetleri KPI/count verisinden türetilecek). `.page-header` `align-
+  items:flex-end`, `margin-bottom:24px` — filtre çubuğu zaten ayrı bir
+  satırda olduğu için bu değişiklik hiçbir toolbar'la çakışmadı.
+- `.btn`/`.btn-ghost-sm`/`.form-input`/`.sidebar-search-input` 40px
+  yüksekliğe, 14px fonta geçti; `.btn-icon` mockup'ın satır-aksiyonu
+  ikon butonlarıyla eşleşsin diye sabit 30×30px'e sabitlendi.
+- **Bulunup düzeltilen gerçek regresyon:** `.form-input`'a `height:40px`
+  eklemek, `class="form-input ... search-input"` olan 4 arama kutusunda
+  (`#tune-search` vb.) `.search-wrap` konteynerinin İÇİNE kendi
+  arka planı/border'ı/40px yüksekliğiyle İKİNCİ bir kutu açtı ("kutu
+  içinde kutu"). `.form-input.search-input` için kutu stilini (bg/
+  border/height/padding/radius) sıfırlayan bir override eklenerek
+  düzeltildi — canlı `getComputedStyle` ile önce hatayı, sonra düzeldiğini
+  doğruladım. `.form-textarea`'ya da benzer bir çakışma riski vardı
+  (yeni `height:40px` çok satırlı kutuyu tek satıra sıkıştırırdı) —
+  `height:auto` + kendi padding'i eklenerek proaktif olarak önlendi.
+- **Doğrulandı:** gerçek tarayıcıda (admin), Kural Tuning ekranında
+  `getComputedStyle` ile buton/input/badge/arama kutusu/kart
+  radius-yükseklik-font değerleri tek tek doğrulandı, tablo satırları
+  ve filtre çubuğu canlı veriyle sorunsuz render oldu, konsol hatasız.
+  Ekran görüntüsüyle de (dar viewport'ta bile) genel görünümün
+  bozulmadığı teyit edildi.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
