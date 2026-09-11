@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v52
+   SOC Tracker — Frontend  v53
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -2251,6 +2251,7 @@ async function loadAuditLog() {
         <td class="text-muted" style="font-size:12px">${esc(r.record_type || "")}</td>
         <td class="text-muted" style="font-size:12px">${r.record_id ? "#"+r.record_id : ""}</td>
         <td class="text-muted" style="font-size:12px">${esc(r.detail || "")}</td>
+        <td class="text-muted mono td-truncate" style="font-size:11px" title="${esc(r.record_hash || "")}">${r.record_hash ? esc(r.record_hash.slice(0,16)) + "…" : "—"}</td>
       </tr>`;
     }).join("");
   } catch (e) { console.error(e); }

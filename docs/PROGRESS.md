@@ -2163,6 +2163,27 @@ Faz 4'teki gibi otomatik `backToIncidents()` eklendi.
   doğru gösterdi, sidebar daraltılınca sayaçların da gizlendiği
   `getComputedStyle` ile teyit edildi, konsol hatasız.
 
+### Takip (2026-09-12) — Mockup tam entegrasyonu, Faz 7: Audit Log Hash kolonu
+
+Mockup'ın Audit Log tablosunda satır başına bir Hash kolonu var
+(`9f2ac41b7e08d5c3…`). `record_hash` zaten `/api/audit`'in `SELECT *`
+yanıtında dönüyordu, sadece frontend'de hiç gösterilmiyordu — salt
+frontend değişikliği (yeni backend endpoint/alan gerekmedi). Tabloya
+7. kolon (`th`/`colgroup`) eklendi, `loadAuditLog()`'un satır şablonuna
+`record_hash`'in ilk 16 hex karakteri (mono, `title`'da tam hash)
+eklendi.
+
+- **Kapsam dışı bırakılan (bilinçli):** mockup'ta zincir her sekme
+  açılışında otomatik doğrulanmış gibi (varsayılan yeşil banner)
+  görünüyor — ama bu, her ziyarette TÜM zinciri yeniden hesaplamak
+  demek (kayıt sayısı arttıkça maliyeti büyüyen bir işlem). Mevcut
+  "Zinciri Doğrula" butonuna tıklama davranışı (istek üzerine doğrulama)
+  korundu, sadece davranış aynı kalırken kolon eklendi.
+- **Doğrulandı:** gerçek tarayıcıda Audit Log açılıp satır başına 7
+  hücre (Hash dahil) render olduğu, en son kaydın hash'inin
+  `verify_audit.py`'nin raporladığı zincir-ucu hash'iyle eştiği
+  (`15c8462bf7e13ab5…`) doğrulandı. Konsol hatasız.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
