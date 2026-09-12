@@ -2551,6 +2551,40 @@ davranışı bozulmadı. Konsol hatasız.
 
 `static/styles.css` (v13.1) değişti.
 
+### Takip (2026-09-12) — Kenar çubuğunda satır kayması (etiket kolonu çok genişti)
+
+Önceki düzeltme boşluğu gidermişti ama kullanıcı hâlâ "Raporlayan / XSOAR
+Entegrasyon u" gibi değerlerin alt satıra kaydığını, kısımların kapladığı
+alanın "saçma" göründüğünü belirtti — asıl kalan sorun buydu.
+
+Kök neden: Künye/Durum kartlarındaki key-value satırları paylaşılan
+`.detail-row` class'ını kullanıyor — bu class Tune/UC detay MODALİ için
+ayarlanmış bir CSS grid (`grid-template-columns: minmax(120px,180px)
+minmax(0,1fr)`), yani "Raporlayan" gibi 10 karakterlik kısa bir etiket
+için bile ZORUNLU olarak 180px ayırıyordu. Modal 700px+ genişken bu sorun
+değil, ama şimdi sidebar kartı sadece ~380px (280px padding çıkınca
+~330px) — 180px etikete gidince değere sadece ~130px kalıyor, "XSOAR
+Entegrasyonu" gibi bir değer bu genişliğe sığmayıp satır kaydırıyor.
+Mockup'ın kendisi bu kartlarda zaten grid değil `display:flex;justify-
+content:space-between` kullanıyor (dc.html satır 743) — etiket ne kadar
+yer kaplıyorsa o kadar, kalan TÜM genişlik değere gidiyor.
+
+Düzeltme: `detailRow()` JS helper'ına (Tune/UC modalinde hâlâ doğru
+çalışan grid'i bozmadan) dokunmadım — sadece `.hp-card-side .detail-row`
+scoped override'ı ekleyip SADECE bu dar bağlamda flex+space-between'e
+çevirdim. `static/app.js`'e hiç dokunulmadı, salt CSS.
+
+**Doğrulandı:** canlı tarayıcıda (1400px) Olay Raporu'nda "Raporlayan"
+etiketi artık ~69px (önceden zorunlu 180px), değer ~142px'e çıktı,
+`getClientRects().length === 1` ile tek satıra sığdığı doğrulandı.
+Hunt'ın TÜM künye satırları (Talep Eden/Atanan Analist/Ön Onayı Veren/
+Sonucu Onaylayan gibi daha uzun etiketler dahil) tek tek kontrol edilip
+hepsinin tek satırda kaldığı doğrulandı. Tune/UC detay modalinin kendi
+`.detail-row`'unun HÂLÂ grid (`180px 610px`) kullandığı, bu değişiklikten
+etkilenmediği ayrıca doğrulandı. Konsol hatasız.
+
+`static/styles.css` (v13.2) değişti.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

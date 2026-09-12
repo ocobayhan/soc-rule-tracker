@@ -1323,6 +1323,21 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 
 .hp-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 28px; }
 .hp-card-side { padding: 24px; }
+/* Kenar çubuğu kartları (Künye/Durum) modal'dan çok daha dar; .detail-row'un
+   grid'i (bkz. .modal-body .detail-row) 120-180px'lik zorunlu bir etiket
+   kolonu ayırıyor — kısa bir etikette bile (ör. "Raporlayan") değeri
+   ~130px'e sıkıştırıp gereksiz satır kaydırmasına yol açıyordu (mockup'ta
+   bu kartlar zaten flex+space-between kullanıyor, bkz. dc.html satır 743
+   ve .hp-row). Etiket kendi içeriği kadar yer kaplasın, kalan tüm genişlik
+   değere gitsin diye burada flex'e çevrildi. */
+.hp-card-side .detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.hp-card-side .detail-label { flex: none; }
+.hp-card-side .detail-value { text-align: right; }
 .hp-card-hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
 .hp-card-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-2); margin-right: auto; }
 /* Olay Raporu bölüm başlıklarının "BÖLÜM N" kısmı — mono, .hp-card-label'dan
