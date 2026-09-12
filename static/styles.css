@@ -1302,16 +1302,24 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
    satır 624 vs 938-942). */
 .detail-page-kicker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 10px; }
 .detail-page-kicker-row .detail-page-id { margin: 0; }
+/* Önceden auto-fit(minmax(320px,1fr)) yan kolona da ana kolonla EŞİT
+   pay veriyordu (2 öğe → 2 eşit 1fr track), ama .detail-page-side ayrıca
+   max-width:340px ile sıkıştırılıyordu — track genişliği ile kutunun
+   gerçek genişliği arasındaki fark sağda kocaman boş alan bırakıyordu.
+   Track'i doğrudan sabit bir aralıkta tanımlamak (kutuda ayrı bir
+   max-width'e gerek kalmadan) bu boşluğu ortadan kaldırıyor. */
 .detail-page-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: 24px;
   align-items: start;
   margin-top: 24px;
 }
+@media (min-width: 900px) {
+  .detail-page-grid { grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); }
+}
 .detail-page-main { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .detail-page-side { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
-@media (min-width: 900px) { .detail-page-side { max-width: 340px; } }
 
 .hp-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 28px; }
 .hp-card-side { padding: 24px; }

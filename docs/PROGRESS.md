@@ -2519,6 +2519,38 @@ Bulunan somut farklar:
 
 `static/styles.css` (v13.0), `static/app.js` (v56) değişti.
 
+### Takip (2026-09-12) — Tam sayfa detayda sağda kalan boşluk (grid/max-width çakışması)
+
+Kullanıcı bir ekran görüntüsüyle Olay Raporu detay sayfasının sağında
+büyük bir boş alan kaldığını gösterdi ("yerleşim olarak bir saçmalık
+var"), hem Olay Raporu hem Threat Hunting için düzeltilmesini istedi.
+
+Kök neden bulundu: `.detail-page-grid` `grid-template-columns: repeat(
+auto-fit, minmax(320px, 1fr))` kullanıyordu — sayfada sadece 2 grid öğesi
+(ana içerik + yan kolon) olduğundan bu, ikisine de EŞİT pay veriyordu
+(geniş bir ekranda her ikisi de ~700px). Ama `.detail-page-side` AYRICA
+`max-width:340px` ile sıkıştırılmıştı — yani grid TRACK'i ~700px
+genişlik ayırıyordu, kutunun kendisi ise 340px'te duruyordu, aradaki
+~360px boş alan olarak kalıyordu. Kartın kendisi 340px'te durduğu için
+sorun screenshot'ta net görülüyordu.
+
+Düzeltme: track genişliğini kutunun kendi max-width'iyle çakışmayacak
+şekilde grid tanımının içine taşıdım — `grid-template-columns: minmax(0,
+1fr) minmax(280px, 380px)` (≥900px'te; altında tek sütuna katlanıyor,
+mobil/dar ekran davranışı korunuyor). Artık yan kolonun kutusu KENDİ
+track'ini tam dolduruyor, ayrı bir max-width'e gerek yok. Bu, `.detail-
+page-grid`/`.detail-page-side` paylaşılan class'lar olduğu için hem Hunt
+hem Olay Raporu'nda TEK değişiklikle düzeldi.
+
+**Doğrulandı:** canlı tarayıcıda pencere 1400px'e büyütülüp
+`getBoundingClientRect()` ile ölçüldü — hem Olay Raporu hem Hunt'ta
+`grid.right - side.right === 0` (sıfır boşluk), yan kolon 380px, ana
+kolon geri kalanı (722px) aldı. 700px'e küçültülünce grid tek sütuna
+düştüğü (`gridTemplateColumns` tek track) doğrulandı — dar ekran/mobil
+davranışı bozulmadı. Konsol hatasız.
+
+`static/styles.css` (v13.1) değişti.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
