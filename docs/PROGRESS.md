@@ -2216,6 +2216,76 @@ Composio mockup entegrasyonu (Faz 1-8) burada tamamlandı. Sekiz fazın
 hepsi ayrı commit'lerle (a3ef366, c9a38e4, 5787880, b0ae2f7, f416b2c,
 efe3c08, cb17b33 + bu girdi) canlıda test edilip pushlandı.
 
+### Takip (2026-09-12) — Tune/UC detay modali + hover durumları: pixel-seviyesi düzeltme
+
+Kullanıcı, mockup'ın kendi genel "hasModal" dialog'undan aldığı iki ekran
+görüntüsünü (Kural Tuning #1284, Use-Case "Deneme Use case...") mevcut
+uygulamanın modalleriyle yan yana koyup "en minik ayrıntıya, hover'lanan
+kutunun mavi çizgisine kadar" birebir eşleşme istedi. `tema/SOC
+Tracker.dc.html`'deki `hasModal` bloğunu (satır 1285-1320) ve TÜM
+`style-hover` kullanımlarını (`grep` ile 7 farklı desen, ~190 örnek)
+tekrar satır satır okuyup mevcut `.modal-*`/`.detail-*` CSS'iyle
+karşılaştırdım. Bulunan somut farklar ve düzeltmeler:
+
+- **Kicker satırı hiç yoktu:** mockup'ta başlığın üstünde mono "Kural
+  Tuning · #1284" satırı var, bizde YOKTU. Yeni `.modal-kicker` class'ı
+  + `tune-detail-modal`/`uc-detail-modal` header'larına eklendi,
+  `openTuneDetail()`/`openUCDetail()`'e birer satır eklenerek dolduruldu.
+- **Başlık 14px/500 → mockup'ta 20px/600:** `#tune-detail-modal
+  .modal-title`/`#uc-detail-modal .modal-title` için scoped override
+  eklendi (diğer modallerin başlığı hâlâ 17px/600 — küçük dialoglar
+  için mockup'ın kendi `dlgValidate`/`dlgClaim` boyutuyla eşleşiyor).
+- **Backdrop yanlıştı:** `rgba(0,0,0,0.6)` + `backdrop-filter:blur(2px)`
+  kullanılıyordu; mockup'ta blur YOK, düz `rgba(0,0,0,0.72)`. İkisi de
+  düzeltildi (TÜM modaller için, mockup'ta hiçbir yerde blur yok).
+- **Etiket/değer satırları 2 kolonlu KART grid'iydi** (`.detail-grid{
+  grid-template-columns:1fr 1fr}` + `.detail-row{flex-direction:column}`
+  — iki alan yan yana, her biri kendi içinde etiket üstte/değer altta).
+  Mockup'ın deseni TAMAMEN farklı: tek sütun, her satır kendi başına
+  `grid-template-columns:minmax(120px,180px) minmax(0,1fr)` ile etiket
+  SOLDA/değer SAĞDA aynı satırda. `.detail-grid`/`.detail-row`/
+  `.detail-label`/`.detail-value` mockup'a birebir çekildi (font 10-12px
+  → 13-14px, uppercase kaldırıldı). Bu class'lar Hunt/Olay Raporu'nun
+  Faz 4-5'te yazdığım tam-sayfa kenar çubuğu kartlarında da ORTAK
+  kullanıldığı için, TEK bir CSS değişikliği 4 modülü birden düzeltti.
+  **Doğrulama notu:** ilk bakışta ekran görüntüsünde etiket/değerin
+  hâlâ alt alta göründüğünü DÜŞÜNDÜM — `getBoundingClientRect()` ile
+  ölçünce ikisinin de AYNI y-aralığında olduğu (yan yana, doğru)
+  kanıtlandı; görsel yanılgı ekran görüntüsü sıkıştırmasından kaynaklıydı.
+- **Bölüm ayracı ters yöndeydi:** `.detail-section-title`de ÜST border
+  vardı (önceki bölümden ayırmak için); mockup her `.detail-section`'ın
+  ALT'ında ayraç kullanıyor. `.detail-section:not(:last-child){border-
+  bottom}` deseni ile değiştirildi.
+- **Footer'da arka plan farkı yoktu:** mockup'ın TÜM modal footer'ları
+  (`hasModal` + `dlgValidate` + `dlgClaim` + ...) `background:#1a1a1a`
+  kullanıyor (body'nin `#181818`'inden hafif farklı) — `.modal-footer`
+  buna göre güncellendi, padding 12px 20px → 16-18px 24px.
+- **`.modal-close` boyutu tutarsızdı** (`padding:2px 4px`, içerik kadar
+  büyük) — mockup'ta sabit `32×32px`. Düzeltildi.
+- **Dashboard KPI kartları hover'da GRİ border + `scale(1.08)` zoom
+  efekti kullanıyordu** — mockup'ta bu 4 kart (`grep` ile doğrulandı,
+  toplam 7 blue-border-hover kullanımından 4'ü bunlar) hover'da SADECE
+  `border-color:#0007cd`'ye geçiyor, zoom/gölge yok. `.kpi-module:hover`
+  düzeltildi, padding de 14px 16px → 20px 24px'e çekildi (mockup'ın
+  kart iç boşluğu). `.trend-card`'daki aynı zoom efekti de kaldırıldı
+  (nötr border rengine, çünkü mockup bu karta blue-hover UYGULAMIYOR —
+  sadece tıklanabilir dashboard modül kartları ve kanıt-görseli
+  thumbnail'leri mavi hover alıyor, ayrım bilinçli korundu).
+- **Doğrulandı:** gerçek tarayıcıda Tune #1 ve UC #2 detay modalleri
+  açılıp kullanıcının referans ekran görüntüleriyle karşılaştırıldı —
+  kicker/başlık/rozet/bölüm/satır düzeni artık eşleşiyor. Küçük bir
+  onay dialog'u (`openValidateModal`) da yeni header/footer stiliyle
+  sorunsuz render oldu. Dashboard'da Kural Tuning kartına gerçek fare
+  hover'ı uygulanıp mavi kenarlığın göründüğü ekran görüntüsüyle teyit
+  edildi. Konsol hatasız.
+
+**Not:** Bu, mockup'ın TÜM 1855 satırının satır-satır yeniden taranması
+değil — kullanıcının işaret ettiği somut örnek (detay modal ailesi +
+dashboard hover'ları) üzerinden derinlemesine, kanıta dayalı bir
+düzeltme turu. Başka bir ekranda benzer bir fark fark edilirse aynı
+yöntemle (mockup kaynağını oku, mevcut CSS'i karşılaştır, canlı ölç)
+ele alınabilir.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

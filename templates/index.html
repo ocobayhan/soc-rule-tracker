@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=12.5"/>
+  <link rel="stylesheet" href="/static/styles.css?v=12.6"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='soc-theme-composio.css') }}?v=1"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1268,11 +1268,14 @@
 <div id="tune-detail-modal" class="modal-overlay" style="display:none">
   <div class="modal modal-wide">
     <div class="modal-header">
-      <div style="display:flex;align-items:center;gap:8px;min-width:0">
-        <h2 class="modal-title" id="tune-detail-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"></h2>
-        <span id="tune-detail-status-badge" style="flex-shrink:0"></span>
+      <div style="min-width:0">
+        <div class="modal-kicker" id="tune-detail-kicker"></div>
+        <h2 class="modal-title" id="tune-detail-title"></h2>
       </div>
-      <button class="modal-close" onclick="closeTuneDetailModal()">&#x2715;</button>
+      <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+        <span id="tune-detail-status-badge"></span>
+        <button class="modal-close" onclick="closeTuneDetailModal()">&#x2715;</button>
+      </div>
     </div>
     <div class="modal-body" id="tune-detail-body"></div>
     <div class="modal-footer">
@@ -1285,11 +1288,14 @@
 <div id="uc-detail-modal" class="modal-overlay" style="display:none">
   <div class="modal modal-wide">
     <div class="modal-header">
-      <div style="display:flex;align-items:center;gap:8px;min-width:0">
-        <h2 class="modal-title" id="uc-detail-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"></h2>
-        <span id="uc-detail-status-badge" style="flex-shrink:0"></span>
+      <div style="min-width:0">
+        <div class="modal-kicker" id="uc-detail-kicker"></div>
+        <h2 class="modal-title" id="uc-detail-title"></h2>
       </div>
-      <button class="modal-close" onclick="closeUCDetailModal()">&#x2715;</button>
+      <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+        <span id="uc-detail-status-badge"></span>
+        <button class="modal-close" onclick="closeUCDetailModal()">&#x2715;</button>
+      </div>
     </div>
     <div class="modal-body" id="uc-detail-body"></div>
     <div class="modal-footer">
@@ -1828,6 +1834,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=53"></script>
+<script src="/static/app.js?v=54"></script>
 </body>
 </html>

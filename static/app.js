@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v53
+   SOC Tracker — Frontend  v54
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -831,6 +831,7 @@ function detailImgRow(label, filenames) {
 function openTuneDetail(id) {
   const r = tuneRows.find(x => x.id === id); if (!r) return;
   const fmt = v => v ? v.slice(0,10) : "";
+  document.getElementById("tune-detail-kicker").textContent = `Kural Tuning · #${r.id}`;
   document.getElementById("tune-detail-title").textContent = r.rule_name;
   document.getElementById("tune-detail-status-badge").innerHTML = badge(r.status, TUNE_CLS);
   const finalApproval = r.tuned_at || r.approved_by || r.qa_test_ok || r.qa_peer_reviewed;
@@ -890,6 +891,7 @@ function closeTuneDetailModal() { document.getElementById("tune-detail-modal").s
 function openUCDetail(id) {
   const r = ucRows.find(x => x.id === id); if (!r) return;
   const fmt = v => v ? v.slice(0,10) : "";
+  document.getElementById("uc-detail-kicker").textContent = `Use-Case · #${r.id}`;
   document.getElementById("uc-detail-title").textContent = r.usecase_description.slice(0, 60) + (r.usecase_description.length > 60 ? "…" : "");
   document.getElementById("uc-detail-status-badge").innerHTML = badge(r.status, UC_CLS);
   const finalApproval = r.test_started_at || r.test_approved_by || r.qa_test_ok || r.qa_peer_reviewed;
