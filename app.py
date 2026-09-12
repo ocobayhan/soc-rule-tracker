@@ -2780,7 +2780,11 @@ def update_hunt(item_id):
         if not isinstance(v, list):
             return fallback
         if text_field is None:
-            v = [sanitize_rich_text(x) if isinstance(x, str) else x for x in v]
+            # str(x) ile sar — x bir dict/sayı gibi string olmayan bir tür
+            # olsa bile sanitize_rich_text()'ten HİÇ geçmeden ham haliyle
+            # json.dumps()'a düşmesin (aksi halde attribute'lu, allowlist
+            # dışı HTML render tarafına (PDF'teki |safe) sızabilir).
+            v = [sanitize_rich_text(x) for x in v]
         else:
             for item in v:
                 if isinstance(item, dict) and text_field in item:
@@ -3390,7 +3394,7 @@ def export_data():
                display_name(r["assigned_analyst"]) or "", r["status"],
                r["report_status"] or "", r["hunt_result"] or "",
                r["severity"] if "severity" in r.keys() else "",
-               mitre_txt, r["findings"] or "", ioc_txt,
+               mitre_txt, strip_rich_text_for_plaintext(r["findings"] or ""), ioc_txt,
                strip_rich_text_for_plaintext(r["affected_assets"]) if "affected_assets" in r.keys() else "",
                strip_rich_text_for_plaintext(r["scope"] or ""),
                (r["detection_suggestion"] or "") + ((" — " + strip_rich_text_for_plaintext(r["detection_detail"])) if r["detection_detail"] else ""),
@@ -3805,8 +3809,14 @@ def hunt_report_pdf(item_id):
     mitre_entries = [e for e in _parse_list("mitre_techniques") if isinstance(e, dict)]
     ioc_list      = [v for v in _parse_list("ioc_list") if str(v).strip()]
     env_list      = [v.strip() for v in (row["hunt_environment"] or "").split(",") if v.strip()]
-    recommendations = [v for v in _parse_list("recommendations") if str(v).strip()]
-    vulnerabilities = [v for v in _parse_list("discovered_vulnerabilities") if str(v).strip()]
+    # isinstance(v, str) filtresi savunma-derinliği: bu ikisi şablonda
+    # `| safe` ile basılıyor (bkz. Zengin Metin Biçimlendirme) — yazma
+    # tarafı (jv_rich) zaten sadece string sanitize edip yazıyor, ama bir
+    # dict/liste gibi string-olmayan bir değer DB'ye bir şekilde sızarsa
+    # (ör. eski/elle düzenlenmiş bir satır) burada da süzülür, PDF'e hiç
+    # ulaşmaz.
+    recommendations = [v for v in _parse_list("recommendations") if isinstance(v, str) and v.strip()]
+    vulnerabilities = [v for v in _parse_list("discovered_vulnerabilities") if isinstance(v, str) and v.strip()]
 
     # Bulgular: yeni numaralı-liste formatı (her maddenin kendi metni + görseli).
     # findings_items boşsa (bu özellikten önce tamamlanmış eski raporlar) şablon

@@ -171,3 +171,28 @@ class TestRichTextSanitization:
         findings = json.loads(body["findings_items"])
         assert findings[0]["text"] == "<i>italic</i>"
         assert "onerror" not in findings[0]["text"]
+
+    def test_non_string_list_items_do_not_bypass_sanitizer(self, admin_client):
+        """Regression: jv_rich()'in düz-string-listesi dalı (Öneriler/
+        Zafiyetler) `isinstance(x, str)` kontrolüyle string OLMAYAN öğeleri
+        (ör. bir dict) hiç sanitize etmeden olduğu gibi json.dumps()'a
+        veriyordu — PDF şablonundaki `| safe` render'ına attribute'lu, ham
+        HTML (ör. Python dict repr'i içine gömülü <img onerror=...>)
+        sızabiliyordu (bkz. docs/PROGRESS.md, kapsamlı test turu bulgusu).
+        Artık her öğe tipi ne olursa olsun sanitize_rich_text()'ten geçiyor."""
+        created = _create_hunt(admin_client).get_json()
+        hunt_id = created["id"]
+        resp = admin_client.put(f"/api/hunt/{hunt_id}", json={
+            "recommendations": [{"x": "<img src=evil onerror=alert(1)>"}, "<b>ok</b>"],
+            "discovered_vulnerabilities": [{"y": "<script>alert(2)</script>"}],
+        })
+        assert resp.status_code == 200
+        body = resp.get_json()
+        recs  = json.loads(body["recommendations"])
+        vulns = json.loads(body["discovered_vulnerabilities"])
+        assert all(isinstance(v, str) for v in recs)
+        assert all(isinstance(v, str) for v in vulns)
+        assert "onerror" not in recs[0]
+        assert "<img" not in recs[0]
+        assert recs[1] == "<b>ok</b>"
+        assert "<script" not in vulns[0]

@@ -3054,6 +3054,95 @@ print.html`, `templates/incident_report_print.html`, `templates/index.html`
 (yeni), `tests/test_hunt.py`, `tests/test_incident.py`, `tests/
 test_xsoar_webhook.py` güncellendi.
 
+### Kapsamlı Test Turu — Güvenlik + Arayüz + Fonksiyonel Regresyon (2026-09-13)
+
+Kullanıcı Zengin Metin özelliğinden sonra geniş kapsamlı bir test istedi:
+güvenlik açığı, arayüz bozulması/çakışması, "sıkışma" olmasın. Önce plan
+sunuldu (bkz. bu dosyanın sürüm geçmişinde, plan dosyası
+`cheerful-puzzling-pumpkin.md`), onaylandıktan sonra 4 izde uygulandı.
+
+**A) Otomatik regresyon:** `pytest tests/ -v --cov` → 84/84 yeşil (%54
+coverage), `pytest tests_e2e/` → 15/15 yeşil. B1-B9 (Faz 1) hâlâ kodda
+mevcut, regresyon yok.
+
+**B) Kod-seviyesi güvenlik incelemesi — `security-review` becerisi (2 alt-
+ajan: bulgu tespiti + bağımsız doğrulama):**
+
+- 🔴 **KRİTİK, GERÇEK BULGU — hemen düzeltildi:** `update_hunt()`'ın yeni
+  `jv_rich()` yardımcı fonksiyonu (düz-string-listesi dalı — Öneriler/
+  Zafiyetler), bir liste öğesi `string` DEĞİLSE (ör. bir JSON dict) onu
+  `sanitize_rich_text()`'ten HİÇ geçirmeden olduğu gibi saklıyordu. Bir
+  saldırgan (o hunt'ın talep edeni veya atanan analisti — `discovered_
+  vulnerabilities` alanı `not is_assigned` kilit listesinde bile değildi,
+  yani sadece talep eden bile yeterliydi) `PUT /api/hunt/<id>` ile
+  `{"discovered_vulnerabilities": [{"x": "<img src=... onerror=...>"}]}`
+  gönderebiliyordu — Jinja bir dict'i `|safe` ile basarken Python'ın dict
+  repr'ini (`{'x': '<img ...>'}`) OLDUĞU GİBİ yazdırıyor, WeasyPrint bunun
+  içindeki `<img>`/`<link>` etiketini gerçek bir etiket olarak tanıyor
+  (öznitelikleri dahil) — hem PDF'e keyfi/attribute'lu HTML enjeksiyonu
+  hem de (WeasyPrint varsayılan URL fetcher'ı `file://`/`http(s)://`
+  kısıtlamasız desteklediği için, bu render pipeline'ın zaten logo/font
+  gömmek için `file://` kullandığı doğrulandı) sunucu taraflı istek
+  sahteciliği (SSRF) / yerel dosya erişimi riski. **Düzeltme:** `jv_rich()`
+  artık her öğeyi tipi ne olursa olsun `sanitize_rich_text()`'ten geçiriyor
+  (`sanitize_rich_text()` zaten kendi içinde `str()` dönüşümü yapıyor);
+  `hunt_report_pdf()`'e de savunma-derinliği olarak `isinstance(v, str)`
+  filtresi eklendi. Regresyon testi: `tests/test_hunt.py::
+  TestRichTextSanitization::test_non_string_list_items_do_not_bypass_sanitizer`.
+  İki alt-ajanla bağımsız doğrulandı (confidence 8/10, gerçek/High).
+- Ek saldırı payload'ları elle denendi (`<ScRiPt>`, `<b/onmouseover=...>`,
+  `<svg/onload=...>`, çift `&lt;`-kodlama, iç içe/bozuk tag'ler,
+  string-olmayan tipler doğrudan `sanitize_rich_text()`'e) — hepsi güvenli
+  şekilde ele alındı, ek bulgu çıkmadı. Tek kozmetik (güvenlik dışı) not:
+  eşleşmeyen bir kapanış tag'i (`<b>a</i>x</b>`) sanitizer'dan öznitelik-
+  siz ama dengesiz HTML olarak geçebiliyor — tarayıcılar bunu zararsızca
+  tolere ediyor (adoption-agency algoritması), gerçek kullanım senaryosunda
+  oluşması da beklenmiyor (toolbar hep dengeli çift üretiyor); düzeltme
+  gerektirmiyor.
+
+**C) Arayüz/erişilebilirlik incelemesi — `web-design-guidelines` becerisi:**
+Yeni `.rt-btn` (araç çubuğu butonları) sitedeki diğer ikon butonlarla
+(`.btn-icon`, 30×30px + `:focus-visible` halkası) TUTARSIZDI — 26×26px
+ve klavye ile Tab'lanınca markalı odak halkası yoktu (tarayıcı varsayılan
+halkasına düşüyordu — erişilebilirlik açığı değil ama görsel tutarsızlık).
+**Düzeltildi:** `.rt-btn` 30×30px'e çıkarıldı, `:focus-visible` kuralına
+eklendi. `aria-label` eksikliği tüm sitede (sadece `title`) zaten var olan,
+bu oturumla ilgisi olmayan bir desen — yeni butonlar bilinçli olarak aynı
+deseni izliyor, ayrı bir iş olarak not edildi.
+
+**D) Canlı tarayıcı fonksiyonel yürüyüşü:** Yeni bir Hunt (#2) üzerinde
+zengin metin araç çubuğunun **8 alanının TAMAMI** (3 statik: Hedef&Kapsam/
+Etkilenen Varlıklar/Detection Detayı + 5 dinamik: Bulgu/MITRE Yöntem Notu/
+Öneri/Zafiyet), 5 butonun (Kalın/İtalik/Altı Çizili/Kod/Kod Bloğu) HER
+BİRİYLE tek tek denendi — hepsi doğru sarıyor, ayrı `input` event'i doğru
+tetikleniyor, paste dinleyicileri (`_pasteReady` flag + `onpaste`
+attribute) toolbar eklenince de sağlam kaldığı DOM'dan doğrudan doğrulandı.
+Kaydedilen kayıt `openHuntDetail()`'de 6/6 bölümde doğru render edildi;
+Hunt "Tamamlandı"ya taşınıp **PDF indirilip gerçek içeriği okunarak**
+2 sayfa boyunca tüm biçimlendirmenin (kod bloğu dahil, taşma yok) doğru
+göründüğü teyit edildi. Aynı döngü Olay Raporu (#33, kod bloğu) için de
+tekrarlandı — PDF'te kusursuz render. **Yol boyu bulunan ikinci küçük
+bulgu:** legacy `findings` alanı (frontend her kaydede `findings_items`
+ile senkronize ediyor) Excel'in "Bulgular" sütununda artık ham tag
+gösterebiliyordu — `strip_rich_text_for_plaintext()` eklenerek düzeltildi.
+Responsive: masaüstü ve **tablet (768px)** genişlikte Dashboard + Hunt
+Raporu modali (en yoğun ekran) kusursuz; **mobil (375px)** genişlikte
+sidebar sabit kalıp içeriği büyük ölçüde kapatıyor — bu, bu oturumdan
+ÖNCE VAR OLAN, kapsam dışı bir sınırlama (uygulama masaüstü/tablet
+odaklı tasarlanmış, `styles.css`'te mobil-genişlik için bir off-canvas
+sidebar deseni hiç yok) — düzeltilmedi, ayrı bir iş olarak not edildi.
+Audit Log ("Zinciri Doğrula" → 381/381 kayıt geçerli), Kural Tuning/
+Use-Case/Ayarlar/Audit Log sayfaları görsel olarak da hatasız.
+
+**Temizlik:** test kayıtları (Hunt #2, Incident #33) silindi; kullanıcının
+kendi manuel testinden kalan Incident #32 ("Dbasadas") bilinçli olarak
+DOKUNULMADI (kendi verisi). Son durum: Tuning 2, UC 2, Hunt 1, Incident 2
+(#7 örnek + #32 kullanıcı testi) — doğrulandı.
+
+`app.py` (jv_rich + hunt_report_pdf + Excel findings düzeltmeleri),
+`static/styles.css` (.rt-btn boyut/focus-visible), `tests/test_hunt.py`
+(yeni regresyon testi) güncellendi.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
