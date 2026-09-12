@@ -82,7 +82,6 @@ input[type="text"].mono,
 
 /* ---- Bölüm başlığı / kicker: 11px büyük harf, gri ---- */
 .section-label,
-.form-label,
 .table th {
   font-size: 11px;
   font-weight: 600;
@@ -90,6 +89,9 @@ input[type="text"].mono,
   text-transform: uppercase;
   color: var(--text-2);
 }
+/* .form-label buradan bilinçli çıkarıldı — mockup'ın form etiketleri
+   (Raporlayan/Ortam/vb.) büyük-harf değil, 13px/500 düz metin
+   (bkz. styles.css .form-label); bu grup kural onu eziyordu. */
 
 /* ---- Kartlarda hover geri bildirimi ---- */
 .card,

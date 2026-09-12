@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=12.6"/>
+  <link rel="stylesheet" href="/static/styles.css?v=12.7"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='soc-theme-composio.css') }}?v=1"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -311,7 +311,7 @@
       <button class="btn-ghost-sm" onclick="clearTuneFilters()">Temizle</button>
       <button class="btn-ghost-sm range-toggle" id="tune-range-toggle" onclick="toggleTuneRange()">Tümünü Göster</button>
       <div class="col-toggle-wrap">
-        <button class="btn-ghost-sm" onclick="toggleColumnPanel('tune', this)">&#9776; Kolonlar</button>
+        <button class="btn-outline" onclick="toggleColumnPanel('tune', this)">&#9776; Kolonlar</button>
         <div class="col-toggle-panel" id="tune-col-panel" style="display:none"></div>
       </div>
     </div>
@@ -372,7 +372,7 @@
       <button class="btn-ghost-sm" onclick="clearUCFilters()">Temizle</button>
       <button class="btn-ghost-sm range-toggle" id="uc-range-toggle" onclick="toggleUCRange()">Tümünü Göster</button>
       <div class="col-toggle-wrap">
-        <button class="btn-ghost-sm" onclick="toggleColumnPanel('uc', this)">&#9776; Kolonlar</button>
+        <button class="btn-outline" onclick="toggleColumnPanel('uc', this)">&#9776; Kolonlar</button>
         <div class="col-toggle-panel" id="uc-col-panel" style="display:none"></div>
       </div>
     </div>
@@ -432,7 +432,7 @@
       <button class="btn-ghost-sm" onclick="clearHuntFilters()">Temizle</button>
       <button class="btn-ghost-sm range-toggle" id="hunt-range-toggle" onclick="toggleHuntRange()">Tümünü Göster</button>
       <div class="col-toggle-wrap">
-        <button class="btn-ghost-sm" onclick="toggleColumnPanel('hunt', this)">&#9776; Kolonlar</button>
+        <button class="btn-outline" onclick="toggleColumnPanel('hunt', this)">&#9776; Kolonlar</button>
         <div class="col-toggle-panel" id="hunt-col-panel" style="display:none"></div>
       </div>
     </div>
@@ -498,7 +498,7 @@
       <button class="btn-ghost-sm" onclick="clearIncidentFilters()">Temizle</button>
       <button class="btn-ghost-sm range-toggle" id="incident-range-toggle" onclick="toggleIncidentRange()">Tümünü Göster</button>
       <div class="col-toggle-wrap">
-        <button class="btn-ghost-sm" onclick="toggleColumnPanel('incident', this)">&#9776; Kolonlar</button>
+        <button class="btn-outline" onclick="toggleColumnPanel('incident', this)">&#9776; Kolonlar</button>
         <div class="col-toggle-panel" id="incident-col-panel" style="display:none"></div>
       </div>
     </div>
@@ -1279,7 +1279,7 @@
     </div>
     <div class="modal-body" id="tune-detail-body"></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeTuneDetailModal()">Kapat</button>
+      <button class="btn btn-ghost-sm" onclick="closeTuneDetailModal()">Kapat</button>
     </div>
   </div>
 </div>
@@ -1299,7 +1299,7 @@
     </div>
     <div class="modal-body" id="uc-detail-body"></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeUCDetailModal()">Kapat</button>
+      <button class="btn btn-ghost-sm" onclick="closeUCDetailModal()">Kapat</button>
     </div>
   </div>
 </div>
@@ -1676,7 +1676,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-ghost-sm" onclick="document.getElementById('validate-modal').style.display='none'">İptal</button>
-      <button class="btn btn-secondary" onclick="execRejectValidation()" style="color:var(--red);border-color:rgba(229,72,77,0.3)">Reddet</button>
+      <button class="btn btn-danger-outline" onclick="execRejectValidation()">Reddet</button>
       <button class="btn btn-primary" onclick="execValidate()">Onayla ✓</button>
     </div>
   </div>
@@ -1761,7 +1761,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-ghost-sm" onclick="document.getElementById('hunt-result-modal').style.display='none'">İptal</button>
-      <button class="btn btn-secondary" onclick="execRejectHuntResult()" style="color:var(--red);border-color:rgba(229,72,77,0.3)">Revizyona Gönder</button>
+      <button class="btn btn-danger-outline" onclick="execRejectHuntResult()">Revizyona Gönder</button>
       <button class="btn btn-primary" onclick="execApproveHuntResult()">Tamamlandı ✓</button>
     </div>
   </div>
@@ -1789,7 +1789,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-ghost-sm" onclick="document.getElementById('tune-approve-modal').style.display='none'">İptal</button>
-      <button class="btn btn-secondary" id="btn-retry-tune" onclick="execRetryTune()" style="color:var(--red);border-color:rgba(229,72,77,0.3)">Yeniden Tune</button>
+      <button class="btn btn-danger-outline" id="btn-retry-tune" onclick="execRetryTune()">Yeniden Tune</button>
       <button class="btn btn-primary" id="btn-approve-tune" onclick="execApproveTune()">Tune Başarılı ✓</button>
     </div>
   </div>
@@ -1817,7 +1817,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-ghost-sm" onclick="document.getElementById('uc-test-approve-modal').style.display='none'">İptal</button>
-      <button class="btn btn-secondary" onclick="execTestRejectUC()" style="color:var(--red);border-color:rgba(229,72,77,0.3)">Revizyon</button>
+      <button class="btn btn-danger-outline" onclick="execTestRejectUC()">Revizyon</button>
       <button class="btn btn-primary" onclick="execTestApproveUC()">Prod'a Geç ✓</button>
     </div>
   </div>

@@ -2286,6 +2286,103 @@ düzeltme turu. Başka bir ekranda benzer bir fark fark edilirse aynı
 yöntemle (mockup kaynağını oku, mevcut CSS'i karşılaştır, canlı ölç)
 ele alınabilir.
 
+### Takip (2026-09-12) — Proaktif kendi-kendine denetim: form/buton ortak bileşen katmanı
+
+Kullanıcı bir önceki turun kapanışında önerdiğim "sen bana ekran görüntüsü
+göster, ben düzeltirim" akışını reddetti: *"mevcut html'yi inceleyip 'ah
+burayı yapmamışım' deyip migrate edemez misin"* — yani kullanıcı beklemeden,
+kalan farkları kendim bulup düzeltmemi istedi. Bunun üzerine, kullanıcıdan
+yeni bir ekran görüntüsü beklemeden, `tema/SOC Tracker.dc.html`'deki TÜM
+form alanlarını (dlgValidate/dlgClose/dlgApprove/dlgHuntResult/dlgIncEdit/
+dlgUser/formOpen) ve TÜM liste-görünümü filtre çubuklarını (Tuning/UC/Hunt/
+Olay Raporu/Audit Log) satır satır yeniden okuyup mevcut `.form-*`/`.btn-*`
+CSS ailesiyle karşılaştırdım. Bunlar önceki turda hiç incelenmemişti çünkü
+önceki tur sadece kullanıcının işaret ettiği Tune/UC detay modali + Dashboard
+hover'ına odaklanmıştı — bu tur bilinçli olarak GERİ KALAN paylaşılan
+bileşenleri (her diyalogda, her liste ekranında tekrarlanan form/buton
+kalıpları) hedefledi. Bulunan somut farklar:
+
+- **Modal içi input/textarea/select zemini yanlıştı:** TÜM modal formları
+  (Yeni Tuning Talebi, düzenleme diyalogları, Kullanıcı Düzenle, Onay/Kapama
+  diyalogları) `--bg-secondary` (#181818, kartla aynı ton) kullanıyordu;
+  mockup'ta modal içi form alanları HER YERDE daha koyu `#0f0f0f` zeminde
+  (kart zemininden ayrışsın diye). Liste ekranlarının filtre çubuğu
+  input/select'leri ise mockup'ta zaten `#181818` kullanıyor — yani bunlar
+  iki farklı, kasıtlı kural. `.modal-body .form-input { background:
+  var(--bg) }` scoped override'ı eklendi, filtre çubuğu dokunulmadı.
+- **Input/select border'ı `0.5px var(--border-md)` (#333) idi**, mockup'ta
+  HER yerde (modal içi de filtre çubuğu da) `1px solid #222222`
+  (`var(--border)`). Global olarak düzeltildi.
+- **Odak halkası eski (indigo) temadan kalma bir renkti** (`box-shadow: 0 0
+  0 3px rgba(94,106,210,.12)` — Composio'nun mavisi #0007CD değil, eski
+  #5E6AD2'nin rengiydi). Mockup'ta zaten hiçbir input'ta glow yok, sadece
+  `border-color` değişiyor — glow kaldırıldı. (Not: `soc-theme-composio.css`
+  zaten `box-shadow:none` ile bunu token katmanında eziyordu, ama
+  `styles.css`'teki kaynak hâlâ yanlış rengi taşıyordu — iki dosya
+  arasında sessiz bir çelişkiydi.)
+- **`select` elemanlarında `appearance:none` custom ok OLMADAN
+  kullanılıyordu** — yani TÜM açılır kutularda native ok tamamen kayıptı.
+  Mockup düz `<select>` kullanıp native oku gösteriyor. `select.form-input
+  { appearance:auto }` ile geri getirildi.
+- **Form etiketleri (`.form-label`) 11px büyük-harf'ti** — mockup'ta 13px,
+  normal harf, `font-weight:500`. Kaynağı ilginç: `styles.css`'teki
+  `.form-label` zaten 13px'e çekilmişti ama `soc-theme-composio.css`'teki
+  ESKİ bir grup kural (`.section-label, .form-label, .table th { font-
+  size:11px; text-transform:uppercase; ... }`) tema dosyası SONRA
+  yüklendiği için onu eziyordu — canlı testte `getComputedStyle` ile 11px
+  görünce fark edildi, tema dosyasından `.form-label` grup kuralından
+  çıkarılarak çözüldü. (Bu, PROGRESS.md'de daha önce de not edilen "tema
+  dosyası stiles.css'i ezer" tuzağının yeni bir örneği.)
+- **Buton aileleri mockup'ta aslında 4 farklı arketipe ayrılıyor**, biz
+  hepsini `.btn-secondary`/`.btn-ghost-sm` gibi 2 class'a sıkıştırmıştık:
+  - `.btn-secondary` (Filtrele/Uygula/Yenile/Zinciri Doğrula/+Ekle): dolgu
+    ve hover rengi mockup'a göre TERSTİ (taban `--bg-active`, hover
+    `--bg-hover` — olması gereken tam tersi) ve gereksiz bir border
+    taşıyordu. Düzeltildi: taban `--bg-hover`, hover `--bg-active`, border
+    yok.
+  - `.btn-ghost-sm` (Temizle/İptal/detay modalinin tek "Kapat" butonu):
+    border taşıyordu ve hover'da arka plan doluyordu; mockup'ta tamamen
+    şeffaf, border yok, hover SADECE metin rengini değiştiriyor. Ayrıca
+    Tune/UC detay sayfasının "Kapat" butonu yanlışlıkla `.btn-secondary`
+    (dolgu) kullanıyordu — mockup'ta bu buton `closeModal`'ın borderless
+    ghost'u, `.btn-ghost-sm`'e taşındı.
+  - **Yeni `.btn-outline`** eklendi (şeffaf + `1px solid #333` + beyaz
+    metin, hover'da hafif dolgu) — mockup'ın "☰ Kolonlar" ve hasModal'ın
+    Üstlen-dışı aksiyon butonlarının deseni. 4 modülün "Kolonlar"
+    butonuna uygulandı (önceden `.btn-ghost-sm` kullanıyorlardı, border
+    kaybolacaktı).
+  - **Yeni `.btn-danger-outline`** eklendi — Reddet/Revizyona Gönder/
+    Yeniden Tune/Revizyon butonları önceden `.btn-secondary` + satır-içi
+    `style="color:...;border-color:..."` ile taklit ediliyordu (bu yüzden
+    dolgu zemini ve yanlış hover'ı miras alıyorlardı); artık gerçek
+    transparent+kırmızı-outline+kırmızı-tint-hover.
+  - **`.range-toggle`** ("Tümünü Göster") için ayrı kesikli-border kuralı
+    eklendi — `.btn-ghost-sm` borderless olunca bu da border'ını
+    kaybedecekti, mockup'ta özellikle `1px dashed #333333` (hover'da
+    `#666666`) kullanıyor.
+- **Doğrulandı (canlı tarayıcı + `getComputedStyle`):** Kural Tuning filtre
+  çubuğunda Filtrele (`rgb(34,34,34)`/border yok) — Temizle (şeffaf/border
+  yok) — Tümünü Göster (`1px dashed rgb(51,51,51)`) — Kolonlar
+  (`1px solid rgb(51,51,51)`/beyaz metin) dördü de mockup'la birebir;
+  aynı "Kolonlar" kontrolü UC/Hunt/Olay Raporu sekmelerinde de tekrarlanıp
+  aynı sonuç doğrulandı. Yeni Tuning Talebi formunda input/select zemini
+  `rgb(15,15,15)` + border `rgb(34,34,34)`, etiket `13px/500/rgb(168,168,
+  168)` ölçüldü. Tune detay sayfasının "Kapat" butonu borderless/şeffaf,
+  Tune Onaylama diyalogunun "Yeniden Tune" butonu şeffaf+kırmızı-outline
+  ölçüldü. Konsol hatasız, brace-balance (404/404) ve Jinja2 template
+  doğrulaması geçti.
+- **Bilinçli sınırlama:** "+ Ekle" satır-ekleme butonları (`addUCEnvCreate`
+  vb., ~7 yer) mockup'ta 32px yükseklik/13px font kullanıyor ama
+  `.btn-secondary` üzerinden 40px/14px alıyorlar — küçük bir boyut farkı,
+  bu turda kapsam dışı bırakıldı (renk/border/hover hatalarının aksine
+  görsel etkisi düşük). `.form-textarea`/`.form-input` padding'i modal
+  içinde mockup'ın 12px'ine karşı bizim 14px'imiz de aynı gerekçeyle
+  ertelendi. İkisi de gelecekte benzer bir geçiş turunda ele alınabilir.
+
+`static/styles.css` (v12.7), `static/soc-theme-composio.css`,
+`templates/index.html` değişti; `app.js`'e dokunulmadı (JS mantığı
+değişmedi, sadece render edilen class'lar).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
