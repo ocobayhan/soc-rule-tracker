@@ -1426,7 +1426,7 @@ def xsoar_create_tune():
             reporter = match["username"]
 
     webhook_case_id = str(data["xsoar_case_id"]).strip()
-    webhook_url = (data.get("xsoar_url") or "").strip() or build_xsoar_url(webhook_case_id) or None
+    webhook_url = sanitize_external_url((data.get("xsoar_url") or "").strip()) or build_xsoar_url(webhook_case_id) or None
 
     # Aynı case için mükerrer talep engeli (manuel create_tune ile aynı kural) —
     # XSOAR playbook'unun aynı case'i iki kez tetiklemesi (retry/çift ateşleme)
@@ -1953,14 +1953,19 @@ def update_tune(item_id):
         new_st      = data.get("status", row["status"])
         is_reporter = row["reporter"] == uname
         is_assigned = cur_analyst == uname
+        # Claiming an unassigned request (self-assign on empty slot) is
+        # always allowed — must be computed BEFORE the ownership gate below,
+        # otherwise an analyst who is neither the reporter nor already
+        # assigned (i.e. exactly the analyst trying to claim an open,
+        # unclaimed request) gets rejected before ever reaching the
+        # claim-specific exception (bkz. docs/PROGRESS.md, "Faz 2").
+        is_claiming = (cur_analyst == "" and new_analyst == uname)
 
-        # Must be the reporter OR the assigned analyst to edit at all
-        if not is_reporter and not is_assigned:
+        # Must be the reporter, the assigned analyst, or claiming, to edit at all
+        if not is_reporter and not is_assigned and not is_claiming:
             return jsonify({"error": "Sadece kendi raporladığınız veya size atanan talepleri düzenleyebilirsiniz."}), 403
         # Only the assigned analyst can change the analyst field
-        # Exception: claiming an unassigned request (self-assign on empty slot) is always allowed
         if new_analyst != cur_analyst:
-            is_claiming = (cur_analyst == "" and new_analyst == uname)
             if not is_assigned and not is_claiming:
                 return jsonify({"error": "Atama alanını değiştirme yetkiniz yok."}), 403
             if new_analyst != uname:
@@ -2289,14 +2294,14 @@ def update_usecase(item_id):
         new_st      = data.get("status", row["status"])
         is_requester = row["requester"] == uname
         is_assigned  = cur_author == uname
+        # bkz. update_tune() — aynı sıralama düzeltmesi (docs/PROGRESS.md, "Faz 2")
+        is_claiming  = (cur_author == "" and new_author == uname)
 
-        # Must be the requester OR the assigned analyst to edit at all
-        if not is_requester and not is_assigned:
+        # Must be the requester, the assigned analyst, or claiming, to edit at all
+        if not is_requester and not is_assigned and not is_claiming:
             return jsonify({"error": "Sadece kendi talep ettiğiniz veya size atanan use-case'leri düzenleyebilirsiniz."}), 403
         # Only the assigned analyst can change the author field
-        # Exception: claiming an unassigned request (self-assign on empty slot) is always allowed
         if new_author != cur_author:
-            is_claiming = (cur_author == "" and new_author == uname)
             if not is_assigned and not is_claiming:
                 return jsonify({"error": "Atama alanını değiştirme yetkiniz yok."}), 403
             if new_author != uname:
@@ -2596,12 +2601,13 @@ def update_hunt(item_id):
         new_st       = data.get("status", row["status"])
         is_requester = row["requester"] == uname
         is_assigned  = cur_analyst == uname
+        # bkz. update_tune() — aynı sıralama düzeltmesi (docs/PROGRESS.md, "Faz 2")
+        is_claiming  = (cur_analyst == "" and new_analyst == uname)
 
-        if not is_requester and not is_assigned:
+        if not is_requester and not is_assigned and not is_claiming:
             return jsonify({"error": "Sadece kendi talep ettiğiniz veya size atanan hunt'ları düzenleyebilirsiniz."}), 403
 
         if new_analyst != cur_analyst:
-            is_claiming = (cur_analyst == "" and new_analyst == uname)
             if not is_assigned and not is_claiming:
                 return jsonify({"error": "Atama alanını değiştirme yetkiniz yok."}), 403
             if new_analyst != uname:
@@ -4007,7 +4013,10 @@ _scheduler = JobScheduler(
 )
 _scheduler.register(ScheduledJob("db_backup", _backup_if_due, interval_hours=6))
 _scheduler.register(ScheduledJob("audit_export", _scheduled_audit_export, interval_hours=24))
-_scheduler.start()
+# Testler `import app` yaptığında arka planda thread bırakmasın diye —
+# prod/dev'de bu env değişkeni set edilmediği sürece davranış değişmez.
+if os.environ.get("DISABLE_SCHEDULER") != "1":
+    _scheduler.start()
 
 if __name__ == "__main__":
     host  = os.environ.get("HOST", "127.0.0.1")

@@ -2700,6 +2700,77 @@ kilidi elle temizlendi.
 `app.py`, `static/app.js` (v57), `templates/index.html`, `Dockerfile`
 değişti.
 
+### Takip (2026-09-12) — Faz 2: pytest test paketi + coverage + yeni bir fonksiyonel bug
+
+Kullanıcı "devam" dedi — Faz 1'de anlaşılan sıradaki adım: otomatik test
+paketi + coverage ölçümü (Playwright UI testleri hâlâ ayrı, Faz 3). Proje
+daha önce hiç test altyapısına sahip değildi.
+
+**Test edilebilirlik ön-koşulu:** `app.py`'yi import etmek başlı başına
+yan etkiliydi — modül seviyesinde (`if __name__` dışında) `init_db()` VE
+`_scheduler.start()` (arka plan job thread'i) çalışıyordu. `app.py`'ye
+tek satırlık bir `DISABLE_SCHEDULER` ortam değişkeni gate'i eklendi
+(env değişkeni yoksa davranış aynı kalır); `tests/conftest.py` da
+`DATABASE`/`UPLOAD_FOLDER`/`BACKUP_DIR`'i `import app`'tan ÖNCE geçici
+dizinlere yönlendiriyor — gerçek `tracker.db`'ye asla dokunulmuyor
+(mtime testinden önce/sonra aynı kaldığı doğrulandı).
+
+**Yeni bağımlılık:** `requirements-dev.txt` (production image'a girmez):
+`pytest`, `pytest-cov`.
+
+**Yazılan test dosyaları** (`tests/`, 49 test, hepsi yeşil):
+- `test_auth_security.py` — Faz 1'in TÜM bulgularını (B1 hariç, o
+  `test_incident.py`'de) kilitleyen regresyon testleri: login/logout,
+  B4 rate-limit, B5 cookie flag'leri, B6 header'lar, `settings_required`/
+  `is_senior()` temel davranışı.
+- `test_tune.py` — Kural Tuning'in TAMAMI (create/update/delete/validate/
+  reject/approve) — diğer 3 modül için referans şablon.
+- `test_incident.py` — B1 regresyon testi + 4 durumlu onay akışı.
+- `test_xsoar_webhook.py` — `api_key_required`, B2 (webhook path) ve B7
+  görsel doğrulaması, mükerrer case koruması, `requested_by` eşleme.
+
+**Coverage:** `pytest --cov=app --cov-report=term-missing` → **%39**
+(2253 satırdan 874'ü kapsanıyor). %100 hedeflenmedi — bu ilk tur
+"kritik güvenlik yolları + Tuning modülü tam" kapsıyor; Use-Case/Threat
+Hunting (aynı `test_tune.py` şablonuyla), Excel/PDF export, backup/
+restore, MITRE cache fetch (dış HTTP, mock gerekir) bilinçli olarak bu
+turun dışında bırakıldı — Faz 2'nin devamı olarak işaretlendi.
+
+**Test yazarken bulunan yeni bug (güvenlik denetiminin dışında,
+fonksiyonel bir hata):** Tune/Use-Case/Hunt'ın ÜÇÜNDE de `update_*()`
+route'larının yetki kontrolü, "bir analist raporlamadığı/atanmadığı bir
+talebi düzenleyemez" kapısını "kendine atama (claim)" istisnasından ÖNCE
+kontrol ediyordu — yani raporlayan olmayan VE henüz atanmamış bir analist
+"Üstlen" butonuna bassa (ki arayüz bunu HERKESE gösteriyor, bkz.
+`tuneActionBtns()` app.js) backend 403 döndürüyordu. Kullanıcıya soruldu,
+"şimdi düzelt" onayı alındı: `is_claiming` hesaplaması ilk yetki
+kapısından ÖNCEye taşınıp kapıya eklendi (üç modülde de aynı düzeltme).
+**Doğrulandı:** hem pytest'te (`test_full_happy_path`, raporlayan
+olmayan bir "worker" kullanıcısının claim etmesi artık 200) hem canlı
+tarayıcıda (`lowtier` hesabı, admin'in raporladığı bir kaydı claim etti,
+200 + `status: İnceleniyor` + `tuning_analyst: lowtier` doğrulandı).
+
+**Ayrıca fark edilen tutarsızlık:** `sanitize_external_url()` (B2, Faz 1)
+sadece manuel `create_tune`/`update_tune`'a uygulanmıştı; XSOAR webhook'un
+kendi `xsoar_url` alanı (`xsoar_create_tune()`) aynı sanitizasyondan
+GEÇMİYORDU. Aynı fonksiyon oraya da uygulandı — webhook zaten paylaşılan
+bir secret gerektirdiği için tehdit modeli daha düşük, ama aynı çıktı
+noktasına (aynı `<a href>`) yazdığı için tutarlılık/derinlemesine savunma
+adına düzeltildi.
+
+**Doğrulama:** `pytest -v` (49/49 yeşil), coverage raporu üretildi,
+`tracker.db` mtime'ı test öncesi/sonrası aynı kaldı, test süreci arka
+planda thread bırakmadan (`DISABLE_SCHEDULER=1`) temiz çıktı, canlı
+tarayıcıda tüm sekmeler gezilip konsol/sunucu log'u hatasız kaldı.
+
+**Not (kapsam dışı, gelecekte ele alınabilir):** coverage raporunda
+`datetime.utcnow()` için çok sayıda `DeprecationWarning` görüldü (Python
+3.12+'ta kademeli olarak kaldırılıyor) — `app.py` genelinde ~15+ çağrı
+noktası var, ayrı bir temizlik turu gerektirir, bu turda dokunulmadı.
+
+`app.py`, `requirements-dev.txt` (yeni), `pytest.ini` (yeni), `tests/`
+(yeni, 4 dosya), `.gitignore` değişti.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

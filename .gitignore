@@ -12,3 +12,6 @@ uploads/
 logs/
 .tools/
 .env
+.coverage
+htmlcov/
+.pytest_cache/
