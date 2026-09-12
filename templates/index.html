@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SOC Tracker</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
-  <link rel="stylesheet" href="/static/styles.css?v=12.7"/>
+  <link rel="stylesheet" href="/static/styles.css?v=12.8"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='soc-theme-composio.css') }}?v=1"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -318,7 +318,7 @@
     <div class="table-wrapper">
       <table class="table table-fixed" id="tune-table">
         <colgroup>
-          <col class="col-dot"/><col class="col-id"/>
+          <col class="col-id"/>
           <col class="col-name"/><col style="width:90px"/><col class="col-env"/>
           <col class="col-person"/><col class="col-reason"/><col class="col-freq"/>
           <col class="col-analyst"/><col class="col-status"/>
@@ -326,7 +326,6 @@
         </colgroup>
         <thead>
         <tr>
-          <th></th>
           <th class="th-sortable" id="th-tune-id" onclick="sortTune('id')"># <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-tune-rule_name" onclick="sortTune('rule_name')">Kural İsmi <span class="sort-arrow"></span></th>
           <th>Case No</th>
@@ -379,7 +378,7 @@
     <div class="table-wrapper">
       <table class="table table-fixed" id="uc-table">
         <colgroup>
-          <col class="col-dot"/><col class="col-id"/>
+          <col class="col-id"/>
           <col class="col-desc"/><col class="col-env"/>
           <col class="col-person"/><col class="col-rule"/>
           <col class="col-analyst"/><col class="col-status"/>
@@ -387,7 +386,6 @@
         </colgroup>
         <thead>
         <tr>
-          <th></th>
           <th class="th-sortable" id="th-uc-id" onclick="sortUC('id')"># <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-uc-usecase_description" onclick="sortUC('usecase_description')">Use-Case <span class="sort-arrow"></span></th>
           <th>Ortam</th><th>Talep Eden</th>
@@ -439,7 +437,7 @@
     <div class="table-wrapper">
       <table class="table table-fixed" id="hunt-table">
         <colgroup>
-          <col class="col-dot"/><col class="col-id"/>
+          <col class="col-id"/>
           <col class="col-desc"/>
           <col class="col-person"/><col class="col-analyst"/>
           <col class="col-status"/>
@@ -447,7 +445,6 @@
         </colgroup>
         <thead>
         <tr>
-          <th></th>
           <th class="th-sortable" id="th-hunt-id" onclick="sortHunt('id')"># <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-hunt-hunt_title" onclick="sortHunt('hunt_title')">Hunt Başlığı <span class="sort-arrow"></span></th>
           <th>Talep Eden</th><th>Analist</th>
@@ -505,14 +502,13 @@
     <div class="table-wrapper">
       <table class="table table-fixed" id="incident-table">
         <colgroup>
-          <col class="col-dot"/><col class="col-id"/>
+          <col class="col-id"/>
           <col class="col-name"/><col style="width:90px"/><col class="col-env"/>
           <col class="col-person"/><col style="width:120px"/><col class="col-status"/>
           <col class="col-date"/><col class="col-act"/>
         </colgroup>
         <thead>
         <tr>
-          <th></th>
           <th class="th-sortable" id="th-incident-id" onclick="sortIncident('id')"># <span class="sort-arrow"></span></th>
           <th class="th-sortable" id="th-incident-title" onclick="sortIncident('title')">Başlık <span class="sort-arrow"></span></th>
           <th>Case No</th>
@@ -1834,6 +1830,6 @@
   const USER_TIER    = "{{ user_tier }}";
   const IS_SENIOR    = {{ is_senior|tojson }};
 </script>
-<script src="/static/app.js?v=54"></script>
+<script src="/static/app.js?v=55"></script>
 </body>
 </html>

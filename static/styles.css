@@ -181,14 +181,15 @@ input, select, textarea { font-family: inherit; }
 .nav-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 9px 10px;
   border-radius: var(--r-sm);
   background: none;
   border: none;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   text-align: left;
   transition: background 0.15s, color 0.15s;
@@ -197,16 +198,17 @@ input, select, textarea { font-family: inherit; }
 }
 .nav-btn i { font-size: 16px; flex-shrink: 0; }
 .nav-btn:hover { background: var(--bg-tertiary); color: var(--text-1); }
-.nav-btn.active { background: var(--bg-active); color: var(--text-1); }
+/* Mockup'ta aktif modül sekmesi dolu mavi (accent) — soluk gri kutu
+   değil, tam kontrast bir seçili durum. */
+.nav-btn.active { background: var(--accent); color: #fff; }
 .nav-btn .nav-count {
   margin-left: auto;
-  font-size: 10px;
-  background: var(--bg-hover);
-  color: var(--text-2);
-  padding: 1px 6px;
-  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
   font-weight: 500;
 }
+.nav-btn.active .nav-count { color: rgba(255,255,255,0.7); }
 .sidebar-divider {
   height: 0.5px;
   background: var(--border);
@@ -724,7 +726,6 @@ select.form-input { appearance: auto; -webkit-appearance: menulist; }
 .sort-arrow { font-size: 9px; opacity: 0.5; }
 
 /* column widths */
-.col-dot    { width: 20px;  }
 .col-id     { width: 34px;  }
 .col-name   { width: 16%;   }
 .col-desc   { width: 20%;   }
@@ -739,12 +740,6 @@ select.form-input { appearance: auto; -webkit-appearance: menulist; }
 .col-act    { width: 120px; white-space: nowrap; }
 
 /* ============================================================ BADGES */
-.status-dot {
-  display: inline-block;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  vertical-align: middle;
-}
 .badge {
   display: inline-flex;
   align-items: center;
@@ -777,20 +772,6 @@ select.form-input { appearance: auto; -webkit-appearance: menulist; }
 /* Hunt statuses */
 .status-done      { background: var(--green-subtle);  color: var(--green);  }
 .status-nottuned  { background: var(--amber-subtle);  color: var(--amber);  }
-
-/* dot colors */
-.dot-open       { background: var(--amber); }
-.dot-reviewing  { background: var(--accent); }
-.dot-tuned      { background: var(--purple); }
-.dot-success    { background: var(--green); }
-.dot-retry      { background: var(--red); }
-.dot-written    { background: var(--blue); }
-.dot-testing    { background: var(--teal); }
-.dot-prod       { background: var(--green); }
-.dot-done       { background: var(--green); }
-.dot-skipped    { background: var(--text-3); }
-.dot-pending    { background: var(--blue); }
-.dot-rejected   { background: var(--red); }
 
 /* ============================================================ COUNTDOWN */
 .countdown {

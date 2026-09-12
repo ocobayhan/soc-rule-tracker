@@ -2383,6 +2383,47 @@ kalıpları) hedefledi. Bulunan somut farklar:
 `templates/index.html` değişti; `app.js`'e dokunulmadı (JS mantığı
 değişmedi, sadece render edilen class'lar).
 
+### Takip (2026-09-12) — Sidebar aktif renk + kural listelerindeki gereksiz nokta
+
+Kullanıcı iki gerçek ekran görüntüsünü (mevcut Use-Case listesi + mockup'ın
+Kural Tuning listesi) yan yana koyup üç somut şey işaret etti: (1) sol
+navigasyondaki renk farkı çok belirgin, (2) kural listelerinde `#`'den önceki
+renkli yuvarlağa gerek yok, (3) Use-Case tablosundaki "Yazılan Kural" rozeti
+zaten doğru — dokunma. Üçüncüsü zaten mevcut haliyle mockup'a uygun olduğu
+için sadece ilk ikisi + karşılaştırırken fark edilen ek bir nokta ele alındı:
+
+- **Sidebar'da aktif modül rengi yanlıştı:** `.nav-btn.active` soluk gri
+  dolgu (`--bg-active`, #2a2a2a) kullanıyordu; mockup'ta aktif sekme TAM
+  dolu accent mavisi (`#0007cd`) + beyaz metin. Düzeltildi. Aynı taramada
+  `.nav-btn`'in kendisinin de mockup'tan biraz küçük olduğu görüldü
+  (padding 6px 8px/13px font yerine mockup'ın 9px 10px/14px'i) — birlikte
+  düzeltildi. `.nav-count` da mockup'ta pill-rozet DEĞİL, düz mono metin
+  (aktifken `rgba(255,255,255,.7)`, pasifken `#666666`) — önceki halimiz
+  gri pill arka planlı bir rozetti, sadeleştirildi.
+- **Kural Tuning/Use-Case/Threat Hunting/Olay Raporu listelerindeki `#`
+  sütunundan önceki renkli durum noktası** (`.status-dot`/`dot-*`
+  class'ları, `dot()` JS helper'ı, `TUNE_DOT`/`UC_DOT`/`HUNT_DOT`/
+  `INCIDENT_DOT` map'leri) mockup'ta hiç yok — durum zaten aynı satırda
+  ayrı bir "Durum" rozet sütununda tam metinle gösteriliyor, nokta sadece
+  fazladan/gereksiz bir tekrar. Kullanıcının "gerek yok" tespiti doğrulandı
+  ve dört tablonun TAMAMINDAN (colgroup/thead/tbody + JS render + kolon-
+  index'leri) kaldırıldı — ölü kod olarak `dot()`, 4 DOT map'i ve 12 adet
+  `.dot-*` CSS kuralı da silindi (kullanılmadıkları `grep` ile doğrulandı).
+- **Dikkat edilen risk:** `#`-sütunu kaldırılan yeni ilk sütun olduğu için,
+  4 modülün `_COLUMNS` dizisindeki (kolon göster/gizle + kolona göre filtre
+  özelliğinin dayandığı) `index` değerleri 1 kaydırılıp yeniden 0-tabanlı
+  hale getirildi (`TUNE_COLUMNS`/`UC_COLUMNS`/`HUNT_COLUMNS`/
+  `INCIDENT_COLUMNS`), `buildColumnFilterRow()`'daki filtre satırının
+  başındaki fazladan boş `<td>` de kaldırıldı (aksi halde kolon filtre
+  girişleri bir sütun kayardı). Canlı tarayıcıda sıralama, kolona göre
+  filtre (select + text tipi) ve kolon göster/gizle üçü de ayrı ayrı test
+  edilip DOM/veri hizası doğrulandı (`onColumnFilterInput`/`onColumnToggle`
+  çağrılarıyla), 4 modülün tamamında ilk hücrenin artık `#`
+  olduğu doğrulandı, konsol hatasız.
+
+`static/styles.css` (v12.8), `static/app.js` (v55), `templates/index.html`
+değişti.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

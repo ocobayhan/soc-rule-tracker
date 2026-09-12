@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v54
+   SOC Tracker — Frontend  v55
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -266,16 +266,6 @@ const TUNE_CLS = {
   "Tune Edilmedi": "status-skipped",
   "Reddedildi":    "status-rejected",
 };
-const TUNE_DOT = {
-  "Ön Onay Bekliyor": "dot-pending",
-  "Açık":          "dot-open",
-  "İnceleniyor":   "dot-reviewing",
-  "Tune Edildi":   "dot-tuned",
-  "Tune Başarılı": "dot-success",
-  "Yeniden Tune":  "dot-retry",
-  "Tune Edilmedi": "dot-skipped",
-  "Reddedildi":    "dot-rejected",
-};
 const UC_CLS = {
   "Ön Onay Bekliyor": "status-pending",
   "Açık":          "status-open",
@@ -285,21 +275,8 @@ const UC_CLS = {
   "Yazılamaz":     "status-cant",
   "Reddedildi":    "status-rejected",
 };
-const UC_DOT = {
-  "Ön Onay Bekliyor": "dot-pending",
-  "Açık":          "dot-open",
-  "İnceleniyor":   "dot-reviewing",
-  "Test Ediliyor": "dot-testing",
-  "Prod'da Aktif": "dot-prod",
-  "Yazılamaz":     "dot-skipped",
-  "Reddedildi":    "dot-rejected",
-};
-
 function badge(label, map) {
   return `<span class="badge ${map[label] || "status-skipped"}">${esc(label)}</span>`;
-}
-function dot(label, dotMap) {
-  return `<span class="status-dot ${dotMap[label] || "dot-skipped"}"></span>`;
 }
 
 const FREQ_CLS = { "Düşük": "freq-low", "Orta": "freq-medium", "Yüksek": "freq-high" };
@@ -1013,9 +990,8 @@ const _tableColumns = {};                        // tableKey -> columns config
 const _colFilters    = { tune: {}, uc: {}, hunt: {}, incident: {} };
 
 /** columns: [{ index, key, label, filterType: 'text'|'select' }] — index,
- * <colgroup>/<thead>/<tbody><tr> içindeki 0-based sütun sırası. İlk (durum
- * noktası) ve son (İşlem) kolonlar bilinçli olarak listede yok — diğer
- * tablolardaki gibi (bkz. makeColumnsResizable) hep görünür kalırlar. */
+ * <colgroup>/<thead>/<tbody><tr> içindeki 0-based sütun sırası. Son (İşlem)
+ * kolon bilinçli olarak listede yok — hep görünür kalır. */
 function initTableColumns(tableKey, columns) {
   _tableColumns[tableKey] = columns;
   applyColumnVisibility(tableKey);
@@ -1106,7 +1082,7 @@ function buildColumnFilterRow(tableKey, rows) {
   const row = document.getElementById(`${tableKey}-filter-row`);
   if (!row || !columns) return;
   const current = _colFilters[tableKey];
-  row.innerHTML = `<td></td>` + columns.map(c => {
+  row.innerHTML = columns.map(c => {
     if (c.filterType === "select") {
       // Virgülle ayrılmış çoklu değerli hücreler (örn. "DEV,PROD") tek bir
       // seçenek olarak değil, her değer ayrı seçenek olarak listelenir —
@@ -1199,17 +1175,17 @@ function tuneActionBtns(r) {
 }
 
 const TUNE_COLUMNS = [
-  { index: 1,  key: "id",              label: "#",           filterType: "text" },
-  { index: 2,  key: "rule_name",       label: "Kural İsmi",   filterType: "text" },
-  { index: 3,  key: "xsoar_case_id",   label: "Case No",      filterType: "text" },
-  { index: 4,  key: "environment",     label: "Ortam",        filterType: "select" },
-  { index: 5,  key: "reporter",        label: "Raporlayan",   filterType: "text" },
-  { index: 6,  key: "tune_reason",     label: "Tune Nedeni",  filterType: "text" },
-  { index: 7,  key: "trigger_frequency", label: "Sıklık",     filterType: "select" },
-  { index: 8,  key: "tuning_analyst",  label: "Tune Eden",    filterType: "text" },
-  { index: 9,  key: "status",          label: "Durum",        filterType: "select" },
-  { index: 10, key: "created_at",      label: "Raporlandı",   filterType: "text" },
-  { index: 11, key: "completed_at",    label: "Tamamlandı",   filterType: "text" },
+  { index: 0,  key: "id",              label: "#",           filterType: "text" },
+  { index: 1,  key: "rule_name",       label: "Kural İsmi",   filterType: "text" },
+  { index: 2,  key: "xsoar_case_id",   label: "Case No",      filterType: "text" },
+  { index: 3,  key: "environment",     label: "Ortam",        filterType: "select" },
+  { index: 4,  key: "reporter",        label: "Raporlayan",   filterType: "text" },
+  { index: 5,  key: "tune_reason",     label: "Tune Nedeni",  filterType: "text" },
+  { index: 6,  key: "trigger_frequency", label: "Sıklık",     filterType: "select" },
+  { index: 7,  key: "tuning_analyst",  label: "Tune Eden",    filterType: "text" },
+  { index: 8,  key: "status",          label: "Durum",        filterType: "select" },
+  { index: 9,  key: "created_at",      label: "Raporlandı",   filterType: "text" },
+  { index: 10, key: "completed_at",    label: "Tamamlandı",   filterType: "text" },
 ];
 
 function setPageSubtitle(id, text) {
@@ -1235,7 +1211,6 @@ function renderTuneRows() {
   if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   tbody.innerHTML = sorted.map(r => `<tr>
-    <td>${dot(r.status, TUNE_DOT)}</td>
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.rule_name)}">
       <span class="cell-link" onclick="openTuneDetail(${r.id})" style="cursor:pointer">${esc(r.rule_name)}</span>
@@ -1711,15 +1686,15 @@ function ucActionBtns(r) {
 }
 
 const UC_COLUMNS = [
-  { index: 1,  key: "id",                   label: "#",             filterType: "text" },
-  { index: 2,  key: "usecase_description",  label: "Use-Case",      filterType: "text" },
-  { index: 3,  key: "environment",          label: "Ortam",         filterType: "select" },
-  { index: 4,  key: "requester",            label: "Talep Eden",    filterType: "text" },
-  { index: 5,  key: "rule_name",            label: "Yazılan Kural", filterType: "text" },
-  { index: 6,  key: "rule_author",          label: "Analist",       filterType: "text" },
-  { index: 7,  key: "status",               label: "Durum",         filterType: "select" },
-  { index: 8,  key: "created_at",           label: "Talep Tarihi",  filterType: "text" },
-  { index: 9,  key: "completed_at",         label: "Yazılma Tarihi",filterType: "text" },
+  { index: 0,  key: "id",                   label: "#",             filterType: "text" },
+  { index: 1,  key: "usecase_description",  label: "Use-Case",      filterType: "text" },
+  { index: 2,  key: "environment",          label: "Ortam",         filterType: "select" },
+  { index: 3,  key: "requester",            label: "Talep Eden",    filterType: "text" },
+  { index: 4,  key: "rule_name",            label: "Yazılan Kural", filterType: "text" },
+  { index: 5,  key: "rule_author",          label: "Analist",       filterType: "text" },
+  { index: 6,  key: "status",               label: "Durum",         filterType: "select" },
+  { index: 7,  key: "created_at",           label: "Talep Tarihi",  filterType: "text" },
+  { index: 8,  key: "completed_at",         label: "Yazılma Tarihi",filterType: "text" },
 ];
 
 function renderUCRows() {
@@ -1740,7 +1715,6 @@ function renderUCRows() {
   if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   tbody.innerHTML = sorted.map(r => `<tr>
-    <td>${dot(r.status, UC_DOT)}</td>
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.usecase_description)}">
       <span class="cell-link" onclick="openUCDetail(${r.id})" style="cursor:pointer">${esc(r.usecase_description)}</span>
@@ -2606,16 +2580,6 @@ const HUNT_CLS = {
   "İptal":                 "status-skipped",
   "Reddedildi":            "status-rejected",
 };
-const HUNT_DOT = {
-  "Ön Onay Bekliyor":      "dot-pending",
-  "Açık":                  "dot-open",
-  "İnceleniyor":           "dot-reviewing",
-  "Sonuç Onayı Bekliyor":  "dot-tuned",
-  "Tamamlandı":            "dot-done",
-  "İptal":                 "dot-skipped",
-  "Reddedildi":            "dot-rejected",
-};
-
 let huntRows    = [];
 let huntSearch  = "";
 let huntSortCol = "id";
@@ -2669,13 +2633,13 @@ function huntActionBtns(r) {
 }
 
 const HUNT_COLUMNS = [
-  { index: 1, key: "id",               label: "#",            filterType: "text" },
-  { index: 2, key: "hunt_title",       label: "Hunt Başlığı", filterType: "text" },
-  { index: 3, key: "requester",        label: "Talep Eden",   filterType: "text" },
-  { index: 4, key: "assigned_analyst", label: "Analist",      filterType: "text" },
-  { index: 5, key: "status",           label: "Durum",        filterType: "select" },
-  { index: 6, key: "created_at",       label: "Talep Tarihi", filterType: "text" },
-  { index: 7, key: "completed_at",     label: "Tamamlandı",   filterType: "text" },
+  { index: 0, key: "id",               label: "#",            filterType: "text" },
+  { index: 1, key: "hunt_title",       label: "Hunt Başlığı", filterType: "text" },
+  { index: 2, key: "requester",        label: "Talep Eden",   filterType: "text" },
+  { index: 3, key: "assigned_analyst", label: "Analist",      filterType: "text" },
+  { index: 4, key: "status",           label: "Durum",        filterType: "select" },
+  { index: 5, key: "created_at",       label: "Talep Tarihi", filterType: "text" },
+  { index: 6, key: "completed_at",     label: "Tamamlandı",   filterType: "text" },
 ];
 
 function renderHuntRows() {
@@ -2696,7 +2660,6 @@ function renderHuntRows() {
   if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   tbody.innerHTML = sorted.map(r => `<tr>
-    <td>${dot(r.status, HUNT_DOT)}</td>
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.hunt_title || r.hunt_subject)}">
       <span class="cell-link" onclick="openHuntDetail(${r.id})" style="cursor:pointer">${esc(r.hunt_title || r.hunt_subject)}</span>
@@ -3797,18 +3760,17 @@ let incidentSortCol = "created_at", incidentSortDir = -1;
 let incidentShowAll = false;
 
 const INCIDENT_COLUMNS = [
-  { index: 1, key: "id",            label: "#",           filterType: "text" },
-  { index: 2, key: "title",         label: "Başlık",       filterType: "text" },
-  { index: 3, key: "xsoar_case_id", label: "Case No",      filterType: "text" },
-  { index: 4, key: "environment",   label: "Ortam",        filterType: "select" },
-  { index: 5, key: "reporter",      label: "Raporlayan",   filterType: "text" },
-  { index: 6, key: "_affected_asset_types", label: "Etkilenen Varlık", filterType: "select" },
-  { index: 7, key: "status",        label: "Durum",        filterType: "select" },
-  { index: 8, key: "created_at",    label: "Tarih",        filterType: "text" },
+  { index: 0, key: "id",            label: "#",           filterType: "text" },
+  { index: 1, key: "title",         label: "Başlık",       filterType: "text" },
+  { index: 2, key: "xsoar_case_id", label: "Case No",      filterType: "text" },
+  { index: 3, key: "environment",   label: "Ortam",        filterType: "select" },
+  { index: 4, key: "reporter",      label: "Raporlayan",   filterType: "text" },
+  { index: 5, key: "_affected_asset_types", label: "Etkilenen Varlık", filterType: "select" },
+  { index: 6, key: "status",        label: "Durum",        filterType: "select" },
+  { index: 7, key: "created_at",    label: "Tarih",        filterType: "text" },
 ];
 
 const INCIDENT_CLS = { "Açıldı": "status-open", "İncelemede": "status-reviewing", "Onay Bekliyor": "status-tuned", "Kapandı": "status-done" };
-const INCIDENT_DOT = { "Açıldı": "dot-open",     "İncelemede": "dot-reviewing",    "Onay Bekliyor": "dot-tuned",    "Kapandı": "dot-done" };
 
 function sortIncident(col) {
   incidentSortDir = incidentSortCol === col ? incidentSortDir * -1 : 1;
@@ -3907,7 +3869,6 @@ function renderIncidentRows() {
   if (!sorted.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
   empty.style.display = "none";
   tbody.innerHTML = sorted.map(r => `<tr>
-    <td>${dot(r.status, INCIDENT_DOT)}</td>
     <td class="text-muted" style="font-size:11px;letter-spacing:0">#${r.id}</td>
     <td class="td-truncate" title="${esc(r.title)}">
       <span class="cell-link" onclick="openIncidentDetail(${r.id})" style="cursor:pointer">${esc(r.title)}</span>
