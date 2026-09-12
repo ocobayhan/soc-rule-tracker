@@ -2835,6 +2835,40 @@ aynı kaldı; test süreci arkada thread bırakmadan temiz çıktı.
 3 dosya), `.gitignore` değişti; `tests/test_*.py`'deki importlar
 `tests.conftest`'e güncellendi (davranış değişmedi).
 
+### Takip (2026-09-12) — GitHub Actions CI
+
+Faz 2 ve Faz 3 tamamlandığına göre (49 + 7 test), her push/PR'da otomatik
+çalışan bir CI hattı artık anlamlı — kurulumu bir önceki mesajda önerdim,
+kullanıcı onayladı.
+
+`.github/workflows/tests.yml` — iki paralel job:
+- **`unit-tests`**: `pytest tests/ --cov=app --cov-report=term-missing`
+  (Python 3.11 — prod `Dockerfile`'ın Python sürümüyle tutarlı, bu
+  makinenin yerel 3.14'ünden bilinçli olarak farklı).
+- **`e2e-tests`**: `python -m playwright install --with-deps chromium`
+  (GitHub'ın minimal Ubuntu runner'ında Chromium'un ihtiyaç duyduğu OS
+  paketlerini de kurar) + `pytest tests_e2e/`. Tarayıcı ikili dosyası
+  `actions/cache` ile önbelleğe alınıyor (sonraki çalıştırmalar daha
+  hızlı olsun diye); cache hit olsa bile OS bağımlılıkları ayrı bir
+  adımda garanti ediliyor (`install-deps`), çünkü onlar cache'in kendisi
+  değil apt paketleri.
+
+Tetikleyiciler: `push` (master), `pull_request` (her dal), `workflow_
+dispatch` (elle tetikleme). İki job PARALEL çalışıyor (birbirine bağımlı
+değil) — Faz 3'ün dokümante ettiği "tests/ ve tests_e2e/ aynı süreçte
+BİRLİKTE çalıştırılamaz" kısıtı burada otomatik olarak sağlanıyor, çünkü
+GitHub Actions zaten her job'u ayrı bir runner/süreçte çalıştırıyor.
+
+**Doğrulama:** workflow dosyasının YAML söz dizimi `python -c "import
+yaml; yaml.safe_load(...)"` ile ayrıştırılıp doğrulandı (PyYAML'ın
+bilinen "Norveç sorunu" nedeniyle `on:` anahtarını `True` olarak
+gösterdiği görüldü — bu GitHub'ın kendi ayrıştırıcısını etkilemeyen,
+her GitHub Actions dosyasında var olan zararsız bir PyYAML tuhaflığı,
+düzeltme gerektirmiyor). Gerçek bir GitHub çalıştırması bu oturumdan
+push edildikten sonra Actions sekmesinde görülebilir.
+
+`.github/workflows/tests.yml` (yeni) eklendi.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
