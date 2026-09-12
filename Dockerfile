@@ -26,6 +26,14 @@ RUN mkdir -p /data /app/static/uploads
 ENV DATABASE=/data/tracker.db
 ENV UPLOAD_FOLDER=/app/static/uploads
 
+# Root olarak çalıştırmamak için — bind-mount edilen /data ve
+# /app/static/uploads'un host tarafında bu kullanıcının yazabileceği
+# izinlerde olması gerekir (docker-compose ile aynı UID/GID mount edilen
+# host dizinine chown gerekebilir, bkz. docs/PROGRESS.md).
+RUN useradd --uid 1000 --create-home --shell /bin/false appuser \
+    && chown -R appuser:appuser /app /data
+USER appuser
+
 EXPOSE 5000
 
 # Gunicorn: 2 worker, 120s timeout (MITRE fetch uzun sürebilir)

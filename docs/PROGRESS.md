@@ -2585,6 +2585,121 @@ etkilenmediği ayrıca doğrulandı. Konsol hatasız.
 
 `static/styles.css` (v13.2) değişti.
 
+### Takip (2026-09-12) — Güvenlik Denetimi (Faz 1): bulgular + kritik düzeltmeler
+
+Kullanıcı geniş çaplı bir kod incelemesi istedi: güvenlik açığı taraması,
+test kapsamı, CI/CD, arayüz hata tespiti. Netleştirme sonrası kapsam: bu
+turda sadece **denetim + kritik düzeltmeler**; pytest test paketi ve
+Playwright UI testleri ayrı, gelecekteki oturumlara bırakıldı (plan dosyası:
+`C:\Users\Oguzhan\.claude\plans\cheerful-puzzling-pumpkin.md`).
+
+Bir Explore ajanıyla `app.py`'nin (3926 satır, 69 route) TÜM güvenlik
+yüzeyi (auth/session, RBAC, SQL, dosya yükleme, XSS, CSRF, XSOAR webhook,
+PDF üretimi, audit zinciri, config) satır satır tarandı. Proje daha önce
+HİÇ test/CI/güvenlik-tarama altyapısına sahip değildi — sıfırdan başlandı.
+
+#### Düzeltilen bulgular
+
+- **B1 (KRİTİK) — `delete_incident_report` yetki kontrolü eksikti**
+  (`app.py`, artık `delete_tune`/`delete_usecase`/`delete_hunt` ile aynı
+  `if session.get("role")=="analyst": 403` bloğu eklendi). Önceden herhangi
+  bir analist `DELETE /api/incident-reports/<id>` ile olay raporu
+  silebiliyordu — `docs/REQUIREMENTS.md`'deki izin matrisine ("Sil" =
+  sadece Admin) aykırıydı. **Doğrulandı:** test kaydı oluşturup `lowtier`
+  (analyst) hesabıyla silme denendi → `403`; admin ile denendi → `200`.
+- **B2 (KRİTİK) — `xsoar_url` alanında şema doğrulaması yoktu → saklı XSS**
+  riski. Herhangi bir kullanıcı `javascript:...` gibi bir URI yazabiliyordu;
+  bu değer `app.js`'te bir `<a href>`'e `esc()` ile (sadece `&<>"` kaçıran,
+  şema kontrolü yapmayan) konuyordu — daha yetkili bir kullanıcı o kaydı
+  açıp linke tıklarsa kendi oturumunda keyfi JS çalışabilirdi. Yeni
+  `sanitize_external_url()` helper'ı (`app.py`) eklendi — sadece `http`/
+  `https` şemasına izin veriyor, `create_tune` ve `update_tune`'daki her
+  iki save path'inde de uygulandı. **Doğrulandı:** `xsoar_url=
+  "javascript:alert(1)"` ile create/update denendi → kayıtta `null`;
+  `xsoar_url="https://example.com/..."` ile denendi → olduğu gibi kaydedildi.
+- **B4 (ORTA) — Login route'unda brute-force koruması yoktu.** Yeni
+  SQLite-backed `login_attempts` tablosu + `LOGIN_MAX_ATTEMPTS=8`/
+  `LOGIN_WINDOW_MINUTES=15` sabitleri eklendi (in-memory DEĞİL —
+  gunicorn 2 worker'la çalışıyor, worker'lar bellek paylaşmıyor).
+  Kullanıcı adı bazında sayılıyor (IP bazında değil — iç kurumsal araç,
+  NAT arkasında IP paylaşımı olabilir). Başarılı girişte o kullanıcının
+  kayıtları temizleniyor. **Doğrulandı:** aynı kullanıcı adıyla 9 kez
+  yanlış şifre denendi → 9.'da `429`; doğru şifre bile artık `429`
+  (eşik aşılınca kimlik bilgisi hiç kontrol edilmiyor, beklenen davranış);
+  farklı bir kullanıcı adı (`admin`) etkilenmedi, normal giriş yaptı.
+- **B5 (ORTA) — Session cookie'de `Secure`/`HttpOnly`/`SameSite` açık
+  ayarlanmamıştı.** `SESSION_COOKIE_HTTPONLY=True`, `SESSION_COOKIE_
+  SAMESITE="Lax"` eklendi; `SESSION_COOKIE_SECURE` yeni bir `FORCE_HTTPS`
+  ortam değişkenine bağlandı (yerel HTTP dev ortamı kırılmasın diye) —
+  **prod'da `docker-compose.yml`'e `FORCE_HTTPS=1` eklenmesi gerekiyor**,
+  bunu yapmadan bu bayrak prod'da da kapalı kalır (mevcut davranışla aynı,
+  regresyon yok, ama etkisiz).
+- **B6 (ORTA) — Hiç güvenlik header'ı yoktu.** Yeni `@app.after_request`
+  hook'u `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin` ekliyor. **Bilinçli
+  sınırlama:** tam bir Content-Security-Policy bu turda YAPILMADI —
+  uygulama yoğun inline `style="..."` kullanıyor + Google Fonts CDN'i
+  çekiyor, sıkı bir CSP bunları kırar; ayrı/dikkatli bir tur gerektirir.
+  **Doğrulandı:** canlı `fetch()` ile response header'larında üçü de
+  göründü.
+- **B7 (ORTA) — Base64/dosya yükleme yollarında format doğrulaması yoktu**
+  — çözülen/yüklenen bytes, gerçekten resim olup olmadığına bakılmaksızın
+  diske yazılıyordu (sadece uzantı/mime tahmini vardı). Yeni bağımlılık
+  eklemeden (Pillow yok, `imghdr` Python 3.11'de deprecated) PNG/JPEG/GIF/
+  WEBP magic-byte imza kontrolü (`_looks_like_image()`, `app.py`) eklendi.
+  Onaylanan plandaki kapsam (XSOAR webhook) yanında, AYNI gerekçeyle
+  `/api/upload`'a (normal kullanıcı paste/upload akışı) da uygulandı —
+  aynı sınıftan bir eksiklik olduğu ve tek satırlık bir genişletme olduğu
+  için, ayrı onay beklemeden ekledim (şeffaflık için burada not ediyorum).
+  **Doğrulandı:** her iki uçta da rastgele/bozuk bytes → `400`
+  ("geçerli bir görsele benzemiyor"); gerçek bir PNG (1x1, base64) → kabul.
+  XSOAR webhook'un çoklu-görsel dizisinde geçersiz bir öğe sessizce
+  atlanıp geçerli olan kabul edildiği de doğrulandı (mevcut "sessizce
+  atla" davranışıyla tutarlı).
+- **B8 (DÜŞÜK) — Audit log ekranında eşlenmeyen action label'ı için
+  `innerHTML`'e escape'siz fallback** (`static/app.js`) — `esc()` eklendi.
+  Şu an sömürülemez (action'lar hep sabit sunucu-taraflı string) ama ucuz
+  bir sertleştirme.
+- **B9 (DÜŞÜK) — Docker container root olarak çalışıyordu** —
+  `Dockerfile`'a non-root `appuser` (`useradd --uid 1000`) + `USER
+  appuser` eklendi, `/app` ve `/data` ona chown edildi. **Not:** bu
+  makinede Docker kurulu değil, bu yüzden gerçek bir `docker build` ile
+  test edilemedi — sadece inceleme yoluyla doğrulandı, prod'a
+  dağıtımdan önce bir build/run denemesi önerilir (bind-mount edilen host
+  dizinlerinin bu UID'nin yazabileceği izinlerde olması gerekebilir).
+
+#### Sadece raporlanan, kod değişikliği yapılmayan bulgular
+
+- **CSRF token mekanizması yok** — mevcut `fetch()+JSON` deseni klasik
+  form-based CSRF'i zorlaştırıyor ama garanti değil; tam bir token
+  sistemi (Flask-WTF/custom) büyük bir değişiklik, ayrı bir tur gerektirir.
+- **`requirements.txt`'te üst sınır/lockfile yok** — `pip-audit` ile CVE
+  taraması öneriliyor, internet erişimi + kurulum + ayrı onay gerektirir.
+- **Reddedilen/yetkisiz erişim denemeleri audit log'a yazılmıyor** —
+  `docs/audit_logging.md`'de bilinçli bir tasarım kararı olarak zaten
+  dokümante edilmiş; bir SOC aracı için yeniden değerlendirilebilir ama
+  değiştirilmedi.
+- **B3 — Üç secret (`SECRET_KEY`, `AUDIT_CHAIN_SECRET`,
+  `XSOAR_WEBHOOK_TOKEN`) + iki varsayılan şifre (`admin`/`Admin123!`,
+  `settings`/`Settings123!`), prod'da `.env` ile override edilmezse bu
+  repodaki bilinen değerlerle çalışır.** Bu kod değil, deployment/config
+  sorunu — production sunucusuna erişim/dokunma yetkisi olmadığı için
+  koddan düzeltilemedi. **Kullanıcıya soruldu:** prod'da bu 3 secret ve
+  2 varsayılan şifre gerçekten değiştirilmiş mi? Değilse ayrı, acil bir
+  "Faz 0" (SSH ile birlikte ele alınacak) iş olarak takip edilmeli.
+
+#### Genel doğrulama
+
+Tüm düzeltmeler canlı tarayıcıda (yerel dummy DB, `tracker.db`) test
+edildi: login/logout, Tune/Incident CRUD, XSOAR webhook, sidebar/tab
+gezinme regresyon göstermedi; konsol temiz (test sırasında bilerek
+tetiklenen 403/429/400'ler hariç); test amaçlı oluşturulan tüm kayıtlar
+(2 tune, 2 incident report) temizlendi, `lowtier` test hesabının login
+kilidi elle temizlendi.
+
+`app.py`, `static/app.js` (v57), `templates/index.html`, `Dockerfile`
+değişti.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

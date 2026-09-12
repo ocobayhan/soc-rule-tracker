@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import os
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from functools import wraps
 from io import BytesIO
 
@@ -16,6 +16,28 @@ from verify_audit import audit_hash, AUDIT_GENESIS, verify_chain, AUDIT_CHAIN_SE
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "soc-rule-tracker-dev-key-change-in-prod")
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB — paste/upload görsel limiti
+
+# Session cookie sertleştirme — Flask varsayılanları HttpOnly=True veriyor
+# ama Secure=False ve SameSite=None (belirtilmemiş) bırakıyor. HTTPONLY/
+# SAMESITE her ortamda güvenli (kırılma riski yok); SECURE ise prod'da
+# (HTTPS arkasında) zorunlu olmalı ama bu makinedeki gibi düz HTTP dev
+# ortamında açılırsa tarayıcı cookie'yi HİÇ göndermez, giriş tamamen kırılır
+# — bu yüzden ayrı bir env bayrağıyla (FORCE_HTTPS=1) kontrol ediliyor;
+# prod docker-compose'a bu değişken eklenip 1 yapılmalı (bkz. docs/PROGRESS.md).
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"]   = os.environ.get("FORCE_HTTPS", "0") == "1"
+
+@app.after_request
+def set_security_headers(response):
+    """Clickjacking/MIME-sniffing'e karşı temel, kırılma riski olmayan 3
+    header. Bilinçli olarak DAHİL EDİLMEYEN: tam bir Content-Security-Policy
+    — uygulama yoğun inline style="..." kullanıyor ve Google Fonts CDN'inden
+    font çekiyor, sıkı bir CSP bunları kırar; ayrı ve dikkatli bir tur ister."""
+    response.headers["X-Frame-Options"]        = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"
+    return response
 
 # Ürün versiyonu (Semantic Versioning — MAJOR.MINOR.PATCH). Bkz. docs/VERSIONING.md
 # için ne zaman hangi rakamın artırılacağı. static/app.js ve styles.css'teki
@@ -66,6 +88,14 @@ TIER_KIDEMLI = "Kıdemli Analist"
 TIER_MUDUR   = "Müdür"
 TIERS = (TIER_ANALIST, TIER_KIDEMLI, TIER_MUDUR)
 SENIOR_TIERS = (TIER_KIDEMLI, TIER_MUDUR)
+
+# Login brute-force koruması — DB-backed (in-memory DEĞİL): gunicorn birden
+# fazla worker process ile çalışıyor, worker'lar bellek paylaşmadığı için
+# in-memory bir sayaç güvenilir olmazdı (bkz. docs/PROGRESS.md güvenlik
+# denetimi). Kullanıcı adı bazında sayılır, IP bazında değil — bilinçli
+# tercih: bu iç bir kurumsal araç, IP'ler NAT arkasında paylaşılabilir.
+LOGIN_MAX_ATTEMPTS   = 8
+LOGIN_WINDOW_MINUTES = 15
 
 # Ön onay (validity) durumu — yeni tune/UC talepleri bu durumda açılır, işe
 # başlanabilmesi (Açık/İnceleniyor) için Kıdemli Analist/Müdür onayı gerekir.
@@ -281,6 +311,17 @@ def init_db():
         CREATE TABLE IF NOT EXISTS app_settings (
             key   TEXT PRIMARY KEY,
             value TEXT
+        )
+    """)
+
+    # Login brute-force koruması (bkz. LOGIN_MAX_ATTEMPTS/LOGIN_WINDOW_MINUTES)
+    # — sadece başarısız denemeler yazılır, başarılı girişte o kullanıcının
+    # satırları temizlenir.
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS login_attempts (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            username     TEXT NOT NULL,
+            attempted_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
 
@@ -674,6 +715,20 @@ def build_xsoar_url(case_id):
     from urllib.parse import quote
     return template.replace("[CASENO]", quote(str(case_id), safe=""))
 
+def sanitize_external_url(url):
+    """xsoar_url gibi kullanıcı tarafından girilip sonradan bir <a href> olarak
+    render edilen alanlar için — sadece http(s) şemasına izin verir. Aksi
+    halde None döner (ör. `javascript:...` gibi tehlikeli bir şemayla
+    kullanıcılar-arası saklı XSS'i önler)."""
+    if not url:
+        return None
+    from urllib.parse import urlparse
+    try:
+        scheme = urlparse(url).scheme.lower()
+    except ValueError:
+        return None
+    return url if scheme in ("http", "https") else None
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -771,6 +826,14 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         db = get_db()
+        cutoff = (datetime.utcnow() - timedelta(minutes=LOGIN_WINDOW_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
+        recent_fails = db.execute(
+            "SELECT COUNT(*) c FROM login_attempts WHERE username=? AND attempted_at>?",
+            (username, cutoff),
+        ).fetchone()["c"]
+        if recent_fails >= LOGIN_MAX_ATTEMPTS:
+            error = "Çok fazla başarısız deneme. Lütfen birkaç dakika sonra tekrar deneyin."
+            return render_template("login.html", error=error), 429
         user = db.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         if user and check_password_hash(user["password_hash"], password):
             if user["active"] == "Hayır":
@@ -782,8 +845,11 @@ def login():
             session["tier"]     = user["tier"] if "tier" in user.keys() else TIER_ANALIST
             now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             db.execute("UPDATE users SET last_login=? WHERE id=?", (now, user["id"]))
+            db.execute("DELETE FROM login_attempts WHERE username=?", (username,))
             db.commit()
             return redirect(url_for("index"))
+        db.execute("INSERT INTO login_attempts (username) VALUES (?)", (username,))
+        db.commit()
         error = "Kullanıcı adı veya şifre hatalı."
     return render_template("login.html", error=error)
 
@@ -818,10 +884,14 @@ def upload_file():
     ext = os.path.splitext(secure_filename(file.filename))[1].lower()
     if ext not in ALLOWED_EXT:
         return jsonify({"error": "Geçersiz dosya türü (jpg/png/gif/webp)"}), 400
+    raw_bytes = file.read()
+    if not raw_bytes or not _looks_like_image(raw_bytes):
+        return jsonify({"error": "Dosya içeriği geçerli bir görsele benzemiyor."}), 400
     filename = str(uuid.uuid4()) + ext
     try:
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        file.save(os.path.join(UPLOAD_FOLDER, filename))
+        with open(os.path.join(UPLOAD_FOLDER, filename), "wb") as f:
+            f.write(raw_bytes)
     except OSError as e:
         app.logger.error(f"[upload] Dosya kaydedilemedi: {e}")
         return jsonify({"error": "Görsel sunucuya kaydedilemedi (disk/izin sorunu olabilir)."}), 500
@@ -1283,7 +1353,7 @@ def create_tune():
     if not xsoar_url_val and not xsoar_missing:
         xsoar_url_val = build_xsoar_url(xsoar_case_id) or None
     else:
-        xsoar_url_val = xsoar_url_val or None
+        xsoar_url_val = sanitize_external_url(xsoar_url_val)
 
     db  = get_db()
     # Aynı SOAR case ID altında ikinci bir AKTİF tuning talebi açılmasını
@@ -1399,6 +1469,24 @@ def xsoar_create_tune():
 # ---------------------------------------------------------------------------
 # XSOAR Olay Raporu (Incident Report) — Faz W, bkz. docs/xsoar_integration.md
 # ---------------------------------------------------------------------------
+_IMAGE_SIGNATURES = (
+    (b"\x89PNG\r\n\x1a\n", None),
+    (b"\xff\xd8\xff", None),
+    (b"GIF87a", None),
+    (b"GIF89a", None),
+)
+
+def _looks_like_image(raw_bytes):
+    """PNG/JPEG/GIF/WEBP dosya imzalarına (magic bytes) göre kaba bir
+    doğrulama — yeni bir bağımlılık eklemeden (Pillow yok, `imghdr` Python
+    3.11'de deprecated). Webhook'tan gelen base64'ün gerçekten bir resim
+    olduğunu, rastgele/bozuk veri olmadığını garanti eder."""
+    if len(raw_bytes) < 12:
+        return False
+    if any(raw_bytes.startswith(sig) for sig, _ in _IMAGE_SIGNATURES):
+        return True
+    return raw_bytes[0:4] == b"RIFF" and raw_bytes[8:12] == b"WEBP"
+
 def _decode_incident_image(raw):
     """Base64 (opsiyonel data:image/X;base64, önekiyle) bir görseli diske
     yazar, dosya adını döner. Format data URI'den çıkarılır, yoksa .png
@@ -1420,7 +1508,7 @@ def _decode_incident_image(raw):
         raw_bytes = base64.b64decode(b64, validate=False)
     except Exception:
         return None
-    if not raw_bytes:
+    if not raw_bytes or not _looks_like_image(raw_bytes):
         return None
     filename = str(uuid.uuid4()) + ext
     try:
@@ -1828,6 +1916,8 @@ def reject_incident_report(item_id):
 @app.route("/api/incident-reports/<int:item_id>", methods=["DELETE"])
 @login_required
 def delete_incident_report(item_id):
+    if session.get("role") == "analyst":
+        return jsonify({"error": "Kayıt silmek için admin yetkisi gereklidir."}), 403
     db  = get_db()
     row = db.execute("SELECT * FROM incident_reports WHERE id=?", (item_id,)).fetchone()
     if not row:
@@ -1942,7 +2032,7 @@ def update_tune(item_id):
     if not new_url and new_missing == "Hayır":
         new_url = build_xsoar_url(new_case_id) or None
     else:
-        new_url = new_url or None
+        new_url = sanitize_external_url(new_url)
 
     # Case ID başka bir aktif talebe ait değil (kendisi hariç, reddedilenler
     # hariç) — düzenlemeyle de mükerrer case oluşmasın (create_tune ile aynı kural).

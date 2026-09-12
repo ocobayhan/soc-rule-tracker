@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v56
+   SOC Tracker — Frontend  v57
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -2218,7 +2218,7 @@ async function loadAuditLog() {
     empty.style.display = "none";
     tbody.innerHTML = rows.map(r => {
       const cls  = ACTION_CLS[r.action] || "";
-      const label = ACTION_TR[r.action]  || r.action;
+      const label = ACTION_TR[r.action]  || esc(r.action);
       const time  = r.created_at ? r.created_at.slice(0, 16).replace("T", " ") : "—";
       return `<tr>
         <td class="text-muted" style="font-size:12px;white-space:nowrap">${time}</td>
