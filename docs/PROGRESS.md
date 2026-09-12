@@ -2910,6 +2910,59 @@ restore, MITRE cache fetch — dış bağımlılık/mock gerektirenler).
 
 `tests/test_usecase.py` (yeni), `tests/test_hunt.py` (yeni) eklendi.
 
+### Takip (2026-09-12) — Faz 3 devamı: Playwright'ı Use-Case/Hunt/Incident + Dashboard/Audit'e genişletme
+
+Kullanıcı "süreci ilerlet" dedi; birkaç somut seçenek arasından Faz 3'ün
+orijinal planında açıkça "bu turda yazılmayacak, aynı şablonla
+genişletilecek" diye not edilen işi seçti: `test_tune_lifecycle.py`
+şablonu diğer üç modüle + Dashboard/Audit Log'a uygulandı.
+
+**Yeni testler (4 dosya, 8 test, `tests_e2e/`):**
+- `test_usecase_lifecycle.py`, `test_hunt_lifecycle.py` — Tune şablonuyla
+  birebir aynı iki test (modal ile oluştur → listede görün, Kıdemli Analist
+  UI'dan Onayla/Reddet → Açık). UC'nin ortam alanı Tune'unkinden farklı bir
+  widget (tek `<select>` değil, "seç + Ekle" etiket listesi) olduğu için
+  ayrıca `#uc-env-select` + "+ Ekle" tıklaması gerekti.
+- `test_incident_lifecycle.py` — Incident'in farklı akışına uyarlandı: ön
+  onay kapısı yok (oluşturma doğrudan "Açıldı"), paylaşılan `validate-modal`
+  bileşenine ulaşmadan önce iki düz buton daha var ("İncelemeye Başla",
+  "Onaya Gönder"). İkinci test tam zinciri (Açıldı→İncelemede→Onay
+  Bekliyor→Kapandı) UI'dan sürüyor.
+- `test_dashboard_and_audit.py` — bu ikisinin kendi CRUD modülü yok, o
+  yüzden iş akışı sürmek yerine SPA'nın API verisini gerçekten DOM'a
+  bastığını doğruluyor: Dashboard KPI kartları girişten sonra sayısal
+  değer render ediyor mu; Audit Log ekranı bir aksiyon sonrası doğru
+  eşlenmiş etiketle (`ACTION_TR`) bir satır gösteriyor mu.
+
+**Yol boyu bulunan iki gerçek sorun (kod değil, test/varsayım hatası):**
+1. İlk yazımda Audit Log testi girişin (`LOGIN`) bir audit satırı
+   yazacağını varsaydı — **yanlıştı**: `app.py`'nin `login()` route'u hiç
+   `write_audit()` çağırmıyor (`app.js`'teki `ACTION_TR.LOGIN` eşlemesi
+   kullanılmayan ölü bir girdi). Test, gerçekten audit yazan bir aksiyona
+   (`CREATE_TUNE`) çevrildi.
+2. `tests_e2e/conftest.py`'ın `seed_reference_data` fixture'ı bir
+   `analysts` tablosuna satır ekliyor ("Talep Eden" dropdown'ları için
+   kullanılacağı varsayımıyla) — ama `/api/analysts` route'u (`app.py`)
+   aslında `users` tablosunu okuyor; `analysts` tablosu şemada var ama
+   hiçbir route tarafından hiç okunmuyor/yazılmıyor, tamamen ölü. Bu
+   varsayım daha önce hiç sınanmamıştı çünkü Tune testleri "Talep Eden"i
+   hep analist-kendine-kilitli (`lockToSelf`) senaryosunda kullanmıştı.
+   Yeni Audit Log testi admin ile (kilitsiz, serbest seçim) bir tune
+   oluşturduğu için bu ilk kez ortaya çıktı — dropdown'da seçilecek
+   "e2e-reporter" hiç yoktu. **Düzeltme kapsamı bilinçli olarak dar
+   tutuldu:** ölü `analysts` tablosunu/route'unu temizlemek bu turun
+   konusu değil (istenmedi, ayrı bir iş); sadece yeni testte gerçek bir
+   `users` satırı (admin'in kendisi) seçilecek şekilde düzeltildi ve
+   kök neden bir yorumla test dosyasına not edildi.
+
+**Doğrulama:** `pytest tests_e2e/ -v --browser chromium` → 15/15 yeşil
+(7 önceki + 8 yeni); `pytest tests/ -q` → 70/70 yeşil (regresyon yok);
+`tracker.db`'nin mtime'ı çalıştırma öncesi/sonrası değişmedi.
+
+`tests_e2e/test_usecase_lifecycle.py`, `tests_e2e/test_hunt_lifecycle.py`,
+`tests_e2e/test_incident_lifecycle.py`, `tests_e2e/test_dashboard_and_audit.py`
+(hepsi yeni) eklendi.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
