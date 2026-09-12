@@ -20,6 +20,9 @@
   --bg-hover:     #222222;
   --bg-active:    #2A2A2A;
   --bg-1:         #181818;
+  /* Kart zemininden (#181818) bir tık koyu — mockup'ta tablo header'ı,
+     satır ayracı ve modal footer'ı bunu kullanıyor. */
+  --bg-elevated:  #1A1A1A;
 
   /* Kenarlıklar — alfa yerine sabit gri, kartlarda net kenar */
   --border:        #222222;
@@ -177,6 +180,7 @@ select.form-input:focus {
     --bg: #FFFFFF;
     --bg-secondary: #FFFFFF;
     --bg-tertiary: #F7F7F7;
+    --bg-elevated: #F0F0F0;
     --border: #E4E4E4;
     --border-md: #CFCFCF;
     --text-1: #0F0F0F;

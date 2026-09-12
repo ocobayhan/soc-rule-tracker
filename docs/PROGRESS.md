@@ -2424,6 +2424,41 @@ için sadece ilk ikisi + karşılaştırırken fark edilen ek bir nokta ele alı
 `static/styles.css` (v12.8), `static/app.js` (v55), `templates/index.html`
 değişti.
 
+### Takip (2026-09-12) — Tablo çerçevesi: dolgu/ayraç/hover mockup'a çekildi
+
+Aynı iki ekran görüntüsünü karşılaştırırken sidebar ve nokta sütunu dışında
+tablonun kendisinde de fark bulundu — mockup'ın liste tablosu satır satır
+(`tema/SOC Tracker.dc.html` satır 331-333) yeniden okunup şu 4 farkla
+karşılaştırıldı:
+
+- **`.table-wrapper` border'ı** `0.5px var(--border-md)` (#333) idi, mockup
+  `1px solid #222222`. Düzeltildi.
+- **Header/satır dolgusu çok sıkıydı** (`12px 14px`) — mockup'ta header
+  `14px 24px`, satır `16px 24px`. Genişletildi (tablolar zaten
+  `.table-fixed{min-width:1100px}` + `.table-wrapper{overflow-x:auto}` ile
+  yatay kaydırmaya hazır, mockup da aynı gerekçeyle `min-width:1060px`
+  kullanıyor — dar ekranda kaydırma bekleniyor, kırılma değil).
+- **Header zemini kart zeminiyle AYNIYDI** (`--bg-tertiary` = #181818,
+  `--bg-secondary` ile birebir aynı token) — mockup'ta header bir tık daha
+  koyu (`#1a1a1a`). Yeni bir `--bg-elevated` token'ı eklendi
+  (`soc-theme-composio.css`) ve satır ayracı rengi de buna çekildi (mockup
+  satır border'ı `#1a1a1a`, header'ın kendi alt border'ı ise `#222222` —
+  ikisi ayrı, doğru şekilde ayrıştırıldı).
+- **En önemlisi — satır hover'ı neredeyse görünmüyordu:** `.table
+  tr:hover td` rengi `var(--bg-secondary)` (#181818) yani KART ZEMİNİYLE
+  AYNIYDI, dolayısıyla üstüne gelince pratikte hiçbir şey değişmiyordu.
+  Mockup'ta hover `#222222` (`--bg-hover`) — belirgin bir renk sıçraması.
+  Bu, muhtemelen daha önce `--bg-hover`/`--bg-secondary`'nin bir noktada
+  karıştırılmasından kalma bir regresyon; düzeltildi.
+- **Doğrulandı:** canlı tarayıcıda Kural Tuning ve Audit Log tabloları
+  (ikisi de aynı paylaşılan `.table` class'ını kullanıyor) yeni dolgu/
+  header rengiyle render edildi, `table-wrapper.scrollWidth >
+  clientWidth` ile yatay kaydırmanın devrede olduğu doğrulandı, gerçek
+  fare hover'ı ekran görüntüsüyle rengin artık belirgin şekilde
+  değiştiği teyit edildi, konsol hatasız.
+
+`static/styles.css` (v12.9), `static/soc-theme-composio.css` değişti.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

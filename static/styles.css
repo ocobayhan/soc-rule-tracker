@@ -679,7 +679,7 @@ select.form-input { appearance: auto; -webkit-appearance: menulist; }
   overflow-x: auto;
   min-width: 0;
   background: var(--bg-secondary);
-  border: 0.5px solid var(--border-md);
+  border: 1px solid var(--border);
   border-radius: var(--r-lg);
 }
 .table-wrapper .table { border-radius: inherit; }
@@ -695,9 +695,9 @@ select.form-input { appearance: auto; -webkit-appearance: menulist; }
   font-size: 11px;
   font-weight: 600;
   color: var(--text-2);
-  background: var(--bg-tertiary);
-  padding: 12px 14px;
-  border-bottom: 0.5px solid var(--border);
+  background: var(--bg-elevated);
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
   letter-spacing: .07em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -705,14 +705,17 @@ select.form-input { appearance: auto; -webkit-appearance: menulist; }
   text-overflow: ellipsis;
 }
 .table td {
-  padding: 12px 14px;
-  border-bottom: 0.5px solid var(--border);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--bg-elevated);
   font-size: 13px;
   color: var(--text-1);
   vertical-align: middle;
   transition: background 0.08s;
 }
-.table tr:hover td { background: var(--bg-secondary); }
+/* Mockup'ta satır hover'ı kart zemininden (#181818) belirgin şekilde
+   ayrışıyor (#222222) — önceden hover rengi kart zeminiyle AYNIYDI,
+   yani hover neredeyse görünmüyordu. */
+.table tr:hover td { background: var(--bg-hover); }
 /* table-fixed kolonları karışık px/% genişlik kullanıyor (bkz. aşağıdaki
    "column widths"); dar bir konteynerde % kolonlar sıfıra sıkışıp metnin
    üst üste binmesine yol açabiliyordu. min-width, tüm kolonların kendi
