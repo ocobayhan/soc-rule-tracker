@@ -1,7 +1,7 @@
 """Kural Tuning (tune_requests) module — reference test template for the
 other three near-identical modules (Use-Case / Threat Hunt / Incident),
 per docs/PROGRESS.md ("Faz 2: pytest test paketi")."""
-from conftest import login
+from tests.conftest import login
 
 
 def _create_tune(client, case_id, **overrides):

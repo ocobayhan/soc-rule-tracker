@@ -1,7 +1,7 @@
 """Olay Raporu (incident_reports) module — B1 regression test (missing
 delete-authorization check, docs/PROGRESS.md "Güvenlik Denetimi") plus the
 4-state approval pipeline (docs/REQUIREMENTS.md, docs/rbac.md)."""
-from conftest import login
+from tests.conftest import login
 
 
 def _create_incident(client, title="pytest incident", **overrides):

@@ -2771,6 +2771,70 @@ noktası var, ayrı bir temizlik turu gerektirir, bu turda dokunulmadı.
 `app.py`, `requirements-dev.txt` (yeni), `pytest.ini` (yeni), `tests/`
 (yeni, 4 dosya), `.gitignore` değişti.
 
+### Takip (2026-09-12) — Faz 3: Playwright otomatik UI test paketi
+
+Kullanıcı yine "devam" dedi — üzerinde en başta anlaşılan son faz:
+gerçek bir tarayıcıda (Chromium) kritik akışları uçtan uca doğrulayan,
+kalıcı/tekrar çalıştırılabilir bir test paketi. Faz 2'nin `tests/`'i
+sadece Flask `test_client()` (HTTP katmanı) test ediyordu — JS/DOM'un
+gerçekten çalıştığını değil.
+
+**Test edilebilirlik:** Playwright gerçek bir soket ister, `test_client()`
+yetmiyor. `werkzeug.serving.make_server()` arka plan thread'inde
+başlatılıp testler bitince `.shutdown()` ile kapatılıyor (subprocess
+değil — daha hızlı). Faz 2'deki AYNI "ortam değişkenlerini `import
+app`'tan ÖNCE ayarla" izolasyon deseni burada da uygulandı.
+
+**Yeni bağımlılıklar:** `playwright`, `pytest-playwright`
+(`requirements-dev.txt`); `python -m playwright install chromium` ile
+tek seferlik ~115MB'lık tarayıcı ikili dosyası indirildi (bu oturumda
+sorunsuz tamamlandı).
+
+**Dizin yapısı:** `tests_e2e/` — Faz 2'nin `tests/`inden BİLİNÇLİ olarak
+ayrı (yavaş + tarayıcı kurulumu gerektiriyor, `pytest.ini`'nin varsayılan
+`testpaths = tests`'iyle karışmıyor).
+
+**Yazılan testler** (7 test, hepsi yeşil, headless Chromium):
+- `test_login_flow.py` — geçerli/geçersiz giriş, giriş yapmamışken
+  yönlendirme, logout, B4 rate-limit'in GERÇEK tarayıcıda da (form submit
+  + response'un 429 döndüğü) tetiklendiği.
+- `test_tune_lifecycle.py` — REFERANS ŞABLON: "+ Yeni Talep" modalını
+  gerçek DOM etkileşimiyle (select/fill/click) doldurup kaydetme, listede
+  göründüğünü doğrulama; ardından kıdemli bir kullanıcıyla "Onayla/
+  Reddet" → validate-modal → "Onayla ✓" tıklayarak ön onay adımını
+  tamamlama.
+
+**Bu turda YAZILMAYAN (Faz 3'ün devamı, aynı şablonla):** Use-Case/Hunt/
+Incident'ın UI akışları, Dashboard/Audit Log görsel kontrolleri.
+
+**Test yazarken bulunan ve düzeltilen paketleme hatası:** `tests/` VE
+`tests_e2e/`'nin HER İKİSİ de kendi `conftest.py`'ına sahip; ikisinde de
+`__init__.py` yokken aynı anda çalıştırılınca (`pytest tests/
+tests_e2e/`) pytest ikisini de aynı global `conftest` modül adıyla
+import etmeye çalışıp ikincisi `ImportError` ile çöküyordu. `tests/
+__init__.py` ve `tests_e2e/__init__.py` eklenip importlar `from
+tests.conftest import ...` / `from tests_e2e.conftest import ...`
+olarak netleştirildi — artık isim çakışması yok. **Önemli mimari not**
+(kod olarak "düzeltilmedi", tasarım gereği): `tests/` ve `tests_e2e/`
+YİNE DE aynı pytest sürecinde BİRLİKTE çalıştırılamaz — `app.py` kendi
+`DATABASE`/`UPLOAD_FOLDER`/`BACKUP_DIR` global'lerini ve `init_db()`/
+scheduler başlatmayı import anında, süreç başına BİR KEZ çalıştırıyor;
+hangi suite'in conftest'i `app`'i önce import ederse o "kazanır", ikinci
+suite'in ortam değişkenleri artık etkisiz kalır. Bu, `pytest.ini`'nin
+`testpaths = tests` ile `tests_e2e/`'yi bilinçli olarak dışladığı asıl
+sebep — ikisi HER ZAMAN ayrı `pytest` çağrılarıyla çalıştırılmalı
+(`pytest tests/` ve ayrıca `pytest tests_e2e/`), bu artık `tests_e2e/
+conftest.py`'ın modül docstring'inde de açıkça yazıyor.
+
+**Doğrulama:** `pytest tests_e2e/ -v` → 7/7 yeşil; `pytest tests/` ve
+`pytest tests_e2e/` ayrı ayrı çalıştırılıp ikisinin de (49 + 7 = 56 test)
+bağımsız geçtiği doğrulandı; `tracker.db` mtime'ı test öncesi/sonrası
+aynı kaldı; test süreci arkada thread bırakmadan temiz çıktı.
+
+`requirements-dev.txt`, `tests/__init__.py` (yeni), `tests_e2e/` (yeni,
+3 dosya), `.gitignore` değişti; `tests/test_*.py`'deki importlar
+`tests.conftest`'e güncellendi (davranış değişmedi).
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

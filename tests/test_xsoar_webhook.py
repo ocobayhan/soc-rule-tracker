@@ -1,7 +1,7 @@
 """XSOAR inbound webhooks (docs/xsoar_integration.md) — api_key_required
 auth, duplicate-case protection, and the B2/B7 security-audit fixes as they
 apply to this machine-to-machine surface."""
-from conftest import TEST_XSOAR_TOKEN
+from tests.conftest import TEST_XSOAR_TOKEN
 
 AUTH_HEADER = {"X-API-Key": TEST_XSOAR_TOKEN}
 

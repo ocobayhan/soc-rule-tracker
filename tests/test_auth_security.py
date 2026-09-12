@@ -3,7 +3,7 @@
 Each test class is named after the finding it locks in, so a future
 regression shows up as an obviously-named failure.
 """
-from conftest import login
+from tests.conftest import login
 
 
 class TestLoginRequired:
