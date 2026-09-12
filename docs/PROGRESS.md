@@ -2869,6 +2869,47 @@ push edildikten sonra Actions sekmesinde görülebilir.
 
 `.github/workflows/tests.yml` (yeni) eklendi.
 
+### Takip (2026-09-12) — Faz 2 devamı: Use-Case + Threat Hunting test modülleri
+
+Kullanıcı yine "devam" dedi. CI kurulduğuna göre, Faz 2'de açıkça
+"devamı" olarak işaretlenen iş bu: `test_tune.py` şablonu Use-Case ve
+Threat Hunting modüllerine uygulandı (Faz 2'nin orijinal notu: "Use-Case
+ve Threat Hunting modülleri test_tune.py şablonu doğrulandıktan sonra
+aynı desenle genişletilecek").
+
+Her iki modülün TÜM route'larını (`create_usecase`/`update_usecase`/
+`validate`/`reject-validation`/`test-approve`/`test-reject`/
+`delete_usecase`; `create_hunt`/`update_hunt`/`validate`/`reject-
+validation`/`approve-result`/`reject-result`/`start`/`delete_hunt`)
+okuyup tam durum makinelerini (`UC_LOCKED_LEAVE`/`ARRIVE`,
+`HUNT_LOCKED_LEAVE`/`ARRIVE` sabitleri) çıkararak yazdım — bu sayede
+tahmine dayalı bir deneme-yanılma turu olmadan, ilk çalıştırmada 21
+testin TAMAMI yeşil geçti (önceki iki fazda olduğu gibi test yazarken
+yeni bir bug bulunmadı bu kez, ama bu da beklenen bir sonuç: claim-
+sıralama düzeltmesi zaten önceki turda üç modülün üçüne de uygulanmıştı).
+
+**Yeni testler:**
+- `tests/test_usecase.py` (11 test): create validasyonu (zorunlu alanlar,
+  çoklu-seçim ortamın virgülle birleştirilmesi), sahiplik kısıtı (claim
+  dahil — önceki turdaki düzeltmeyi Use-Case tarafında da regresyon
+  testine bağladı), admin-only silme, tam onay hattı (Ön Onay Bekliyor →
+  Açık → İnceleniyor → Test Ediliyor → Prod'da Aktif, ayrıca test-reject
+  ile geri dönüş).
+- `tests/test_hunt.py` (10 test): create validasyonu, admin-only silme,
+  claim + "sadece atanan analist başlatabilir" kısıtı (`/start` ucu —
+  Tune/UC'de karşılığı olmayan hunt'a özgü bir davranış), tam onay hattı
+  (Ön Onay Bekliyor → Açık → İnceleniyor → Sonuç Onayı Bekliyor →
+  Tamamlandı, reject-result not zorunluluğu).
+
+**Coverage:** %39 → **%52** (2253 satırdan 1168'i kapsanıyor), 70 test
+(49 → 70). Kalan kapsam dışı alanlar aynı (Excel/PDF export, backup/
+restore, MITRE cache fetch — dış bağımlılık/mock gerektirenler).
+
+**Doğrulama:** `pytest tests/ -v` → 70/70 yeşil; `tracker.db` mtime'ı
+öncesi/sonrası aynı kaldı.
+
+`tests/test_usecase.py` (yeni), `tests/test_hunt.py` (yeni) eklendi.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda
