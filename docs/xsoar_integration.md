@@ -123,6 +123,36 @@ X-API-Key: <XSOAR_WEBHOOK_TOKEN ortam değişkeninin değeri>
 | `images` | opsiyonel | En fazla 50 öğe (üst sınır — bkz. aşağıdaki istek boyutu notu, pratikte çok daha erken dolar). Dizi, **her öğe ham bir base64 string** (obje değil) — opsiyonel `data:image/png;base64,...` / `data:image/jpeg;base64,...` önekiyle, önek yoksa `.png` varsayılır (desteklenen diğer formatlar: `.jpg`, `.gif`, `.webp`). Gönderilme **sırasına** göre `order` alanı (1, 2, 3…) otomatik atanır ve rapor arayüzünde "Görsel 1", "Görsel 2"… diye numaralanır — tüm görseller **tek çağrıda**, `sections`'dan bağımsız ayrı bir galeri olarak gönderilir (Hunt raporundaki madde-başı-görsel deseninden farklı). Çözülemeyen/geçersiz bir öğe sessizce atlanır, isteğin geri kalanını etkilemez. |
 | `requested_by` | opsiyonel | Tuning webhook'uyla aynı davranış: SOC Tracker'daki kullanıcı adıyla eşleşirse `reporter` o kullanıcı olur, eşleşmezse `reporter` genel `"XSOAR Entegrasyonu"` etiketine düşer — hiçbir istek bu yüzden reddedilmez. |
 
+### Bölüm Metninde Biçimlendirme (Rich Text)
+
+`sections[].text` alanı sınırlı bir HTML tag kümesini destekler — bunlar
+sunucu tarafında `sanitize_rich_text()` (`app.py`) ile filtrelenir, başka
+HİÇBİR tag veya öznitelik (attribute) korunmaz:
+
+| Tag | Anlamı |
+|-----|--------|
+| `<b>` | Kalın |
+| `<i>` | İtalik |
+| `<u>` | Altı çizili |
+| `<code>` | Satır içi kod |
+| `<pre>` | Kod bloğu |
+| `<br>` | Satır sonu |
+
+Örnek:
+```json
+"text": "İstasyon izole edildi: <code>Invoke-WebRequest</code> ile kötü amaçlı payload indirilmiş.<br>Komut: <pre>certutil -decode a.txt a.exe</pre>"
+```
+
+Gerçek `\n` satır sonu karakterleri de desteklenir (görüntüde `<br>` ile
+aynı etkiyi yapar) — `<br>` özellikle JSON string içine gerçek newline
+gömmenin zahmetli olduğu playbook/otomasyon script'leri için sunulur.
+Yukarıdaki tag'ler DIŞINDA gönderilen her şey (örn. `<script>`, `<img>`,
+herhangi bir öznitelik) sessizce süzülür/kaçırılır — istek reddedilmez,
+sadece o kısım düz metne döner. Bölüm **başlığı** (`heading`) bu
+biçimlendirmeyi desteklemez, düz metin olarak kalır. Tuning webhook'unun
+`analyst_comment` alanı da bu kapsamın dışındadır, düz metin olarak
+saklanmaya devam eder.
+
 > **İstek boyutu limiti:** Sunucu genelinde tüm isteklerde `MAX_CONTENT_LENGTH = 10MB` sınırı var (`app.py`). Base64 kodlama boyutu ~%33 şişirdiği için 10MB'lık bir istekte gerçekçi olarak birkaç-birkaç on görsel sığar, 50 değil — 50 öğe sınırı sadece bir üst tavan, hedef değil. Limit aşılırsa Flask `413` döner (JSON değil, düz HTML gövdeli); yukarıdaki `send_incident_report()` bunu `resp.json()` başarısız olursa ham metne düşerek zaten güvenli şekilde ele alıyor. Çok sayıda görsel varsa ana çağrıda 1-2 kritik görseli gönderip kalanını aşağıdaki "Case'e Sonradan Görsel Ekleme" uç noktasıyla ayrı ayrı eklemek daha güvenilir.
 
 Eksik zorunlu alan varsa `400` ve hangi alan(lar)ın eksik olduğunu belirten
@@ -145,7 +175,9 @@ bir hata döner.
   `sections` ve `images` alanları DB'de TEXT kolon olarak tutulduğu için
   yanıtta dizi değil, JSON-encode edilmiş STRING olarak döner (örn.
   `"sections": "[{\"heading\": ...}]"`) — playbook bu alanları okuyup bir
-  şey yapacaksa ikinci bir `json.loads()` gerekir.
+  şey yapacaksa ikinci bir `json.loads()` gerekir. Dönen `text` değeri
+  gönderilen ham girdi değil, yukarıdaki izin listesinden geçmiş,
+  ZATEN sanitize edilmiş halidir.
 - **Mükerrer case koruması:** Tuning'le aynı kural — gönderilen
   `xsoar_case_id` için zaten aktif (`Kapandı` olmayan) bir olay raporu
   varsa yeni kayıt açılmaz, `409` + `{"existing_id": ..., "duplicate": true}`

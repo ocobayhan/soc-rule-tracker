@@ -1,6 +1,8 @@
 """Threat Hunting (threat_hunt_requests) module — same shape as
 test_tune.py, adapted for this module's field names and status set
 (docs/PROGRESS.md, "Faz 2 devamı")."""
+import json
+
 from tests.conftest import login
 
 
@@ -148,3 +150,24 @@ class TestApprovalPipeline:
 
         resp = client.post(f"/api/hunt/{hunt_id}/approve-result", json={})
         assert resp.status_code == 403
+
+
+class TestRichTextSanitization:
+    """update_hunt() runs scope/findings_items[].text through
+    sanitize_rich_text() (docs/PROGRESS.md, "Zengin Metin Biçimlendirme")
+    — allowed tags survive, disallowed ones don't."""
+
+    def test_scope_and_finding_text_are_sanitized(self, admin_client):
+        created = _create_hunt(admin_client).get_json()
+        hunt_id = created["id"]
+        resp = admin_client.put(f"/api/hunt/{hunt_id}", json={
+            "scope": "<b>bold</b><script>alert(1)</script>",
+            "findings_items": [{"text": "<i>italic</i><img src=x onerror=alert(1)>", "image": None}],
+        })
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["scope"] == "<b>bold</b>alert(1)"
+        assert "<script" not in body["scope"]
+        findings = json.loads(body["findings_items"])
+        assert findings[0]["text"] == "<i>italic</i>"
+        assert "onerror" not in findings[0]["text"]

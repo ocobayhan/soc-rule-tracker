@@ -163,3 +163,27 @@ class TestXsoarIncidentReportWebhook:
         images = jsonlib.loads(resp.get_json()["images"])
         assert len(images) == 1
         assert images[0]["filename"].endswith(".png")
+
+    def test_section_text_is_sanitized_against_stored_xss(self, client):
+        """This is the only unauthenticated-by-session write path (bkz.
+        docs/PROGRESS.md, "Zengin Metin Biçimlendirme") — highest-value
+        automated check for the sanitizer's real attack surface."""
+        resp = client.post(
+            "/api/integrations/xsoar/incident-report",
+            json=self._payload(
+                xsoar_case_id="PYTEST-INC-WEBHOOK-XSS",
+                sections=[{
+                    "heading": "Özet",
+                    "text": "<script>alert(1)</script><img src=x onerror=alert(1)>kalın: <b>ok</b>",
+                }],
+            ),
+            headers=AUTH_HEADER,
+        )
+        assert resp.status_code == 201
+        import json as jsonlib
+        sections = jsonlib.loads(resp.get_json()["sections"])
+        text = sections[0]["text"]
+        assert "<script" not in text
+        assert "onerror" not in text
+        assert "<img" not in text
+        assert "<b>ok</b>" in text

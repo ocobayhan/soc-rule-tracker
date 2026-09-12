@@ -102,6 +102,64 @@ function esc(str) {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// ---------------------------------------------------------------------------
+// Zengin Metin (Rich Text) araç çubuğu — Threat Hunting/Olay Raporu prose
+// alanları için (bkz. docs/PROGRESS.md, "Zengin Metin Biçimlendirme").
+// Saklanan/render edilen tag'ler backend'in sanitize_rich_text() izin
+// listesiyle birebir aynı olmalı: b/i/u/code/pre/br, hiç öznitelik yok.
+// ---------------------------------------------------------------------------
+const RICH_TEXT_TAGS = {
+  b: ["<b>", "</b>"], i: ["<i>", "</i>"], u: ["<u>", "</u>"],
+  code: ["<code>", "</code>"], pre: ["<pre>", "</pre>"],
+};
+
+function richToolbarHtml() {
+  return `<div class="rt-toolbar">
+    <button type="button" class="rt-btn" title="Kalın" onclick="wrapSelection(this,'b')"><b>B</b></button>
+    <button type="button" class="rt-btn" title="İtalik" onclick="wrapSelection(this,'i')"><i>I</i></button>
+    <button type="button" class="rt-btn" title="Altı çizili" onclick="wrapSelection(this,'u')"><u>U</u></button>
+    <button type="button" class="rt-btn mono" title="Satır içi kod" onclick="wrapSelection(this,'code')">&lt;/&gt;</button>
+    <button type="button" class="rt-btn mono" title="Kod bloğu" onclick="wrapSelection(this,'pre')">{ }</button>
+  </div>`;
+}
+
+/** Toolbar HER ZAMAN kontrol ettiği <textarea>'nın hemen bir önceki DOM
+ * kardeşi olarak eklenir — sıfır ID/registry gerektirmeyen basit bir
+ * sözleşme (bkz. plan). Seçili metni etiketle sarar; seçim yoksa imleci
+ * etiketlerin arasına bırakır. Gerçek bir "input" event'i tetikleyerek
+ * textarea'nın zaten sahip olduğu oninput= veri-bağlamasını ve global
+ * autoGrow dinleyicisini (satır 155 civarı) değiştirmeden yeniden çalıştırır. */
+function wrapSelection(btn, tag) {
+  const toolbar = btn.closest(".rt-toolbar");
+  const ta = toolbar ? toolbar.nextElementSibling : null;
+  if (!ta || ta.tagName !== "TEXTAREA") return;
+  const [OPEN, CLOSE] = RICH_TEXT_TAGS[tag];
+  const start = ta.selectionStart, end = ta.selectionEnd, val = ta.value;
+  ta.value = val.slice(0, start) + OPEN + val.slice(start, end) + CLOSE + val.slice(end);
+  ta.dispatchEvent(new Event("input", { bubbles: true }));
+  ta.focus();
+  const hadSelection = end > start;
+  const newPos = hadSelection ? end + OPEN.length : start + OPEN.length;
+  ta.setSelectionRange(start + OPEN.length, newPos);
+}
+
+/** 3 sabit Hunt Raporu textarea'sı için — modal her yeniden açıldığında
+ * ikinci kez eklenmesin diye `_pasteReady` ile birebir aynı idempotent
+ * guard (`_rtReady`) kullanır (bkz. setupPaste). Dinamik liste (Bulgu/
+ * MITRE/Öneri/Zafiyet/Olay bölümü) textarea'ları her render'da innerHTML
+ * ile sıfırdan üretildiği için ayrı bir guard'a gerek yok — toolbar'ları
+ * doğrudan kendi composeHtml template string'lerine gömülü. */
+function setupRichToolbar(textareaId) {
+  const el = document.getElementById(textareaId);
+  if (!el || el._rtReady) return;
+  el._rtReady = true;
+  el.insertAdjacentHTML("beforebegin", richToolbarHtml());
+}
+function setupAllRichToolbars() {
+  ["report-hunt-scope", "report-hunt-affected-assets", "report-hunt-detection-detail"]
+    .forEach(setupRichToolbar);
+}
+
 /** Arama/filtre karşılaştırmaları için küçük harfe çevirme. Sadece Türkçe
  * büyük noktalı İ (U+0130) için hedefli düzeltme yapar — düz `.toLowerCase()`
  * bunu "i" + ayrı bir kombine nokta karakterine ayırıyor, düz "istanbul" arama
@@ -2997,6 +3055,7 @@ function renderHuntMitreEntries() {
     const body = editing
       ? `<div class="form-group" style="margin-top:8px">
           <label class="form-label">Yöntem Notu</label>
+          ${richToolbarHtml()}
           <textarea class="form-input form-textarea"
             placeholder="Bu teknikle ilgili bulgular, araçlar, gözlemler…"
             oninput="updateHuntMitreMethod(${i},this.value)">${esc(e.method)}</textarea>
@@ -3006,7 +3065,7 @@ function renderHuntMitreEntries() {
           <button type="button" class="btn btn-primary" onclick="confirmHuntMitreMethod()">Kaydet</button>
         </div>`
       : `<div class="settled-row" style="margin-top:6px">
-          <div class="settled-row-body">${e.method ? esc(e.method) : `<span class="settled-row-empty">Yöntem notu eklenmedi</span>`}</div>
+          <div class="settled-row-body">${e.method ? e.method : `<span class="settled-row-empty">Yöntem notu eklenmedi</span>`}</div>
           <div class="settled-row-actions">
             <button type="button" class="btn-icon success" title="Düzenle" onclick="editHuntMitreMethod(${i})">&#9998;</button>
           </div>
@@ -3200,9 +3259,10 @@ function renderRecommendations() {
     editFn: "editRecommendation", removeFn: "removeRecommendation",
     composeHtml: `<div class="form-group">
       <label class="form-label">Öneri Metni</label>
+      ${richToolbarHtml()}
       <textarea class="form-input form-textarea" placeholder="Öneri maddesi…" oninput="_huntRecommendations[${i}]=this.value">${esc(v)}</textarea>
     </div>`,
-    settledHtml: v ? esc(v) : `<span class="settled-row-empty">Boş öneri</span>`,
+    settledHtml: v ? v : `<span class="settled-row-empty">Boş öneri</span>`,
   })).join("");
   autoGrowAll(list);
 }
@@ -3240,9 +3300,10 @@ function renderVulnerabilities() {
     editFn: "editVulnerability", removeFn: "removeVulnerability",
     composeHtml: `<div class="form-group">
       <label class="form-label">Zafiyet Metni</label>
+      ${richToolbarHtml()}
       <textarea class="form-input form-textarea" placeholder="Güvenlik açığı…" oninput="_huntVulnerabilities[${i}]=this.value">${esc(v)}</textarea>
     </div>`,
-    settledHtml: v ? esc(v) : `<span class="settled-row-empty">Boş madde</span>`,
+    settledHtml: v ? v : `<span class="settled-row-empty">Boş madde</span>`,
   })).join("");
   autoGrowAll(list);
 }
@@ -3290,13 +3351,14 @@ function renderFindings() {
       <div class="mitre-entry-header">
         <span style="font-size:12px;font-weight:600;color:var(--text-2)">${i + 1}. Bulgu</span>
       </div>
+      ${richToolbarHtml()}
       <textarea class="form-input form-textarea" style="margin-top:6px"
         placeholder="Bu bulgunun açıklaması…"
         oninput="_huntFindings[${i}].text=this.value"
         onpaste="handleFindingPaste(event, ${i})">${esc(f.text)}</textarea>
       <div id="finding-preview-${i}" class="paste-preview-area"></div>`,
     settledHtml: (f.text || f.image)
-      ? `${f.text ? esc(f.text) : ""}${f.image ? `<div style="margin-top:6px"><img class="paste-thumb" src="/static/uploads/${f.image}" onclick="openLightbox('/static/uploads/${f.image}')" title="Büyütmek için tıklayın"/></div>` : ""}`
+      ? `${f.text ? f.text : ""}${f.image ? `<div style="margin-top:6px"><img class="paste-thumb" src="/static/uploads/${f.image}" onclick="openLightbox('/static/uploads/${f.image}')" title="Büyütmek için tıklayın"/></div>` : ""}`
       : `<span class="settled-row-empty">Boş bulgu</span>`,
   })).join("");
   _huntFindings.forEach((_, i) => renderFindingPreview(i));
@@ -3378,6 +3440,7 @@ async function openHuntReportModal(id) {
   let r = huntRows.find(x => x.id === id); if (!r) return;
   await loadMitreData();
   setupAllPaste();
+  setupAllRichToolbars();
   // Fetch linked_uc_id — not in list cache, computed by single-item endpoint
   try { const fresh = await apiFetch(`/api/hunt/${id}`); r = { ...r, linked_uc_id: fresh.linked_uc_id }; } catch {}
 
@@ -3603,7 +3666,7 @@ async function openHuntDetail(id) {
           <span class="hp-card-label">${secnum()} · Hedef &amp; Kapsam</span>
           ${envList.map(e => `<span class="hp-tag mono">${esc(e)}</span>`).join("")}
         </div>
-        <div class="hp-card-body">${esc(r.scope)}</div>
+        <div class="hp-card-body">${r.scope}</div>
         ${r.scope_image ? detailImgRow("Görsel", [r.scope_image]) : ""}
       </div>` : "";
 
@@ -3614,7 +3677,7 @@ async function openHuntDetail(id) {
           ${mitreEntries.map(e => `<span class="hp-tag mono">${esc(e.id)} · ${esc(e.name)}</span>`).join("")}
         </div>
         ${mitreEntries.filter(e => e.method).map(e => `
-          <div class="hp-code-block"><strong class="mono">${esc(e.id)}</strong> <span class="text-muted">${esc(e.tactic)}</span><br>${esc(e.method)}</div>
+          <div class="hp-code-block"><strong class="mono">${esc(e.id)}</strong> <span class="text-muted">${esc(e.tactic)}</span><br>${e.method}</div>
         `).join("")}
       </div>` : "";
 
@@ -3629,7 +3692,7 @@ async function openHuntDetail(id) {
           <div class="hp-list-row">
             <span class="hp-list-idx mono">${String(i+1).padStart(2,"0")}</span>
             <div style="min-width:0">
-              ${f.text ? `<div class="hp-card-body" style="color:var(--text-1);font-size:14px">${esc(f.text)}</div>` : ""}
+              ${f.text ? `<div class="hp-card-body" style="color:var(--text-1);font-size:14px">${f.text}</div>` : ""}
               ${f.image ? detailImgRow("", [f.image]) : ""}
             </div>
           </div>`).join("")
@@ -3637,7 +3700,7 @@ async function openHuntDetail(id) {
         ${iocList.length ? `<div class="hp-row-label" style="margin:14px 0 8px;font-size:12px">IOC Listesi</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">${iocList.map(v => `<span class="hp-tag mono">${esc(v)}</span>`).join("")}</div>` : ""}
         ${r.affected_assets ? `<div class="hp-row-label" style="margin-bottom:8px;font-size:12px">Etkilenen Varlıklar</div>
-          ${detailRow("", r.affected_assets)}${r.affected_assets_image ? detailImgRow("Görsel", [r.affected_assets_image]) : ""}` : ""}
+          <div class="detail-row"><span class="detail-label"></span><span class="detail-value">${r.affected_assets}</span></div>${r.affected_assets_image ? detailImgRow("Görsel", [r.affected_assets_image]) : ""}` : ""}
       </div>` : "";
 
     const ucCard = r.linked_uc_id ? `
@@ -3650,7 +3713,7 @@ async function openHuntDetail(id) {
         <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Detection Önerisi</span></div>
         <div class="hp-row"><span class="hp-row-label">Öneriliyor mu?</span><span class="hp-row-val">${esc(r.detection_suggestion || "—")}</span></div>
         ${r.detection_suggestion === "Evet" ? `
-          ${r.detection_detail ? `<div class="hp-card-body" style="margin-top:8px">${esc(r.detection_detail)}</div>` : ""}
+          ${r.detection_detail ? `<div class="hp-card-body" style="margin-top:8px">${r.detection_detail}</div>` : ""}
           ${r.detection_detail_image ? detailImgRow("Görsel", [r.detection_detail_image]) : ""}
           ${ucCard}` : ""}
       </div>`;
@@ -3658,13 +3721,13 @@ async function openHuntDetail(id) {
     const vulnCard = vulnHtml ? `
       <div class="hp-card">
         <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Keşfedilen Güvenlik Açıkları</span></div>
-        ${vulnList.map((v, i) => `<div class="hp-list-row"><span class="hp-list-idx mono">${String(i+1).padStart(2,"0")}</span><span style="color:var(--text-1);font-size:14px">${esc(v)}</span></div>`).join("")}
+        ${vulnList.map((v, i) => `<div class="hp-list-row"><span class="hp-list-idx mono">${String(i+1).padStart(2,"0")}</span><span style="color:var(--text-1);font-size:14px">${v}</span></div>`).join("")}
       </div>` : "";
 
     const recCard = recHtml ? `
       <div class="hp-card">
         <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Güvenlik Önerileri</span></div>
-        ${recList.map((v, i) => `<div class="hp-list-row"><span class="hp-list-idx mono">${String(i+1).padStart(2,"0")}</span><span style="color:var(--text-1);font-size:14px">${esc(v)}</span></div>`).join("")}
+        ${recList.map((v, i) => `<div class="hp-list-row"><span class="hp-list-idx mono">${String(i+1).padStart(2,"0")}</span><span style="color:var(--text-1);font-size:14px">${v}</span></div>`).join("")}
         ${r.recommendations_image ? detailImgRow("Görsel", [r.recommendations_image]) : ""}
       </div>` : "";
 
@@ -3947,12 +4010,13 @@ function renderIncidentSections() {
       </div>
       <div class="form-group" style="margin-top:8px">
         <label class="form-label">Bölüm Metni</label>
+        ${richToolbarHtml()}
         <textarea class="form-input form-textarea"
           placeholder="Bölüm metni…"
           oninput="_incidentSections[${i}].text=this.value">${esc(s.text)}</textarea>
       </div>`,
     settledHtml: (s.heading || s.text)
-      ? `${s.heading ? `<div class="settled-row-title">${esc(s.heading)}</div>` : ""}${s.text ? esc(s.text) : ""}`
+      ? `${s.heading ? `<div class="settled-row-title">${esc(s.heading)}</div>` : ""}${s.text ? s.text : ""}`
       : `<span class="settled-row-empty">Boş bölüm</span>`,
   })).join("");
   autoGrowAll(list);
@@ -4193,7 +4257,7 @@ async function openIncidentDetail(id) {
         <span class="hp-card-kicker mono">BÖLÜM ${secnum()}</span>
         ${s.heading ? `<span class="hp-card-label">${esc(s.heading)}</span>` : ""}
       </div>
-      <div class="hp-card-body">${esc(s.text)}</div>
+      <div class="hp-card-body">${s.text}</div>
     </div>`).join("") : "";
 
   const assetsCard = assets.length ? `

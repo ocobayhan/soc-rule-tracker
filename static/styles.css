@@ -1240,6 +1240,44 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
   min-width: 0;
 }
 .detail-value.muted { color: var(--text-2); }
+/* Zengin Metin (Rich Text) render hedefi — sanitize_rich_text()'in izin
+   verdiği tag'ler (b/i/u/code/pre/br) bu ve .hp-card-body gibi containerlara
+   innerHTML olarak basılır (bkz. docs/PROGRESS.md, "Zengin Metin
+   Biçimlendirme"). Bare element seçicileri: bu tag'leri başka hiçbir
+   mekanizma üretmiyor. */
+pre {
+  background: var(--bg-tertiary);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  margin: 6px 0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.9em;
+}
+pre code { background: none; padding: 0; }
+.rt-toolbar { display: flex; gap: 4px; margin: 4px 0 6px; }
+.rt-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 26px; height: 26px;
+  background: none;
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0 6px;
+  font-size: 12px; color: var(--text-2); cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.rt-btn:hover { background: var(--bg-hover); color: var(--text-1); border-color: var(--border-md); }
+.rt-btn.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; }
 .detail-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .detail-img {
   max-width: 200px; max-height: 140px; border-radius: var(--r-sm);
@@ -1343,7 +1381,10 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 /* Olay Raporu bölüm başlıklarının "BÖLÜM N" kısmı — mono, .hp-card-label'dan
    ayrı (bkz. dc.html satır 950). */
 .hp-card-kicker { font-size: 11px; color: var(--text-3); }
-.hp-card-body { font-size: 15px; line-height: 1.55; color: var(--text-2); }
+.hp-card-body {
+  font-size: 15px; line-height: 1.55; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word;
+}
 .hp-tag {
   font-size: 11px;
   color: var(--text-1); background: var(--bg-active); border-radius: var(--r-sm); padding: 4px 9px;

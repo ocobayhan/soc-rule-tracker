@@ -1,9 +1,11 @@
 import hashlib
 import hmac
+import html
 import os
 import uuid
 from datetime import datetime, date, timedelta
 from functools import wraps
+from html.parser import HTMLParser
 from io import BytesIO
 
 from flask import (Flask, g, jsonify, redirect, render_template, request,
@@ -728,6 +730,65 @@ def sanitize_external_url(url):
     except ValueError:
         return None
     return url if scheme in ("http", "https") else None
+
+_RICH_TEXT_ALLOWED_TAGS = {"b", "i", "u", "code", "pre", "br"}
+
+class _RichTextParser(HTMLParser):
+    """Threat Hunting/Olay Raporu 'prose' alanları için tek ayrıştırma
+    mantığı — hem HTML-render modu (sanitize_rich_text) hem düz-metin modu
+    (strip_rich_text_for_plaintext, Excel için) burada uygulanır. Öznitelik
+    (attribute) hiçbir tag için asla okunmaz/yazılmaz. Regex tabanlı HTML
+    temizleme YAPILMIYOR (bilinen bir güvenlik anti-pattern'i) — bunun
+    yerine stdlib HTMLParser ile düzgün tokenize edilip yeniden kuruluyor."""
+    def __init__(self, plaintext=False):
+        super().__init__(convert_charrefs=True)
+        self.out = []
+        self.plaintext = plaintext
+
+    def _open(self, tag):
+        if tag == "br" and self.plaintext:
+            self.out.append("\n")
+        elif tag in _RICH_TEXT_ALLOWED_TAGS and not self.plaintext:
+            self.out.append(f"<{tag}>")
+
+    def handle_starttag(self, tag, attrs):    self._open(tag)
+    def handle_startendtag(self, tag, attrs): self._open(tag)
+
+    def handle_endtag(self, tag):
+        if tag in _RICH_TEXT_ALLOWED_TAGS and not self.plaintext:
+            self.out.append(f"</{tag}>")
+
+    def handle_data(self, data):
+        # HTML modda metin her zaman kaçırılır (allowlist dışı gömülü
+        # "<script>" gibi tag'lerin içeriği de HTMLParser tarafından yine
+        # handle_data'ya düşer ve burada zararsız görünür metne döner).
+        # Plaintext modda zaten hedef düz metin, kaçırma yok.
+        self.out.append(data if self.plaintext else html.escape(data, quote=False))
+
+def sanitize_rich_text(raw):
+    """Hunt/Incident 'prose' alanları için tek yazma-anı sanitizer'ı —
+    sanitize_external_url() ile aynı desen: yazma anında bir kere temizle,
+    render tarafı (detay view/PDF) bu string'e güvenir. Girdi ne olursa
+    olsun (toolbar'la eklenmiş tag, elle yazılmış tag, XSOAR webhook) SADECE
+    <b>/<i>/<u>/<code>/<pre>/<br> (özniteliksiz) korunur, gerisi kaçırılır."""
+    if not raw:
+        return ""
+    p = _RichTextParser(plaintext=False)
+    p.feed(str(raw))
+    p.close()
+    return "".join(p.out)
+
+def strip_rich_text_for_plaintext(raw):
+    """Excel gibi HTML render etmeyen hedefler için: zaten sanitize_rich_
+    text() ile temizlenmiş bir stringi düz metne çevirir — <br> -> "\\n",
+    diğer allowlist tag'leri düşer (iç metin korunur). İkinci bir güvenlik
+    süzgeci değildir, sadece biçim dönüşümüdür."""
+    if not raw:
+        return ""
+    p = _RichTextParser(plaintext=True)
+    p.feed(str(raw))
+    p.close()
+    return "".join(p.out)
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -1548,7 +1609,7 @@ def xsoar_create_incident_report():
         return jsonify({"error": f"Eksik alan(lar): {', '.join(missing)}"}), 400
 
     sections = [
-        {"heading": str(s.get("heading", "")).strip(), "text": str(s.get("text", "")).strip()}
+        {"heading": str(s.get("heading", "")).strip(), "text": sanitize_rich_text(str(s.get("text", "")).strip())}
         for s in data.get("sections", [])
         if isinstance(s, dict) and str(s.get("text", "")).strip()
     ]
@@ -1698,7 +1759,7 @@ def create_incident_report():
         return jsonify({"error": "Başlık zorunludur"}), 400
 
     sections = [
-        {"heading": str(s.get("heading", "")).strip(), "text": str(s.get("text", "")).strip()}
+        {"heading": str(s.get("heading", "")).strip(), "text": sanitize_rich_text(str(s.get("text", "")).strip())}
         for s in (data.get("sections") or [])
         if isinstance(s, dict) and (str(s.get("heading", "")).strip() or str(s.get("text", "")).strip())
     ]
@@ -1790,7 +1851,7 @@ def update_incident_report(item_id):
     sections_in = data.get("sections")
     if sections_in is not None:
         sections = [
-            {"heading": str(s.get("heading", "")).strip(), "text": str(s.get("text", "")).strip()}
+            {"heading": str(s.get("heading", "")).strip(), "text": sanitize_rich_text(str(s.get("text", "")).strip())}
             for s in sections_in
             if isinstance(s, dict) and (str(s.get("heading", "")).strip() or str(s.get("text", "")).strip())
         ]
@@ -2701,6 +2762,31 @@ def update_hunt(item_id):
             return _j.dumps(v) if isinstance(v, (list, dict)) else str(v)
         return row[key] or fallback
 
+    def jv_rich(key, fallback="[]", text_field=None):
+        """jv() ile aynı ama JSON liste içindeki serbest metin alan(lar)ını
+        sanitize_rich_text()'ten geçirir (bkz. Zengin Metin Biçimlendirme
+        planı) — text_field=None ise düz string listesi (Öneriler/
+        Zafiyetler), verilmişse dict listesi (findings_items[].text,
+        mitre_techniques[].method) sanitize edilir."""
+        import json as _j
+        v = data.get(key)
+        if v is None:
+            return row[key] or fallback
+        if isinstance(v, str):
+            try:
+                v = _j.loads(v)
+            except (ValueError, TypeError):
+                return fallback
+        if not isinstance(v, list):
+            return fallback
+        if text_field is None:
+            v = [sanitize_rich_text(x) if isinstance(x, str) else x for x in v]
+        else:
+            for item in v:
+                if isinstance(item, dict) and text_field in item:
+                    item[text_field] = sanitize_rich_text(item.get(text_field) or "")
+        return _j.dumps(v)
+
     # hunt_duration_hours: integer or None
     dur_raw = data.get("hunt_duration_hours")
     if dur_raw is not None and str(dur_raw).strip() != "":
@@ -2728,12 +2814,12 @@ def update_hunt(item_id):
     """, (
         hunt_new_id,
         sv("hunt_title"), sv("hunt_subject"), sv("requester"), sv("assigned_analyst"), sv("notes"), new_status,
-        sv("hunt_environment"), sv("scope"), nv("scope_image"),
-        jv("mitre_techniques"), sv("has_findings", "Hayır"),
-        sv("findings"), nv("findings_image"), jv("findings_items", "[]"), jv("ioc_list"), sv("affected_assets"), nv("affected_assets_image"), sv("severity"),
-        sv("detection_suggestion", "Hayır"), sv("detection_detail"), nv("detection_detail_image"),
-        sv("recommendations"), nv("recommendations_image"),
-        jv("discovered_vulnerabilities", "[]"),
+        sv("hunt_environment"), sanitize_rich_text(sv("scope")), nv("scope_image"),
+        jv_rich("mitre_techniques", text_field="method"), sv("has_findings", "Hayır"),
+        sv("findings"), nv("findings_image"), jv_rich("findings_items", "[]", text_field="text"), jv("ioc_list"), sanitize_rich_text(sv("affected_assets")), nv("affected_assets_image"), sv("severity"),
+        sv("detection_suggestion", "Hayır"), sanitize_rich_text(sv("detection_detail")), nv("detection_detail_image"),
+        jv_rich("recommendations", "[]"), nv("recommendations_image"),
+        jv_rich("discovered_vulnerabilities", "[]"),
         jv("related_requests"), sv("hunt_result"), sv("report_status", "Taslak"),
         hunt_duration_hours,
         hunt_created_at,
@@ -3291,19 +3377,24 @@ def export_data():
             ioc_txt  = ""
         try:
             vuln_list = _json.loads(gv(r, "discovered_vulnerabilities", "[]"))
-            vuln_txt  = "; ".join(vuln_list) if isinstance(vuln_list, list) else ""
+            vuln_txt  = "; ".join(strip_rich_text_for_plaintext(v) for v in vuln_list) if isinstance(vuln_list, list) else ""
         except Exception:
             vuln_txt  = ""
+        try:
+            rec_list = _json.loads(r["recommendations"] or "[]")
+            rec_txt  = "; ".join(strip_rich_text_for_plaintext(v) for v in rec_list) if isinstance(rec_list, list) else strip_rich_text_for_plaintext(r["recommendations"] or "")
+        except Exception:
+            rec_txt  = strip_rich_text_for_plaintext(r["recommendations"] or "")
         env_val = r["hunt_environment"] if "hunt_environment" in r.keys() and r["hunt_environment"] else (r["environment"] if "environment" in r.keys() else "")
         row = [r["id"], gv(r, "hunt_title") or r["hunt_subject"], r["hunt_subject"], env_val, display_name(r["requester"]),
                display_name(r["assigned_analyst"]) or "", r["status"],
                r["report_status"] or "", r["hunt_result"] or "",
                r["severity"] if "severity" in r.keys() else "",
                mitre_txt, r["findings"] or "", ioc_txt,
-               r["affected_assets"] if "affected_assets" in r.keys() else "",
-               r["scope"] or "",
-               (r["detection_suggestion"] or "") + ((" — " + r["detection_detail"]) if r["detection_detail"] else ""),
-               r["recommendations"] or "", vuln_txt, gv(r, "hunt_duration_hours"),
+               strip_rich_text_for_plaintext(r["affected_assets"]) if "affected_assets" in r.keys() else "",
+               strip_rich_text_for_plaintext(r["scope"] or ""),
+               (r["detection_suggestion"] or "") + ((" — " + strip_rich_text_for_plaintext(r["detection_detail"])) if r["detection_detail"] else ""),
+               rec_txt, vuln_txt, gv(r, "hunt_duration_hours"),
                fmt_date(r["created_at"]), fmt_date(r["started_at"]), fmt_date(r["completed_at"]),
                display_name(gv(r, "validated_by")), fmt_date(gv(r, "validated_at")), gv(r, "validation_note"),
                display_name(gv(r, "result_approved_by")), fmt_date(gv(r, "result_approved_at")), gv(r, "result_approval_note")]
@@ -3317,6 +3408,9 @@ def export_data():
     # Incident Reports şimdiye kadar Excel'de sadece KPI Özeti'ndeki 2
     # toplam sayı olarak vardı, tek tek kayıtlar hiç yoktu (2026-09-08) —
     # diğer 3 modülle tutarlılık için eklendi.
+    # TODO: `sections` (bölüm başlığı+metni) hâlâ export edilmiyor — yeni
+    # sütun/şema kararı gerektiren ayrı bir kapsam (bkz. "Zengin Metin
+    # Biçimlendirme" planı, bilinçli olarak bu turda eklenmedi).
     ws_incident = wb.create_sheet("Olay Raporları")
     incident_cols = ["ID", "Başlık", "Case No", "Ortam", "Raporlayan", "Durum",
                       "Etkilenen Varlıklar", "Talep Tarihi",

@@ -1,6 +1,8 @@
 """Olay Raporu (incident_reports) module — B1 regression test (missing
 delete-authorization check, docs/PROGRESS.md "Güvenlik Denetimi") plus the
 4-state approval pipeline (docs/REQUIREMENTS.md, docs/rbac.md)."""
+import json
+
 from tests.conftest import login
 
 
@@ -110,3 +112,31 @@ class TestApprovalPipeline:
 
         resp = admin_client.put(f"/api/incident-reports/{item_id}", json={"title": "hacked"})
         assert resp.status_code == 400
+
+
+class TestRichTextSanitization:
+    """sections[].text runs through sanitize_rich_text() on both create and
+    update (docs/PROGRESS.md, "Zengin Metin Biçimlendirme") — allowed tags
+    survive, disallowed ones (and their attributes) don't. heading stays
+    untouched (out of scope, plain text)."""
+
+    def test_create_sanitizes_section_text_not_heading(self, admin_client):
+        resp = _create_incident(admin_client, sections=[
+            {"heading": "<b>should stay literal</b>", "text": "<u>ok</u><script>alert(1)</script>"},
+        ])
+        assert resp.status_code == 201
+        body = resp.get_json()
+        sections = json.loads(body["sections"])
+        assert sections[0]["text"] == "<u>ok</u>alert(1)"
+        assert "<script" not in sections[0]["text"]
+        assert sections[0]["heading"] == "<b>should stay literal</b>"
+
+    def test_update_sanitizes_section_text(self, admin_client):
+        created = _create_incident(admin_client).get_json()
+        resp = admin_client.put(f"/api/incident-reports/{created['id']}", json={
+            "sections": [{"heading": "x", "text": "<code>rm -rf /</code><img src=x onerror=alert(1)>"}],
+        })
+        assert resp.status_code == 200
+        sections = json.loads(resp.get_json()["sections"])
+        assert sections[0]["text"] == "<code>rm -rf /</code>"
+        assert "onerror" not in sections[0]["text"]

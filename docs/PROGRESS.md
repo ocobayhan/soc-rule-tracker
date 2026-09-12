@@ -2963,6 +2963,97 @@ genişletilecek" diye not edilen işi seçti: `test_tune_lifecycle.py`
 `tests_e2e/test_incident_lifecycle.py`, `tests_e2e/test_dashboard_and_audit.py`
 (hepsi yeni) eklendi.
 
+### Zengin Metin (Rich Text) Biçimlendirme — Threat Hunting & Olay Raporu (2026-09-13)
+
+Kullanıcı Hunt Raporu ve Olay Raporu'nu yazarken kalın/italik/altı çizili/
+satır içi kod/kod bloğu kullanmak istedi; ayrıca XSOAR webhook'undan gelen
+metnin de aynı şekilde biçimlendirilebilmesini istedi. Araştırma, bugün
+hiçbir yerde (ne manuel girişte ne XSOAR'da) böyle bir standardın var
+olmadığını doğruladı — bu tur standardı tanımladı: **Markdown değil,
+izin-listeli (allowlist) ham HTML tag'leri** (`<b>` `<i>` `<u>` `<code>`
+`<pre>` `<br>`, hiç öznitelik yok). Gerekçe: XSOAR tarafında bir otomasyon
+script'i için doğru Markdown kaçışı yapmaktansa string birleştirmek çok
+daha kolay; yeni bağımlılık gerekmiyor (stdlib `html.parser.HTMLParser`);
+tek, statik bir izin listesiyle güvenlik yüzeyi küçük kalıyor.
+
+- [x] **Sanitizer (`app.py`):** `sanitize_rich_text()`/`strip_rich_text_
+  for_plaintext()` — `_RichTextParser(HTMLParser)` tabanlı, regex DEĞİL
+  (bilinen bir anti-pattern). `sanitize_external_url()` ile aynı desen:
+  yazma anında bir kere temizle, render tarafı buna güvenir. 4 yazma
+  yoluna bağlandı: `update_hunt()` (`scope`/`affected_assets`/
+  `detection_detail`/`findings_items[].text`/`mitre_techniques[].method`/
+  `recommendations[]`/`discovered_vulnerabilities[]` — yeni `jv_rich()`
+  helper'ı), `create_incident_report()`, `update_incident_report()`,
+  `xsoar_create_incident_report()` (`sections[].text`). Tune'a ve Use-
+  Case'e, bölüm **başlığına** ve Hunt'ın `#hunt-modal` (rapor değil, talep
+  formu) alanlarına bilinçli olarak dokunulmadı. Threat Hunting'in bugün
+  hiç XSOAR webhook'u yok, o yüzden Hunt tarafında özellik sadece manuel
+  girişte devrede.
+- [x] **Toolbar (`static/app.js`):** `richToolbarHtml()`/`wrapSelection()`
+  — `<textarea>`'lar contenteditable'a çevrilmedi (mevcut görsel-yapıştırma
+  özelliği bozulmasın diye), toolbar her zaman kontrol ettiği textarea'nın
+  DOM'da bir önceki kardeşi olacak şekilde eklenip seçili metni
+  `textarea.selectionStart/End` ile sarıyor, gerçek bir `input` event'i
+  tetikleyerek mevcut veri-bağlama/autoGrow kodunu değiştirmeden yeniden
+  çalıştırıyor. 3 sabit Hunt Raporu alanına + 5 dinamik listeye (Bulgu,
+  MITRE Yöntem Notu, Öneri, Zafiyet, Olay bölüm metni) eklendi.
+- [x] **Render:** `openHuntDetail()`/`openIncidentDetail()`'deki ilgili
+  ~8 `esc()` çağrısı, veri zaten yazma anında sanitize edildiği için ham
+  HTML olarak basılacak şekilde değiştirildi (bazı `esc()` çağrıları
+  sadece bir truthy-kontrolü için hesaplanıp asla DOM'a basılmadığı
+  doğrulanıp DOKUNULMADI). `.hp-card-body`'ye eksik olan `white-space:
+  pre-wrap` eklendi (yoksa gerçek satır sonları görsel olarak kayboluyordu
+  — `<pre>`/`<br>`'dan bağımsız, önceden var olan bir eksiklik). `static/
+  styles.css`'e bare `pre`/`code` render kuralları + `.rt-toolbar`/
+  `.rt-btn` eklendi.
+- [x] **PDF şablonları:** `hunt_report_print.html`/`incident_report_
+  print.html`'de ilgili alanlara `| safe` eklendi (bu kod tabanında İLK
+  `|safe` kullanımı — veri zaten sanitize edildiği için güvenli) + her
+  ikisinin kendi `<style>` bloğuna `pre`/`code` kuralı (PDF'te scroll
+  olmadığı için sarma var, overflow yok).
+- [x] **Excel export:** `strip_rich_text_for_plaintext()` ile ilgili
+  hücreler düz metne çevrildi; bu sırada **mevcut bir hata da düzeltildi**
+  — `recommendations` bugüne kadar ham JSON string olarak export
+  ediliyordu (`mitre_txt`/`ioc_txt`/`vuln_txt` gibi `json.loads()`+join
+  YAPILMIYORDU), zaten dokunulacak satır olduğu için aynı desene çevrildi.
+  Olay Raporu `sections`'ının Excel'e hiç export edilmediği (önceden de
+  öyleydi) bilinçli olarak bu turda EKLENMEDİ, kod içine `# TODO` notu
+  bırakıldı.
+- [x] `docs/xsoar_integration.md`'ye yeni bir alt-başlık eklendi: `sections
+  [].text` için desteklenen 6 tag + örnek + "allowlist dışı her şey
+  sessizce süzülür, istek reddedilmez" notu.
+- [x] **Doğrulandı (pytest + canlı tarayıcı + gerçek PDF/Excel):**
+  - `tests/test_rich_text.py` (yeni, 10 test): sanitizer'ın allowlist/
+    script-kaçırma/entity-round-trip/malformed-tag/plaintext davranışları.
+  - `tests/test_hunt.py`, `tests/test_incident.py`'a birer entegrasyon
+    testi (izinli+izinsiz tag karışık gönderilip GET'te doğrulandı).
+  - `tests/test_xsoar_webhook.py`'a `<script>`/`<img onerror>` içeren
+    kötü niyetli bir payload'ın webhook üzerinden (oturum-kimlik-
+    doğrulamasız tek dış erişilebilir yazma yolu) sanitize edildiğini
+    doğrulayan test.
+  - `pytest tests/ -q` → **84/84 yeşil** (70→84, +14 yeni test).
+  - Canlı tarayıcıda: toolbar'ın 3 butonu (Kalın/İtalik/Satır içi kod) hem
+    statik Hunt alanında hem dinamik olmayan bir Incident bölümünde
+    denendi, doğru sarıldığı ve detay view'da gerçekten render olduğu
+    (literal tag değil) doğrulandı; çok satırlı metnin göründüğü teyit
+    edildi (`.hp-card-body` düzeltmesi). Gerçek bir kötü niyetli payload
+    doğrudan XSOAR webhook'undan (doğru API anahtarıyla) gönderilip
+    hem API yanıtında hem `openIncidentDetail()` render'ında `<script>`/
+    `onerror`'ın tamamen temizlendiği, `<b>ok</b>`'un kalın render
+    olduğu, konsolda hiç alert/hata çıkmadığı doğrulandı. Gerçek bir
+    Hunt'ı "Tamamlandı"ya taşıyıp PDF'i indirip **WeasyPrint çıktısını
+    doğrudan okuyarak** kalın/kod render'ının PDF'te de doğru göründüğü
+    teyit edildi. Excel export indirilip "Hedef & Kapsam" hücresinin
+    tag'siz, `<br>`'siz temiz düz metin gösterdiği doğrulandı. Test
+    kayıtları (Hunt #2, Incident #30/#31) temizlendi, sidebar sayaçları
+    test öncesi haline (Tuning 2, UC 2, Hunt 1) döndüğü teyit edildi.
+
+`app.py`, `static/app.js`, `static/styles.css`, `templates/hunt_report_
+print.html`, `templates/incident_report_print.html`, `templates/index.html`
+(cache-buster `?v=`), `docs/xsoar_integration.md`, `tests/test_rich_text.py`
+(yeni), `tests/test_hunt.py`, `tests/test_incident.py`, `tests/
+test_xsoar_webhook.py` güncellendi.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

@@ -103,6 +103,19 @@ table.info-table tr:last-child td { border-bottom: 1px solid var(--border); }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 6px; padding: 10px 12px; margin-top: 4px;
 }
+/* Zengin Metin render hedefi (bkz. app.py sanitize_rich_text()) — scroll
+   yok (PDF'te olamaz), sarma var ki kod bloğu sayfa kenarını taşırmasın. */
+pre {
+  background: #fff; border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; margin: 4px 0;
+  font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  font-size: 9.5px; white-space: pre-wrap; word-break: break-word;
+}
+code {
+  font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  background: #fff; border-radius: 4px; padding: 0 4px; font-size: 0.92em;
+}
+pre code { background: none; padding: 0; }
 .tag {
   display: inline-block; font-size: 9px;
   background: rgba(0,7,205,0.07); color: var(--accent);
@@ -239,7 +252,7 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
   {% if r.scope %}
   <div class="section">
     <div class="section-title">{{ secnum() }} · Hedef &amp; Kapsam</div>
-    <div class="text-block">{{ r.scope }}</div>
+    <div class="text-block">{{ r.scope | safe }}</div>
     {% if scope_image_uri %}<img class="report-img" src="{{ scope_image_uri }}"/>{% endif %}
   </div>
   {% endif %}
@@ -255,7 +268,7 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
           <td class="mono">{{ e.id }}</td>
           <td>{{ e.name }}</td>
           <td class="mono" style="color:var(--text-2)">{{ e.tactic }}</td>
-          <td>{{ e.method or "—" }}</td>
+          <td>{{ (e.method or "—") | safe }}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -269,7 +282,7 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
       {% for f in finding_items %}
       <div class="finding-block">
         <div class="finding-num mono">{{ "%02d"|format(loop.index) }}</div>
-        {% if f.text %}<div class="text-block">{{ f.text }}</div>{% endif %}
+        {% if f.text %}<div class="text-block">{{ f.text | safe }}</div>{% endif %}
         {% if f.image_uri %}<img class="report-img" src="{{ f.image_uri }}"/>{% endif %}
       </div>
       {% endfor %}
@@ -286,7 +299,7 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
       <div class="row"><span class="row-label">IOC Listesi</span><span class="row-value">{% for ioc in ioc_list %}<span class="tag mono">{{ ioc }}</span>{% endfor %}</span></div>
       {% endif %}
       {% if r.affected_assets %}
-      <div class="row"><span class="row-label">Etkilenen Varlıklar</span><span class="row-value">{{ r.affected_assets }}</span></div>
+      <div class="row"><span class="row-label">Etkilenen Varlıklar</span><span class="row-value">{{ r.affected_assets | safe }}</span></div>
       {% endif %}
       {% if affected_assets_image_uri %}<img class="report-img" src="{{ affected_assets_image_uri }}"/>{% endif %}
     {% endif %}
@@ -296,7 +309,7 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
     <div class="section-title">{{ secnum() }} · Detection Önerisi</div>
     <div class="row"><span class="row-label">Öneriliyor mu?</span><span class="row-value">{{ r.detection_suggestion }}</span></div>
     {% if r.detection_suggestion == "Evet" %}
-      {% if r.detection_detail %}<div class="text-block">{{ r.detection_detail }}</div>{% endif %}
+      {% if r.detection_detail %}<div class="text-block">{{ r.detection_detail | safe }}</div>{% endif %}
       {% if detection_detail_image_uri %}<img class="report-img" src="{{ detection_detail_image_uri }}"/>{% endif %}
       {% if linked_uc %}
       <div class="uc-card">
@@ -311,7 +324,7 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
   <div class="section section-flow">
     <div class="section-title">{{ secnum() }} · Keşfedilen Güvenlik Açıkları</div>
     <ol class="list-block">
-      {% for v in vulnerabilities %}<li>{{ v }}</li>{% endfor %}
+      {% for v in vulnerabilities %}<li>{{ v | safe }}</li>{% endfor %}
     </ol>
   </div>
   {% endif %}
@@ -320,7 +333,7 @@ ol.list-block li { padding: 2px 0; break-inside: avoid; }
   <div class="section section-flow">
     <div class="section-title">{{ secnum() }} · Güvenlik Önerileri</div>
     <ol class="list-block">
-      {% for rec in recommendations %}<li>{{ rec }}</li>{% endfor %}
+      {% for rec in recommendations %}<li>{{ rec | safe }}</li>{% endfor %}
     </ol>
     {% if recommendations_image_uri %}<img class="report-img" src="{{ recommendations_image_uri }}"/>{% endif %}
   </div>
