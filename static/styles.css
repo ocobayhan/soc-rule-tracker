@@ -1296,6 +1296,12 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 }
 .detail-back:hover { color: var(--text-1); }
 .detail-page-id { font-size: 13px; color: var(--text-3); margin: 8px 0 0; }
+/* Olay Raporu'nda kimlik satırı (OLAY #X · Case #Y + durum rozeti)
+   mockup'ta başlığın ÜSTÜNDE tek satırda — Hunt'ta ise başlığın ALTINDA
+   tek başına kalıyor (iki modül mockup'ta da farklı, bkz. dc.html
+   satır 624 vs 938-942). */
+.detail-page-kicker-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 10px; }
+.detail-page-kicker-row .detail-page-id { margin: 0; }
 .detail-page-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -1307,17 +1313,20 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 .detail-page-side { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 @media (min-width: 900px) { .detail-page-side { max-width: 340px; } }
 
-.hp-card { background: var(--bg-secondary); border: 0.5px solid var(--border-md); border-radius: var(--r-lg); padding: 28px; }
+.hp-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 28px; }
 .hp-card-side { padding: 24px; }
 .hp-card-hdr { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
 .hp-card-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-2); margin-right: auto; }
+/* Olay Raporu bölüm başlıklarının "BÖLÜM N" kısmı — mono, .hp-card-label'dan
+   ayrı (bkz. dc.html satır 950). */
+.hp-card-kicker { font-size: 11px; color: var(--text-3); }
 .hp-card-body { font-size: 15px; line-height: 1.55; color: var(--text-2); }
 .hp-tag {
   font-size: 11px;
   color: var(--text-1); background: var(--bg-active); border-radius: var(--r-sm); padding: 4px 9px;
 }
 .hp-code-block {
-  background: var(--bg); border-radius: var(--r); padding: 16px 18px; margin-top: 4px;
+  background: #000; border-radius: var(--r-lg); padding: 20px; margin-top: 4px;
   font-size: 13px;
   line-height: 1.6; color: var(--text-2); white-space: pre-wrap; word-break: break-word;
 }
@@ -1344,7 +1353,11 @@ th:hover .col-resize-handle { opacity: 1; background: var(--border-strong); }
 .hp-evidence:hover { border-color: var(--accent); }
 .hp-evidence-thumb { width: 36px; height: 26px; border-radius: 3px; background: var(--bg-active); flex: none; object-fit: cover; }
 .hp-evidence-label { font-size: 12px; color: var(--text-3); }
-.hp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Mockup'ta Onay kartının butonları yan yana değil, tam genişlik ve alt
+   alta (bkz. dc.html satır 756-760). */
+.hp-actions { display: flex; flex-direction: column; gap: 10px; }
+.hp-actions > * { width: 100%; justify-content: center; }
+.hp-actions-note { font-size: 13px; color: var(--text-2); margin: 0; }
 
 /* ============================================================ BÜYÜK DETAY MODALLERİ
    (Tune/UC — mockup'ın hasModal deseni: mono kicker + büyük başlık aynı

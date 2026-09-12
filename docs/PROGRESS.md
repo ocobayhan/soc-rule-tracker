@@ -2459,6 +2459,66 @@ karşılaştırıldı:
 
 `static/styles.css` (v12.9), `static/soc-theme-composio.css` değişti.
 
+### Takip (2026-09-12) — Hunt/Olay Raporu tam sayfa detayı: sayfa yerleşimi
+
+Kullanıcı bu kez 4 ekran görüntüsü verdi (Hunt detayı mockup+güncel, Olay
+Raporu detayı güncel+mockup) ve "sayfa yerleşim hatalarını görüp düzelt"
+dedi. `tema/SOC Tracker.dc.html`'in Hunt detay bloğunu (satır 619-765) ve
+Olay Raporu detay bloğunu (satır 934-1033) satır satır okuyup mevcut
+`openHuntDetail()`/`openIncidentDetail()` (app.js) ile karşılaştırdım.
+Bulunan somut farklar:
+
+- **Bölüm numaralarında gereksiz sıfır:** `secnum()` (her iki fonksiyonda
+  da) `.padStart(2,"0")` kullanıyordu → "01 · Hedef", mockup'ta Hunt için
+  düz "1 · Hedef". Hunt'ta düzeltildi (dikkat: bulgu/öneri/güvenlik-açığı
+  listelerinin İÇİNDEKİ madde numaraları — `hp-list-idx` — mockup'ta HÂLÂ
+  sıfırlı "01"/"02"; o kod satırlarına dokunulmadı, doğru haliyle kaldı).
+- **Olay Raporu'nun bölüm başlığı Hunt'tan FARKLI bir kalıp kullanıyor:**
+  Hunt "N · Başlık" tek span iken, mockup'ta Olay Raporu ayrı bir mono
+  "BÖLÜM N" kicker + ayrı büyük-harf başlık ikilisi (iki ayrı `<span>`,
+  bkz. dc.html satır 950-951) — biz ikisini de aynı `.hp-card-label`
+  içine "01 · Başlık" olarak basıyorduk. Yeni `.hp-card-kicker` class'ı
+  eklenip `openIncidentDetail()`'deki 3 bölüm başlığı (sections/assets/
+  images) buna göre ikiye ayrıldı.
+- **Olay Raporu'nda kimlik satırı YANLIŞ YERDEYDİ:** mockup'ta "OLAY-XXXX
+  · Case #XXXX" + durum rozeti başlığın ÜSTÜNDE tek satırda; bizde bu
+  satır (rozetsiz) başlığın ALTINDA duruyordu (Hunt'ın kendi kalıbı —
+  ki Hunt için bu doğruydu, mockup Hunt'ta da ID'yi başlığın altında
+  tutuyor, satır 624). Olay Raporu için yeni `.detail-page-kicker-row`
+  ile satır başlığın üstüne taşındı ve durum rozeti eklendi. (Mockup'ta
+  ayrıca bir "şiddet" rozeti de var ama incident_reports tablosunda
+  `severity` kolonu yok — bu Hunt'a özgü bir alan — sahte veri
+  uydurmamak için eklenmedi, bilinçli sınırlama.)
+- **En büyük fark — Hunt'ın "Onay" kartı, liste satırının küçük ikon
+  butonlarını (`huntActionBtns()`) yeniden kullanıyordu:** ekran
+  görüntüsünde görülen 3 küçük kare buton bu yüzdendi. Mockup'ta bu kart
+  tam-genişlik, etiketli, birincil/ikincil/ghost hiyerarşili butonlar
+  kullanıyor (Sonucu Onayla mavi dolgu / Revizyona Gönder outline / PDF
+  İndir ghost-link). Liste satırındaki kompakt ikon butonlarını BOZMADAN
+  (hâlâ `huntActionBtns()` kullanıyor), sadece tam sayfa detayı için аynı
+  durum dallanmasını etiketli tam-genişlik butonlarla tekrar eden yeni
+  bir `huntDetailActions()` fonksiyonu yazıldı — yeni `.btn-outline`/
+  `.btn-danger-outline` class'ları (önceki oturumdan) burada da işe
+  yaradı. `.hp-actions` CSS'i `flex-wrap` satırdan `flex-direction:
+  column` + `width:100%` çocuklara çekildi (mockup'ın dikey buton
+  yığını, dc.html satır 756-760) — Olay Raporu'nun Onay kartı zaten
+  düzgün etiketli butonlar kullanıyordu, sadece bu genel `.hp-actions`
+  düzeltmesinden otomatik faydalandı.
+- **Küçük ek düzeltmeler:** `.hp-card`/`.hp-card-side` border'ı (`0.5px
+  var(--border-md)` → `1px var(--border)`, önceki oturumlardaki aynı
+  desen); MITRE kod bloğu (`.hp-code-block`) zemini `var(--bg)`
+  (#0f0f0f) yerine mockup'ın `#000000`'ına, radius 8px→16px'e çekildi.
+- **Doğrulandı:** canlı tarayıcıda Hunt'ın mevcut TÜM durumları
+  (İnceleniyor/Tamamlandı/Reddedildi) ve Olay Raporu'nun mevcut durumu
+  (Kapandı) hatasız açıldı; Tamamlandı durumundaki Hunt'ın Onay kartı
+  artık tam-genişlik "PDF İndir" (mavi) + "Düzenle" (outline) + "Sil"
+  (kırmızı outline) gösteriyor; Olay Raporu'nun "BÖLÜM 1" kickeri mono
+  font + `#666666` ölçüldü; kimlik satırı artık başlığın üstünde rozetle
+  birlikte; MITRE verisi olan bir Hunt kaydında kod bloğu `rgb(0,0,0)`/
+  `16px` radius doğrulandı; konsol hatasız.
+
+`static/styles.css` (v13.0), `static/app.js` (v56) değişti.
+
 ### Faz P/R/S — Dashboard İş Listesi, Trend Grafikleri, Genel Arama (2026-07-20)
 
 Kullanıcının seçtiği üç iyileştirme (öneri #3/#4/#5), her biri ayrı fazda

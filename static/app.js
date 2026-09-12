@@ -1,5 +1,5 @@
 /* ============================================================
-   SOC Tracker — Frontend  v55
+   SOC Tracker — Frontend  v56
    ============================================================ */
 
 const IS_SETTINGS = !!document.getElementById("tab-settings");
@@ -2632,6 +2632,43 @@ function huntActionBtns(r) {
   return `${edit}${del}`;
 }
 
+/** Tam sayfa Hunt detayının "Onay" kartı için — huntActionBtns() ile AYNI
+ * durum dallanması, ama liste satırının küçük ikon butonları yerine
+ * mockup'ın tam-genişlik etiketli butonları (bkz. .hp-actions CSS). */
+function huntDetailActions(r) {
+  const isAdmin    = USER_ROLE === "admin" || USER_ROLE === "user" || USER_ROLE === "settings";
+  const isMyTask   = r.assigned_analyst === CURRENT_USER;
+  const isMyReport = r.requester === CURRENT_USER;
+  const canEdit    = isAdmin || isMyTask || isMyReport;
+
+  const edit = canEdit
+    ? `<button class="btn btn-outline" onclick="openHuntEditModal(${r.id})">Düzenle</button>` : "";
+  const del = isAdmin
+    ? `<button class="btn btn-danger-outline" onclick="deleteHunt(${r.id})">Sil</button>` : "";
+
+  if (r.status === STATUS_PENDING_VALIDATION && IS_SENIOR)
+    return `<button class="btn btn-primary" onclick="openValidateModal('hunt',${r.id})">Onayla / Reddet</button>${edit}${del}`;
+  if (r.status === STATUS_PENDING_VALIDATION)
+    return `${edit}${del}` || `<p class="hp-actions-note">Ön onay bekleniyor.</p>`;
+  if (r.status === "Açık")
+    return `<button class="btn btn-primary" onclick="openHuntClaimModal(${r.id})">Üstlen</button>${edit}${del}`;
+  if (r.status === "İnceleniyor") {
+    const canStart = (isAdmin || isMyTask) && !r.started_at;
+    const startBtn = canStart
+      ? `<button class="btn btn-primary" onclick="startHunt(${r.id})" style="background:var(--green)">▶ Başla</button>` : "";
+    const report = (isAdmin || isMyTask)
+      ? `<button class="btn btn-outline" onclick="openHuntReportModal(${r.id})">Rapor Yaz/Düzenle</button>` : "";
+    return `${startBtn}${report}${edit}${del}`;
+  }
+  if (r.status === STATUS_HUNT_RESULT_PENDING && IS_SENIOR)
+    return `<button class="btn btn-primary" onclick="openHuntResultModal(${r.id})">Sonucu Onayla</button>${edit}${del}`;
+  if (r.status === "Tamamlandı") {
+    const pdf = `<a class="btn btn-primary" href="/hunt/${r.id}/report/pdf" target="_blank">&#8681; PDF İndir</a>`;
+    return `${pdf}${edit}${del}`;
+  }
+  return `${edit}${del}` || `<p class="hp-actions-note">Bu durumda bir aksiyon yok.</p>`;
+}
+
 const HUNT_COLUMNS = [
   { index: 0, key: "id",               label: "#",            filterType: "text" },
   { index: 1, key: "hunt_title",       label: "Hunt Başlığı", filterType: "text" },
@@ -3558,7 +3595,7 @@ async function openHuntDetail(id) {
     // Jinja namespace deseninin JS karşılığı — boş bölüm hiç basılmayınca
     // numaralar hep ardışık kalsın (bkz. hunt_report_print.html secnum()).
     let _n = 0;
-    const secnum = () => String(++_n).padStart(2, "0");
+    const secnum = () => String(++_n);
 
     const scopeCard = r.scope ? `
       <div class="hp-card">
@@ -3675,7 +3712,7 @@ async function openHuntDetail(id) {
             </div>
             <div class="hp-card hp-card-side">
               <div class="hp-card-label" style="margin-bottom:14px">Onay</div>
-              <div class="hp-actions">${huntActionBtns(r)}</div>
+              <div class="hp-actions">${huntDetailActions(r)}</div>
             </div>
           </div>
         </div>
@@ -4143,19 +4180,28 @@ async function openIncidentDetail(id) {
   try { assets = JSON.parse(r.affected_assets || "[]"); if (!Array.isArray(assets)) assets = []; } catch {}
 
   // Jinja namespace deseninin JS karşılığı (bkz. openHuntDetail/secnum) —
-  // boş bölüm hiç basılmayınca numaralar ardışık kalsın.
+  // boş bölüm hiç basılmayınca numaralar ardışık kalsın. Mockup'ta Olay
+  // Raporu bölümleri Hunt'tan farklı: "N · Başlık" değil, ayrı bir mono
+  // "BÖLÜM N" kicker + ayrı büyük-harf başlık (bkz. tema/SOC Tracker.dc.html
+  // satır 950-951).
   let _n = 0;
-  const secnum = () => String(++_n).padStart(2, "0");
+  const secnum = () => String(++_n);
 
   const sectionsHtml = sections.length ? sections.map(s => `
     <div class="hp-card">
-      <div class="hp-card-hdr"><span class="hp-card-label">${secnum()}${s.heading ? " · " + esc(s.heading) : ""}</span></div>
+      <div class="hp-card-hdr">
+        <span class="hp-card-kicker mono">BÖLÜM ${secnum()}</span>
+        ${s.heading ? `<span class="hp-card-label">${esc(s.heading)}</span>` : ""}
+      </div>
       <div class="hp-card-body">${esc(s.text)}</div>
     </div>`).join("") : "";
 
   const assetsCard = assets.length ? `
     <div class="hp-card">
-      <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Etkilenen Varlıklar</span></div>
+      <div class="hp-card-hdr">
+        <span class="hp-card-kicker mono">BÖLÜM ${secnum()}</span>
+        <span class="hp-card-label">Etkilenen Varlıklar</span>
+      </div>
       ${assets.map(a => `
         <div class="hp-asset-row">
           ${a.type ? `<span class="hp-asset-type mono">${esc(a.type)}</span>` : ""}
@@ -4165,7 +4211,10 @@ async function openIncidentDetail(id) {
 
   const imagesCard = images.length ? `
     <div class="hp-card">
-      <div class="hp-card-hdr"><span class="hp-card-label">${secnum()} · Görseller</span></div>
+      <div class="hp-card-hdr">
+        <span class="hp-card-kicker mono">BÖLÜM ${secnum()}</span>
+        <span class="hp-card-label">Görseller</span>
+      </div>
       <div class="detail-images">
         ${images.map((img, i) => {
           const url = `/static/uploads/${img.filename}`;
@@ -4180,25 +4229,30 @@ async function openIncidentDetail(id) {
 
   // Onay kartı — durum bazlı aksiyonlar, eski modal footer'ıyla BİREBİR
   // aynı mantık (bkz. docs/PROGRESS.md), sadece closeIncidentDetailModal()
-  // yerine backToIncidents() çağırıyor.
-  let actionsHtml = `<button class="btn-ghost-sm" onclick="backToIncidents()">Listeye Dön</button>`;
+  // yerine backToIncidents() çağırıyor. Sıralama mockup'ın birincil/ikincil/
+  // ghost hiyerarşisini izliyor (bkz. huntDetailActions).
+  let actionsHtml = "";
   if (r.status === "Açıldı") {
-    actionsHtml += `<button class="btn btn-secondary" onclick="backToIncidents();openIncidentEditModal(${r.id})">Düzenle</button>
-      <button class="btn btn-primary" onclick="backToIncidents();startIncidentReview(${r.id})">İncelemeye Başla</button>`;
+    actionsHtml = `<button class="btn btn-primary" onclick="backToIncidents();startIncidentReview(${r.id})">İncelemeye Başla</button>
+      <button class="btn btn-outline" onclick="backToIncidents();openIncidentEditModal(${r.id})">Düzenle</button>`;
   } else if (r.status === "İncelemede") {
-    actionsHtml += `<button class="btn btn-secondary" onclick="backToIncidents();openIncidentEditModal(${r.id})">Düzenle</button>
-      <button class="btn btn-primary" onclick="backToIncidents();submitIncidentForApproval(${r.id})">Onaya Gönder</button>`;
-  } else if (r.status === "Onay Bekliyor") {
-    actionsHtml += IS_SENIOR ? `<button class="btn btn-primary" onclick="backToIncidents();openValidateModal('incident', ${r.id})">Onayla / Reddet</button>` : "";
+    actionsHtml = `<button class="btn btn-primary" onclick="backToIncidents();submitIncidentForApproval(${r.id})">Onaya Gönder</button>
+      <button class="btn btn-outline" onclick="backToIncidents();openIncidentEditModal(${r.id})">Düzenle</button>`;
+  } else if (r.status === "Onay Bekliyor" && IS_SENIOR) {
+    actionsHtml = `<button class="btn btn-primary" onclick="backToIncidents();openValidateModal('incident', ${r.id})">Onayla / Reddet</button>`;
   } else if (r.status === "Kapandı") {
-    actionsHtml += `<a class="btn btn-primary" href="/incident-reports/${r.id}/report/pdf" target="_blank">&#128424; PDF İndir</a>`;
+    actionsHtml = `<a class="btn btn-primary" href="/incident-reports/${r.id}/report/pdf" target="_blank">&#8681; PDF İndir</a>`;
   }
+  actionsHtml += `<button class="btn btn-ghost-sm" onclick="backToIncidents()">Listeye Dön</button>`;
 
   const body = `
     <div class="detail-page">
       <button class="detail-back" onclick="backToIncidents()">&larr; Tüm olay raporları</button>
+      <div class="detail-page-kicker-row">
+        <span class="detail-page-id mono">OLAY #${r.id}${r.xsoar_case_id ? " · Case #" + esc(r.xsoar_case_id) : ""}</span>
+        ${badge(r.status, INCIDENT_CLS)}
+      </div>
       <h1 class="page-title">${esc(r.title)}</h1>
-      <p class="detail-page-id mono">OLAY #${r.id}${r.xsoar_case_id ? " · Case #" + esc(r.xsoar_case_id) : ""}</p>
 
       <div class="detail-page-grid">
         <div class="detail-page-main">
